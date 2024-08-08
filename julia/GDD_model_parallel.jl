@@ -1,6 +1,7 @@
 #!/snap/bin/julia -p 3
 
 #!/opt/homebrew/bin/julia -p 3
+#
 # Julia script to run the degree day development model from Met Eireann's
 # gridded data (read gridded data directly from Met Eireann's csv files)
 #
@@ -18,15 +19,41 @@ using JLD2
 
 
 
-nNodes = 8;        # Number of compute nodes to use
+nNodes = 8;        # Number of compute nodes to use (if in interactive)
 meteoYear = 1961:2020
-outPrefix = "agrilus";
-saveToFile = true;
-
-latlonFile = "locations.CSV"  # File with daylengths for a grid of lats longs over Ireland
+saveToFile = true;   # If true save the result to a file
+latlonFile = "locations.CSV"  # File a grid of lats longs over Ireland (used for daylength calculations)
 
 # Factor to think the spatial grid (2 means sample every 2 km, 5 = sample every 5km)
 thinFactor = 10;
+
+# Define species parameters
+outPrefix = "agrilus";   # Prefix to use for results files
+# Important:
+# outPrefix must correspond to part of the variable name 
+# for the species parameters. For example, "dummy" if the 
+# variable dummy_species is to be used in the model, or "agrius" 
+# if the pre-defined parameters for agrilus_anxius are to be used.
+
+# Predefined species are:
+#  :agrilus_anxius
+#  :halyomorpha_halys
+#  :ips_cembrae
+#  :ips_duplicatus
+#  :ips_sexdentatus
+#  :ips_typographus
+#  :leptinotarsa_decemlineata
+#  :oulema_melanopus
+#  :pseudips_mexicanus
+#  :spodoptera_frugiperda
+
+# Pre-defined parameters for some species are in species_params.jl
+# or you can define your own parameters below in dummy_species
+dummy_species = (base_temperature = 1.7f0,            # Degrees C
+          threshold = 1004.0f0,                        # Degrees C
+          diapause_photoperiod = missing,              # Hours
+          diapause_temperature = missing);             # Degrees C
+
 
 # =========================================================
 # =========================================================
@@ -34,7 +61,7 @@ thinFactor = 10;
 # Specify directories for import and export of data
 
 if isdir("//home//jon//Desktop//OPRAM//")
-  outDir = "//home//jon//Desktop//OPRAM//agrilus"
+  outDir = "//home//jon//Desktop//OPRAM//"
   meteoDir = "//home//jon//Desktop//OPRAM//Irish_Climate_Data//"  
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
@@ -80,7 +107,7 @@ include("species_params.jl")
 # Find species data corresponding to outPrefix and set this as the variable params
 species_params = filter(x->occursin(outPrefix, string(x)), names(Main))
 if length(species_params)>0
-  params = eval(species_params[1])
+  params = eval(species_params[1])    # Define parameters to use
 else
   error("Species parameters not found")
 end
