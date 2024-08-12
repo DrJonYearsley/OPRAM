@@ -12,34 +12,26 @@ using CSV
 using Plots
 using LinearAlgebra
 using Profile
+using JLD2
 
 # Location of results file
 outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R"
 
-outDir = "//home//jon//Desktop//OPRAM//"
+outDir = "//home//jon//Desktop//OPRAM//results/pseudips"
 
 
-resultsFile = "result_leptinotarsa1974_par_thin1.csv"
+resultsFile = "result_pseudips2019_par_thin10.jld2"
 
 
 # Import results data
-result = CSV.read(joinpath([outDir,resultsFile]), DataFrame,
-                   types = [Int32,Int16,Union{Missing, Int16}])
+result = load(joinpath([outDir,resultsFile]),"single_stored_object")
+
+# result = CSV.read(joinpath([outDir,resultsFile]), DataFrame,
+#                    types = [Int32,Int16,Union{Missing, Int16}])
 
 
 
-
-
-
-
-ID = 1041
-
-
-
-
-
-
-function development_matrix(m, res)
+function development_matrix!(m, res)
     # Add one location's development
     for i in eachindex(res.emergeDOY)
         iStart = res.DOY[i]
@@ -60,11 +52,15 @@ end
 
 # m[i,j] is the probability that an insect starting development on day j emerges on day i
 m = zeros(Int64,365,365)
-
 ID = unique(result.ID)
+
+# Make maximum DOY 365
+result.DOY = min.(result.DOY, 365)
+
 for i in 1:100
+    @show i
     res = filter(x -> x.ID==ID[i], result)
-    development_matrix(m, res)
+    development_matrix!(m, res)
 end
 
 mnorm = convert.(Float64, m)
@@ -78,7 +74,7 @@ end
 
 
 
-heatmap(mnorm)
+heatmap(m)
 
 
 ev = eigen(mnorm)

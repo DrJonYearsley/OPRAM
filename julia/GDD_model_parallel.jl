@@ -1,4 +1,4 @@
-#!/snap/bin/julia -p 3
+#!/snap/bin/julia -p 8
 
 #!/opt/homebrew/bin/julia -p 3
 #
@@ -28,7 +28,7 @@ latlonFile = "locations.CSV"  # File a grid of lats longs over Ireland (used for
 thinFactor = 10;
 
 # Define species parameters
-outPrefix = "agrilus";   # Prefix to use for results files
+outPrefix = "pseudips";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 
@@ -60,19 +60,26 @@ dummy_species = (base_temperature = 1.7f0,            # Degrees C
 
 # Specify directories for import and export of data
 
-if isdir("//home//jon//Desktop//OPRAM//")
-  outDir = "//home//jon//Desktop//OPRAM//"
+if isdir("//home//jon//Desktop//OPRAM")
+  outDir = "//home//jon//Desktop//OPRAM//results//"
   meteoDir = "//home//jon//Desktop//OPRAM//Irish_Climate_Data//"  
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
-  outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R"
+  outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
   meteoDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
 
 elseif isdir("//users//jon//Desktop//OPRAM//")
-  outDir = "//users//jon//Desktop//OPRAM//"
+  outDir = "//users//jon//Desktop//OPRAM//results//"
   meteoDir = "//users//jon//Desktop//OPRAM//Irish_Climate_Data//"
 end
 
+
+# Make directory for the output prefix if one doesn't exist
+if !isdir(joinpath(outDir,outPrefix))
+  println("Making directory " * outPrefix)
+  mkdir(joinpath(outDir,outPrefix))
+end
+outDir = joinpath(outDir,outPrefix)
 
 # =========================================================
 # =========================================================
@@ -107,6 +114,7 @@ include("species_params.jl")
 # Find species data corresponding to outPrefix and set this as the variable params
 species_params = filter(x->occursin(outPrefix, string(x)), names(Main))
 if length(species_params)>0
+  println("Using parameters for species " * string(species_params[1]))
   params = eval(species_params[1])    # Define parameters to use
 else
   error("Species parameters not found")
