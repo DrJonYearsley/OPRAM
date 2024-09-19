@@ -19,12 +19,17 @@ outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R"
 
 outDir = "//home//jon//Desktop//OPRAM//results/pseudips"
 
-
-resultsFile = "result_pseudips2019_par_thin10.jld2"
+importFilePrefix = "result_pseudips"
+importYears = 1971:1990
+# importYears = 2001:2020
+thin = 10
+idx_ID = 200
 
 
 # Import results data
-result = load(joinpath([outDir,resultsFile]),"single_stored_object")
+
+# resultsFile = "result_pseudips2019_par_thin10.jld2"
+# result = load(joinpath([outDir,resultsFile]),"single_stored_object")
 
 # result = CSV.read(joinpath([outDir,resultsFile]), DataFrame,
 #                    types = [Int32,Int16,Union{Missing, Int16}])
@@ -33,13 +38,16 @@ result = load(joinpath([outDir,resultsFile]),"single_stored_object")
 
 function development_matrix!(m, res)
     # Add one location's development
+    # Rows are emerge days
+    # Columns are starting days
+    # Sum down one column should equal
     for i in eachindex(res.emergeDOY)
         iStart = res.DOY[i]
 
         if i==length(res.emergeDOY)
             iEnd = 365
         else
-            iEnd = res.DOY[i+1]-1
+            iEnd = min(365,res.DOY[i+1]-1)
         end
 
         m[mod1(res.emergeDOY[i],365), iStart:iEnd] .+= 1
@@ -57,36 +65,53 @@ ID = unique(result.ID)
 # Make maximum DOY 365
 result.DOY = min.(result.DOY, 365)
 
-for i in 1:100
-    @show i
-    res = filter(x -> x.ID==ID[i], result)
+for y in importYears
+    resultsFile = importFilePrefix * string(y) * "_par_thin" * string(thin) * ".jld2"
+
+    @show resultsFile
+    result = load(joinpath([outDir,resultsFile]),"single_stored_object")
+
+    res = filter(x -> x.ID==ID[idx_ID], result)
     development_matrix!(m, res)
 end
 
-mnorm = convert.(Float64, m)
-for i in 1:365
-    s = sum(mnorm[i,:])
+mnorm = convert.(Float64, m);
+for i in 1:size(mnorm,1)
+    # Rows are emerge days
+    # Columns are starting days
+    # Sum down one column should equal one when normalised
+
+    s = sum(mnorm[:,i])
     if s>0
-        mnorm[i,:] = mnorm[i,:] ./ s
+        mnorm[:,i] = mnorm[:,i] ./ s
     end
 end
 
 
 
 
-heatmap(m)
+heatmap(log10.(mnorm))
 
 
-ev = eigen(mnorm)
+ev = eigen(mnorm);
 
-emerge_dist = abs.(real(ev.vectors[:,end]))
+emerge_dist = abs.(real(ev.vectors[:,end]));
 
-t2 = mnorm * emerge_dist
-
-m2 = mnorm^10000
-heatmap(m2)
+t2 = mnorm * emerge_dist;
 
 
-findall(real(ev.vectors[:,end]).>1e-3)
+# Display long-term emergence dates
+findall(abs.(real(ev.vectors[:,end])).>1e-3)
+ev.values[end]
 
+# Plot long term distribution of emergence dates
 plot(emerge_dist)
+
+
+# Produce plot of development
+d = transpose(reinterpret(reshape,Int64, findall(!iszero, mnorm)));
+plot(d[:,2], [d[:,1], d[:,2]], 
+    aspect_ratio=:equal,
+    ylimits=(0,365),
+    xlimits=(0, 365),
+    color=RGBA{Float64}(0,0,0,0.2))
