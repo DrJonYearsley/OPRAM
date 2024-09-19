@@ -13,6 +13,7 @@ using Plots
 using LinearAlgebra
 using Profile
 using JLD2
+using StatsBase
 
 # Location of results file
 outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R"
@@ -115,3 +116,6 @@ plot(d[:,2], [d[:,1], d[:,2]],
     ylimits=(0,365),
     xlimits=(0, 365),
     color=RGBA{Float64}(0,0,0,0.2))
+
+
+    describe(emerge_dist)
