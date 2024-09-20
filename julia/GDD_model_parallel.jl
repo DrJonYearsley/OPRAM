@@ -28,7 +28,7 @@ latlonFile = "locations.CSV"  # File a grid of lats longs over Ireland (used for
 thinFactor = 10;
 
 # Define species parameters
-outPrefix = "pseudips";   # Prefix to use for results files
+outPrefix = "leptinotarsa";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 
@@ -84,7 +84,7 @@ outDir = joinpath(outDir,outPrefix)
 # =========================================================
 # =========================================================
 
-if isinteractive()
+if isinteractive() & nworkers()==0
   # Enable multiple nodes 
   addprocs(nNodes)
 end
@@ -232,8 +232,8 @@ idxKeep = idxKeep .&& idxKeep2 .&& idxKeep3
 tm = DataFrame(ID=ID[IDvec[idxKeep]],  DOY = result[idxKeep,1], emergeDOY = result[idxKeep,2])
 
 
-# Save the results (replacing ID indices with original ID values)
-CSV.write(joinpath([outDir,"result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".csv"]), tm)
+# # Save the results (replacing ID indices with original ID values)
+# CSV.write(joinpath([outDir,"result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".csv"]), tm)
 
 # Save using jld2 format (no saving in file size)
 save_object(joinpath([outDir,"result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), tm)

@@ -18,12 +18,13 @@ using StatsBase
 # Location of results file
 outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R"
 
-outDir = "//home//jon//Desktop//OPRAM//results/pseudips"
+outDir = "//home//jon//Desktop//OPRAM//results//agrilus"
 
-importFilePrefix = "result_pseudips"
+importFilePrefix = "result_agrilus"
 importYears = 1971:1990
-# importYears = 2001:2020
+importYears = 2001:2020
 thin = 10
+adultLife = 14
 idx_ID = 200
 
 
@@ -37,7 +38,7 @@ idx_ID = 200
 
 
 
-function development_matrix!(m, res)
+function development_matrix!(m, res, adultLifespan)
     # Add one location's development
     # Rows are emerge days
     # Columns are starting days
@@ -51,20 +52,17 @@ function development_matrix!(m, res)
             iEnd = min(365,res.DOY[i+1]-1)
         end
 
-        m[mod1(res.emergeDOY[i],365), iStart:iEnd] .+= 1
+        adult = mod1.(res.emergeDOY[i] .+ collect(Int16, 0:adultLifespan-1),365)
+
+        m[adult, iStart:iEnd] .+= 1
     end
 end
 
 
 # Create matrix columns are doy that development starts
 # Rows are doy development ends
-
 # m[i,j] is the probability that an insect starting development on day j emerges on day i
-m = zeros(Int64,365,365)
-ID = unique(result.ID)
-
-# Make maximum DOY 365
-result.DOY = min.(result.DOY, 365)
+m = zeros(Int64,365,365);
 
 for y in importYears
     resultsFile = importFilePrefix * string(y) * "_par_thin" * string(thin) * ".jld2"
@@ -72,8 +70,15 @@ for y in importYears
     @show resultsFile
     result = load(joinpath([outDir,resultsFile]),"single_stored_object")
 
+    # Make maximum DOY 365
+    result.DOY = min.(result.DOY, 365)
+
+    # Identify unique IDs
+    ID = unique(result.ID)
+
+    
     res = filter(x -> x.ID==ID[idx_ID], result)
-    development_matrix!(m, res)
+    development_matrix!(m, res, adultLife)
 end
 
 mnorm = convert.(Float64, m);
@@ -90,19 +95,20 @@ end
 
 
 
-
-heatmap(log10.(mnorm))
+# Display heat map of development traces
+heatmap(log10.(mnorm),    
+    aspect_ratio=:equal,
+    ylimits=(0,365),
+    xlimits=(0, 365))
 
 
 ev = eigen(mnorm);
 
 emerge_dist = abs.(real(ev.vectors[:,end]));
 
-t2 = mnorm * emerge_dist;
-
 
 # Display long-term emergence dates
-findall(abs.(real(ev.vectors[:,end])).>1e-3)
+# findall(abs.(real(ev.vectors[:,end])).>1e-3)
 ev.values[end]
 
 # Plot long term distribution of emergence dates
@@ -111,11 +117,11 @@ plot(emerge_dist)
 
 # Produce plot of development
 d = transpose(reinterpret(reshape,Int64, findall(!iszero, mnorm)));
-plot(d[:,2], [d[:,1], d[:,2]], 
-    aspect_ratio=:equal,
-    ylimits=(0,365),
-    xlimits=(0, 365),
-    color=RGBA{Float64}(0,0,0,0.2))
+# plot(d[:,2], [d[:,1], d[:,2]], 
+#     aspect_ratio=:equal,
+#     ylimits=(0,365),
+#     xlimits=(0, 365),
+#     color=RGBA{Float64}(0,0,0,0.2))
 
 
-    describe(emerge_dist)
+describe(findall(abs.(real(ev.vectors[:,end])).>1e-3))
