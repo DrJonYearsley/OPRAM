@@ -19,16 +19,16 @@ using JLD2
 
 
 
-nNodes = 2;        # Number of compute nodes to use (if in interactive)
-meteoYear = 1961:2020
+nNodes = 5;        # Number of compute nodes to use (if in interactive)
+meteoYear = 2018:2020
 saveToFile = true;   # If true save the result to a file
 latlonFile = "locations.CSV"  # File a grid of lats longs over Ireland (used for daylength calculations)
 
 # Factor to think the spatial grid (2 means sample every 2 km, 5 = sample every 5km)
-thinFactor = 10;
+thinFactor = 1;
 
 # Define species parameters
-outPrefix = "ips_typographus";   # Prefix to use for results files
+outPrefix = "agrilus";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 

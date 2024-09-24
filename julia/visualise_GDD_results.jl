@@ -9,7 +9,7 @@ using Plots
 using JLD2
 
 # Location of results file
-resultsFile = "agrilus//result_agrilus2018_par_thin10.jld2"
+resultsFile = "agrilus//result_agrilus2020_par_thin1.jld2"
 doy::Int32 = 1   # Day of year to be visualised
 
 
@@ -44,7 +44,7 @@ result = load(joinpath([outDir, resultsFile]), "single_stored_object")
 # ============================================================
 # ============================================================
 
-function doy_idx(doy::Int16, result::DataFrame)
+function doy_idx(doy::Int32, result::DataFrame)
         # Produce a dataframe corresponding to a day of year (doy)
 
         # Find start and end indicies for each location
@@ -67,7 +67,7 @@ function doy_idx(doy::Int16, result::DataFrame)
 end
 
 
-function num_generations(doy::Int16, result::DataFrame)
+function num_generations(doy::Int32, result::DataFrame)
         # Function to calculate number of generations per year, starting
         # development on doy
 
@@ -80,27 +80,32 @@ function num_generations(doy::Int16, result::DataFrame)
         res.north = mod.(res.ID, 1000)
         res.east = div.((res.ID .- res.north), 1000)
 
-        for i in eachindex(idx1)
-                startDOY = doy
-                while startDOY>0
+        # Count number of generations per year
+        startDOY = zeros(Int32, length(idx1)) .+ doy
+
+        while any(startDOY .> 0)
                 # Find index of result that corresponds to desired day of year (ie doy>=result.DOY)
-                idx3 = searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY) - 1 + idx1[i] 
-                
-                if result.emergeDOY[idx3]<=365
-                        startDOY = result.emergeDOY[idx3] + 1
-                        res.nGen[i] += 1.0     # Increment generation
-                else
-                        startDOY = -1
-                        # Add on fraction of last generation
-                        res.nGen[i] += (366.0 - startDOY)/(result.emergeDOY[idx3] - startDOY +1.0)     # Increment generation
-                end
+                idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY[i]) - 1 + idx1[i] for i = eachindex(idx1)]
+
+                # Set any missing matches to zero
+                match = startDOY .> 0 .&& idx2 + ones(Int64, size(idx1)) .> idx3
+                complete = result.emergeDOY[idx3] .<= 365
+
+                # Increment generations
+                res.nGen[match.&complete] .+= 1
+                res.nGen[match.&.!complete] .+= (365 .- startDOY[match.&.!complete]) ./
+                                                (result.emergeDOY[idx3[match.&.!complete]] - startDOY[match.&.!complete])
+
+                # Reset starting DOY
+                startDOY = zeros(Int32, length(idx1))
+                startDOY[match.&complete] .+= result.emergeDOY[idx3[match.&complete]] .+ 1
+
+                sum(startDOY .> 0)
+
         end
 
-         # Set any missing matches to zero
-         # match is TRUE if idx3 between idx1 and idx2
-         match = idx2 + ones(Int64, size(idx1)) .> idx3
- 
-         return (res)
+
+        return (res)
 end
 
 # ============================================================
@@ -112,6 +117,8 @@ end
 # Create result for a start day of year
 @time d = doy_idx(doy, result)
 
+# Create number of generations
+@time gen = num_generations(doy, result)
 
 
 # ===================================================================
@@ -129,6 +136,19 @@ scatter(d.east,
         markerstrokewidth=0,
         title="doy = " * string(doy))
 
+
+
+scatter(gen.east,
+        gen.north,
+        zcolor=gen.nGen,
+        color=:Accent_6,
+        clims=:auto,
+        cbar=true,
+        legend=false,
+        showaxis=false,
+        markersize=1,
+        markerstrokewidth=0,
+        title="Number of Generations")
 
 
 # +++++++++++++++++++++++++++++++++++++++++++
