@@ -19,6 +19,7 @@ using StatsBase
 outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R"
 
 outDir = "//home//jon//Desktop//OPRAM//results//agrilus"
+outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//agrilus"
 
 importFilePrefix = "result_agrilus"
 importYears = 1971:1990

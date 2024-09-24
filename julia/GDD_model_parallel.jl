@@ -19,7 +19,7 @@ using JLD2
 
 
 
-nNodes = 8;        # Number of compute nodes to use (if in interactive)
+nNodes = 2;        # Number of compute nodes to use (if in interactive)
 meteoYear = 1961:2020
 saveToFile = true;   # If true save the result to a file
 latlonFile = "locations.CSV"  # File a grid of lats longs over Ireland (used for daylength calculations)
@@ -28,7 +28,7 @@ latlonFile = "locations.CSV"  # File a grid of lats longs over Ireland (used for
 thinFactor = 10;
 
 # Define species parameters
-outPrefix = "leptinotarsa";   # Prefix to use for results files
+outPrefix = "ips_typographus";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 
@@ -66,7 +66,7 @@ if isdir("//home//jon//Desktop//OPRAM")
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
-  meteoDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
+  meteoDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
 
 elseif isdir("//users//jon//Desktop//OPRAM//")
   outDir = "//users//jon//Desktop//OPRAM//results//"
@@ -81,10 +81,14 @@ if !isdir(joinpath(outDir,outPrefix))
 end
 outDir = joinpath(outDir,outPrefix)
 
+
+# Make complete path to photoperiod file
+latlonFile = joinpath([meteoDir, latlonFile])
+
 # =========================================================
 # =========================================================
 
-if isinteractive() & nworkers()==0
+if isinteractive() & nworkers()==1
   # Enable multiple nodes 
   addprocs(nNodes)
 end
@@ -130,7 +134,7 @@ end
 for year in meteoYear
 # Import weather data along with location and day of year
 println("Importing meteo data starting from year " * string(year))
-meteo = read_meteo(year, meteoDir, thinFactor)
+@time meteo = read_meteo(year, meteoDir, thinFactor)
 
 
 
