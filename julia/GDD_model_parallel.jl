@@ -49,10 +49,10 @@ outPrefix = "ips_typographus";   # Prefix to use for results files
 
 # Pre-defined parameters for some species are in species_params.jl
 # or you can define your own parameters below in dummy_species
-dummy_species = (base_temperature = 1.7f0,            # Degrees C
-          threshold = 1004.0f0,                        # Degrees C
-          diapause_photoperiod = missing,              # Hours
-          diapause_temperature = missing);             # Degrees C
+dummy_species = (base_temperature=1.7f0,            # Degrees C
+  threshold=1004.0f0,                        # Degrees C
+  diapause_photoperiod=missing,              # Hours
+  diapause_temperature=missing);             # Degrees C
 
 
 # =========================================================
@@ -62,7 +62,7 @@ dummy_species = (base_temperature = 1.7f0,            # Degrees C
 
 if isdir("//home//jon//Desktop//OPRAM")
   outDir = "//home//jon//Desktop//OPRAM//results//"
-  meteoDir = "//home//jon//Desktop//OPRAM//Irish_Climate_Data//"  
+  meteoDir = "//home//jon//Desktop//OPRAM//Irish_Climate_Data//"
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
@@ -75,11 +75,11 @@ end
 
 
 # Make directory for the output prefix if one doesn't exist
-if !isdir(joinpath(outDir,outPrefix))
+if !isdir(joinpath(outDir, outPrefix))
   println("Making directory " * outPrefix)
-  mkdir(joinpath(outDir,outPrefix))
+  mkdir(joinpath(outDir, outPrefix))
 end
-outDir = joinpath(outDir,outPrefix)
+outDir = joinpath(outDir, outPrefix)
 
 
 # Make complete path to photoperiod file
@@ -88,7 +88,7 @@ latlonFile = joinpath([meteoDir, latlonFile])
 # =========================================================
 # =========================================================
 
-if isinteractive() & nworkers()==1
+if isinteractive() & nworkers() == 1
   # Enable multiple nodes 
   addprocs(nNodes)
 end
@@ -116,8 +116,8 @@ include("species_params.jl")
 # =========================================================
 
 # Find species data corresponding to outPrefix and set this as the variable params
-species_params = filter(x->occursin(outPrefix, string(x)), names(Main))
-if length(species_params)>0
+species_params = filter(x -> occursin(outPrefix, string(x)), names(Main))
+if length(species_params) > 0
   println("Using parameters for species " * string(species_params[1]))
   params = eval(species_params[1])    # Define parameters to use
 else
@@ -132,122 +132,122 @@ end
 
 
 for year in meteoYear
-# Import weather data along with location and day of year
-println("Importing meteo data starting from year " * string(year))
-@time meteo = read_meteo(year, meteoDir, thinFactor)
+  # Import weather data along with location and day of year
+  println("Importing meteo data starting from year " * string(year))
+  @time meteo = read_meteo(year, meteoDir, thinFactor)
 
 
 
-println("Preparing data for the model")
+  println("Preparing data for the model")
 
-# Create ID's for thinned locations
-ID = meteo[2]
+  # Create ID's for thinned locations
+  ID = meteo[2]
 
- # Calculate average temp (first element of meteo) minus the base temp
-GDD =  meteo[1] .- params.base_temperature
+  # Calculate average temp (first element of meteo) minus the base temp
+  GDD = meteo[1] .- params.base_temperature
 
-# Calculate days where development updates
-gdd_update = GDD .> 0;
-
-
-# List ID's for all GDDs above the base temp
-idx = findall(gdd_update)
-IDvec = [convert(Int32,idx[i][2]) for i in eachindex(idx)];       # Location ID index
+  # Calculate days where development updates
+  gdd_update = GDD .> 0
 
 
-# Add in diapause (if necessary)
-if !ismissing(params.diapause_photoperiod)
-  # Calulate day of year for all points where GDD > base temp
-  DOY = [meteo[5][idx[i][1]] for i in eachindex(idx)]
+  # List ID's for all GDDs above the base temp
+  idx = findall(gdd_update)
+  IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]       # Location ID index
 
-  if ismissing(params.diapause_temperature)   # diapause determine by photoperiod
-    no_overwinter = photoperiod(latlonFile, DOY, IDvec) .> params.diapause_photoperiod
-  else # diapause determined by photoperiod and temp
-    no_overwinter = photoperiod(latlonFile, DOY, IDvec) .> params.diapause_photoperiod  .||  
-                      GDD[gdd_update].> (params.diapause_temperature-params.base_temperature)
+
+  # Add in diapause (if necessary)
+  if !ismissing(params.diapause_photoperiod)
+    # Calulate day of year for all points where GDD > base temp
+    DOY = [meteo[5][idx[i][1]] for i in eachindex(idx)]
+
+    if ismissing(params.diapause_temperature)   # diapause determine by photoperiod
+      no_overwinter = photoperiod(latlonFile, DOY, IDvec) .> params.diapause_photoperiod
+    else # diapause determined by photoperiod and temp
+      no_overwinter = photoperiod(latlonFile, DOY, IDvec) .> params.diapause_photoperiod .||
+                      GDD[gdd_update] .> (params.diapause_temperature - params.base_temperature)
+    end
+
+    # Update gdd_update, idx and IDvec to remove overwintering days
+    gdd_update[gdd_update] = no_overwinter
+    idx = idx[no_overwinter]
+    IDvec = IDvec[no_overwinter]
+
+    # Free up some memory
+    DOY = nothing
+    latitude = nothing
+    no_overwinter = nothing
   end
 
-  # Update gdd_update, idx and IDvec to remove overwintering days
-  gdd_update[gdd_update] = no_overwinter
-  idx = idx[no_overwinter]
-  IDvec = IDvec[no_overwinter]
+  # Make GDD array a shared array
+  GDDsh = SharedArray{Float32,1}(GDD[gdd_update])
 
-  # Free up some memory
-  DOY = nothing
-  latitude = nothing
-  no_overwinter = nothing
-end
-
-# Make GDD array a shared array
-GDDsh = SharedArray{Float32,1}(GDD[gdd_update])
-
-# Find indices separatng different locations
-ind = vec(sum(gdd_update, dims=1))
-locInd2 = accumulate(+, ind)  # End locations
-locInd1 = vcat(1,locInd2[1:end-1].+1)
+  # Find indices separatng different locations
+  ind = vec(sum(gdd_update, dims=1))
+  locInd2 = accumulate(+, ind)  # End locations
+  locInd1 = vcat(1, locInd2[1:end-1] .+ 1)
 
 
-# Create a shared array to hold results for every day when GDD updates
-result = SharedArray{Int16,2}(sum(gdd_update),3);
+  # Create a shared array to hold results for every day when GDD updates
+  result = SharedArray{Int16,2}(sum(gdd_update), 3)
 
-# Fill the first 2 columns of results
-result[:,1] = [idx[i][1] for i in eachindex(idx)];  # Calculate day of year
-result[:,2] .= Int16(-1);
-result[:,3] .= Int16(-1);
+  # Fill the first 2 columns of results
+  result[:, 1] = [idx[i][1] for i in eachindex(idx)]  # Calculate day of year
+  result[:, 2] .= Int16(-1)
+  result[:, 3] .= Int16(-1)
 
-# Free up more memory
-meteo = nothing     # Remove the meteo data
-thinInd = nothing
-gdd_update = nothing
-GDD = nothing
-idx = nothing
+  # Free up more memory
+  meteo = nothing     # Remove the meteo data
+  thinInd = nothing
+  gdd_update = nothing
+  GDD = nothing
+  idx = nothing
 
 
 
-# Loop over all locations and run the model
-println("Running the model")
+  # Loop over all locations and run the model
+  println("Running the model")
 
-@everywhere thresh = convert(Float32,$params.threshold)
-@time location_loop!(locInd1, locInd2,  result, GDDsh, thresh)
-
-
-# Loop over all locations and run the model
-println("Saving the results")
+  @everywhere thresh = convert(Float32, $params.threshold)
+  @time location_loop!(locInd1, locInd2, result, GDDsh, thresh)
 
 
-# Clean up the data
-
-# Remove rows that have emergeDOY>0 
-idxKeep = result[:,2].>0
-
-# Remove rows where the final prediction doesn't change (they can be recalculated later)
-idxKeep2 = (IDvec[1:end-1] .!= IDvec[2:end,1]) .|| (IDvec[1:end-1] .== IDvec[2:end,1] .&& result[1:end-1,2] .!= result[2:end,2])
-push!(idxKeep2, true)    # Add a true value at the end
-
-# Remove all but the first result with DOY >= 365 (results only for 1 year)
-idxKeep3 =  result[2:end,1] .< 365 .|| (IDvec[1:end-1] .== IDvec[2:end,1] .&&  (result[1:end-1,1] .< 365 .&& result[2:end,1] .>= 365))
-pushfirst!(idxKeep3,true)    # Add a true value at the start
-
-# Combine all 3 indices together
-idxKeep = idxKeep .&& idxKeep2 .&& idxKeep3
+  # Loop over all locations and run the model
+  println("Saving the results")
 
 
-# Create a data frame, using real location ID (second element of meteo)
-tm = DataFrame(ID=ID[IDvec[idxKeep]],  DOY = result[idxKeep,1], emergeDOY = result[idxKeep,2])
+  # Clean up the data
+
+  # Remove rows that have emergeDOY>0 
+  idxKeep = result[:, 2] .> 0
+
+  # Remove rows where the final prediction doesn't change (they can be recalculated later)
+  idxKeep2 = (IDvec[1:end-1] .!= IDvec[2:end, 1]) .|| (IDvec[1:end-1] .== IDvec[2:end, 1] .&& result[1:end-1, 2] .!= result[2:end, 2])
+  push!(idxKeep2, true)    # Add a true value at the end
+
+  # Remove all but the first result with DOY >= 365 (results only for 1 year)
+  idxKeep3 = result[2:end, 1] .< 365 .|| (IDvec[1:end-1] .== IDvec[2:end, 1] .&& (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
+  pushfirst!(idxKeep3, true)    # Add a true value at the start
+
+  # Combine all 3 indices together
+  idxKeep = idxKeep .&& idxKeep2 .&& idxKeep3
 
 
-# # Save the results (replacing ID indices with original ID values)
-# CSV.write(joinpath([outDir,"result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".csv"]), tm)
+  # Create a data frame, using real location ID (second element of meteo)
+  tm = DataFrame(ID=ID[IDvec[idxKeep]], DOY=result[idxKeep, 1], emergeDOY=result[idxKeep, 2])
 
-# Save using jld2 format (no saving in file size)
-save_object(joinpath([outDir,"result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), tm)
+
+  # # Save the results (replacing ID indices with original ID values)
+  # CSV.write(joinpath([outDir,"result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".csv"]), tm)
+
+  # Save using jld2 format (no saving in file size)
+  save_object(joinpath([outDir, "result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), tm)
 
 
 end
 
 if isinteractive()
   # Remove parallel nodes
-  a=workers();
+  a = workers()
   rmprocs(a)
 end
 
