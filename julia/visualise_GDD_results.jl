@@ -9,7 +9,7 @@ using Plots
 using JLD2
 
 # Location of results file
-resultsFile = "agrilus//result_agrilus2020_par_thin1.jld2"
+resultsFile = "ips_typographus//result_ips_typographus1961_par_thin1.jld2"
 doy::Int32 = 1   # Day of year to be visualised
 
 
