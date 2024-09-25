@@ -10,7 +10,7 @@ using JLD2
 
 # Location of results file
 speciesName = "agrilus"
-years = [2018]
+years = [2018,2019,2020]
 thin = 1
 
 doy::Int32 = 1   # Day of year to be visualised
@@ -38,9 +38,9 @@ end
 
 
 # Import results data
-# result = CSV.read(joinpath([outDir,resultsFile]), DataFrame,
-#                    types = [Int32,Int32,Union{Missing, Int32}])
-fileName = "result_" * speciesName * string(years) * "_par_thin" * string(thin) * ".jld2"
+coast = CSV.read(joinpath([meteoDir,"..","coastline.csv"]), DataFrame,
+        types=[Float64, Float64, Int64, Int64, Int64])
+fileName = "result_" * speciesName * string(years[1]) * "_par_thin" * string(thin) * ".jld2"
 resultFile = joinpath([outDir, speciesName, fileName])
 result = load(resultFile, "single_stored_object")
 
@@ -124,6 +124,7 @@ end
 function year_average(years::Vector{Int64}, outDir::String, thin::Int64, 
         speciesName::String, doy::Int32, result::DataFrame)
 
+        out = [];
         for y in eachindex(years)
                 fileName = "result_" * speciesName * string(years[y]) * "_par_thin" * string(thin) * ".jld2"
                 resultFile = joinpath([outDir, speciesName, fileName])
@@ -133,17 +134,19 @@ function year_average(years::Vector{Int64}, outDir::String, thin::Int64,
                 d = extract_results(doy, result)
                 if y == 1
                         out = d
-                        out[:,:N] = 1
+                        out.N = ones(size(out.nGen))
                 else
-                        idx = [findfirst(x -> x == ID, gen.ID) for ID in out.ID]
-                        out[idx, :nGen] .+= gen.nGen
-                        out[idx, :emergeDOY] .+= d.emergeDOY
-                        out[idx, :N] .+= 1
+                        idx = [findfirst(x -> x == ID, d.ID) for ID in out.ID]
+                        out.nGen[idx] .+= d.nGen
+                        out.emergeDOY[idx] .+= d.emergeDOY
+                        out.N[idx] .+= 1
                 end
         end
 
         # Calculate average across the years
         out.nGen = out.nGen ./ out.N
+        tmp = Float64.(out.emergeDOY)
+        out.emergeDOY = tmp ./ out.N
 
         return out
 end
@@ -157,40 +160,61 @@ end
 
 
 # Create number of generations and first day of emergence
-@time d = extract_results(doy, result)
-@time d2 = year_average(years, outDir, thin, speciesName, doy, result)
+@time d = year_average(years, outDir, thin, speciesName, doy, result)
 
 # ===================================================================
 # Visualise output
 
 # plot map of emergence day of year
-scatter(d.east,
+plot(d.east,
         d.north,
+        seriestype=:scatter,
         zcolor=d.emergeDOY,
         axis_ratio=:equal,
         color=:matter,
         cbar=true,
         legend=false,
         showaxis=false,
-        markersize=1,
+        markersize=0.5,
         markerstrokewidth=0,
-        title="doy = " * string(doy))
+        markershape=:square,
+        title="doy = " * string(doy),
+        dpi=600);
 
+plot!(coast.idx_east, 
+        coast.idx_north,
+        seriestype=:scatter,
+        showaxis=false,
+        grid = false,
+        markersize = 0.5,
+        markercolor="black",
+        dpi=600)
+# savefig("test.png")
 
-
-scatter(d.east,
+plot(d.east,
         d.north,
         zcolor=d.nGen,
+        seriestype=:scatter,
         color=:Accent_6,
         axis_ratio=:equal,
         clims=:auto,
         cbar=true,
         legend=false,
         showaxis=false,
-        markersize=1,
+        markersize=0.5,
         markerstrokewidth=0,
-        title="Number of Generations")
+        markershape=:square,
+        dpi=600,
+        title="Number of Generations");
 
+        plot!(coast.idx_east, 
+        coast.idx_north,
+        seriestype=:scatter,
+        showaxis=false,
+        grid = false,
+        markersize = 0.5,
+        markercolor="black",
+        dpi=600)
 
 # +++++++++++++++++++++++++++++++++++++++++++
 # Plot emergence for all locations across Ireland
