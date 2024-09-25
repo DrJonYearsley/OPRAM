@@ -10,7 +10,7 @@ using JLD2
 
 # Location of results file
 speciesName = "agrilus"
-years = [2018,2019,2020]
+years = [2018, 2019, 2020]
 thin = 1
 
 doy::Int32 = 1   # Day of year to be visualised
@@ -38,7 +38,7 @@ end
 
 
 # Import results data
-coast = CSV.read(joinpath([meteoDir,"..","coastline.csv"]), DataFrame,
+coast = CSV.read(joinpath([meteoDir, "..", "coastline.csv"]), DataFrame,
         types=[Float64, Float64, Int64, Int64, Int64])
 fileName = "result_" * speciesName * string(years[1]) * "_par_thin" * string(thin) * ".jld2"
 resultFile = joinpath([outDir, speciesName, fileName])
@@ -99,8 +99,8 @@ function extract_results(doy::Int32, result::DataFrame)
                 res.nGen[match.&complete] .+= 1
                 res.nGen[match.&.!complete] .+= (365 .- startDOY[match.&.!complete]) ./
                                                 (result.emergeDOY[idx3[match.&.!complete]] - startDOY[match.&.!complete])
-                if startDOY[1]==doy
-                        res.emergeDOY[match .& complete] .+= result.emergeDOY[idx3[match.&complete]]
+                if startDOY[1] == doy
+                        res.emergeDOY[match.&complete] .+= result.emergeDOY[idx3[match.&complete]]
                 end
 
                 # Reset starting DOY
@@ -121,10 +121,10 @@ end
 
 
 
-function year_average(years::Vector{Int64}, outDir::String, thin::Int64, 
+function year_average(years::Vector{Int64}, outDir::String, thin::Int64,
         speciesName::String, doy::Int32, result::DataFrame)
 
-        out = [];
+        out = []
         for y in eachindex(years)
                 fileName = "result_" * speciesName * string(years[y]) * "_par_thin" * string(thin) * ".jld2"
                 resultFile = joinpath([outDir, speciesName, fileName])
@@ -181,12 +181,12 @@ plot(d.east,
         title="doy = " * string(doy),
         dpi=600);
 
-plot!(coast.idx_east, 
+plot!(coast.idx_east,
         coast.idx_north,
         seriestype=:scatter,
         showaxis=false,
-        grid = false,
-        markersize = 0.5,
+        grid=false,
+        markersize=0.5,
         markercolor="black",
         dpi=600)
 # savefig("test.png")
@@ -207,33 +207,37 @@ plot(d.east,
         dpi=600,
         title="Number of Generations");
 
-        plot!(coast.idx_east, 
+plot!(coast.idx_east,
         coast.idx_north,
         seriestype=:scatter,
         showaxis=false,
-        grid = false,
-        markersize = 0.5,
+        grid=false,
+        markersize=0.5,
         markercolor="black",
         dpi=600)
 
-# +++++++++++++++++++++++++++++++++++++++++++
-# Plot emergence for all locations across Ireland
-plot(result.DOY,
-        result.emergeDOY,
-        group=result.ID,
-        aspect_ratio=:equal,
-        lc=:black,
-        alpha=RGBA(0, 0, 0, 0.05),
-        xaxis="Start DOY",
-        yaxis="Emergence DOY",
-        legend=false)
-plot!([1:365], [1:365])
+
+savefig("agrilus_ngen_2018_2020.png")
 
 
-# Same result visualised as a 2D histogram
-histogram2d(result.DOY,
-        result.emergeDOY,
-        nbinsx=200,
-        nbinsy=100,
-        xaxis="Start DOY",
-        yaxis="Emergence DOY")
+# # +++++++++++++++++++++++++++++++++++++++++++
+# # Plot emergence for all locations across Ireland
+# plot(result.DOY,
+#         result.emergeDOY,
+#         group=result.ID,
+#         aspect_ratio=:equal,
+#         lc=:black,
+#         alpha=RGBA(0, 0, 0, 0.05),
+#         xaxis="Start DOY",
+#         yaxis="Emergence DOY",
+#         legend=false)
+# plot!([1:365], [1:365])
+
+
+# # Same result visualised as a 2D histogram
+# histogram2d(result.DOY,
+#         result.emergeDOY,
+#         nbinsx=200,
+#         nbinsy=100,
+#         xaxis="Start DOY",
+#         yaxis="Emergence DOY")
