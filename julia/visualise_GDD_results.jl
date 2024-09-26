@@ -1,6 +1,10 @@
 #!/usr/bin/julia
 
 # A script to plot the output of the degree day models
+#
+# Script plots spatial distribution of first emergence DOY and 
+# average number of generations per year
+# If more than one year is give an average over the years is plotted
 
 using DataFrames
 using CSV
@@ -8,16 +12,18 @@ using Dates
 using Plots
 using JLD2
 
-# Location of results file
+# =================================================================================
+# Set parameters for the visualisation
+# If more than one year then take average across years
 speciesName = "agrilus"
 years = [2018, 2019, 2020]
-thin = 1
-
-doy::Int32 = 1   # Day of year to be visualised
-
+thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
+doy::Int32 = 1   # Day of year development started
 
 
 
+
+# =================================================================================
 # Specify directories for import and export of data
 if isdir("//home//jon//DATA//OPRAM")
         outDir = "//home//jon//DATA//OPRAM//results//"
@@ -37,40 +43,14 @@ end
 
 
 
+# =================================================================================
 # Import results data
 coast = CSV.read(joinpath([meteoDir, "..", "coastline.csv"]), DataFrame,
         types=[Float64, Float64, Int64, Int64, Int64])
-fileName = "result_" * speciesName * string(years[1]) * "_par_thin" * string(thin) * ".jld2"
-resultFile = joinpath([outDir, speciesName, fileName])
-result = load(resultFile, "single_stored_object")
 
 
-# ============================================================
-# ============================================================
-
-# function doy_idx(doy::Int32, result::DataFrame)
-#         # Produce a dataframe corresponding to a day of year (doy)
-
-#         # Find start and end indicies for each location
-#         idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
-#         idx2 = [searchsortedlast(result.ID, loc) for loc in unique(result.ID)]
-
-
-#         # Find index of result that corresponds to desired day of year (ie doy>=result.DOY)
-#         idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], doy) - 1 + idx1[i] for i = eachindex(idx1)]
-
-#         # Set any missing matches to zero
-#         match = idx2 + ones(Int64, size(idx1)) .> idx3
-
-#         res = DataFrame(ID=result.ID[idx1[match]],
-#                 emergeDOY=result.emergeDOY[idx3[match]])
-#         res.north = mod.(res.ID, 1000)
-#         res.east = div.((res.ID .- res.north), 1000)
-
-#         return (res)
-# end
-
-
+# =================================================================================
+# Start of function definitions
 function extract_results(doy::Int32, result::DataFrame)
         # Function to calculate number of generations per year, and first
         # day of adult emergence based on a starting development on doy
@@ -122,7 +102,7 @@ end
 
 
 function year_average(years::Vector{Int64}, outDir::String, thin::Int64,
-        speciesName::String, doy::Int32, result::DataFrame)
+        speciesName::String, doy::Int32)
 
         out = []
         for y in eachindex(years)
@@ -135,10 +115,14 @@ function year_average(years::Vector{Int64}, outDir::String, thin::Int64,
                 if y == 1
                         out = d
                         out.N = ones(size(out.nGen))
+                        out.nGenSD = d.nGen.^2
+                        out.emergeSD = d.emergeDOY.^2
                 else
                         idx = [findfirst(x -> x == ID, d.ID) for ID in out.ID]
                         out.nGen[idx] .+= d.nGen
+                        out.nGenSD[idx] .+= d.nGen.^2
                         out.emergeDOY[idx] .+= d.emergeDOY
+                        out.emergeSD[idx] .+= d.emergeDOY.^2
                         out.N[idx] .+= 1
                 end
         end
@@ -148,22 +132,52 @@ function year_average(years::Vector{Int64}, outDir::String, thin::Int64,
         tmp = Float64.(out.emergeDOY)
         out.emergeDOY = tmp ./ out.N
 
+        # Calculate standard deviation across years
+        out.nGenSD = (out.nGenSD./ out.N - out.nGen.^2).^0.5
+        tmp = Float64.(out.emergeSD)
+        out.emergeSD = (tmp ./out.N - out.emergeDOY.^2).^0.5
+
+
         return out
 end
 
 
-# ============================================================
-
-# ============================================================
-
-
+# =================================================================================
+# End of function definitions
+# =================================================================================
 
 
-# Create number of generations and first day of emergence
-@time d = year_average(years, outDir, thin, speciesName, doy, result)
+
+
+
+
+
+# Create data to visualised
+# number of generations and first day of emergence
+@time d = year_average(years, outDir, thin, speciesName, doy)
+
+
+
+
+
+
 
 # ===================================================================
 # Visualise output
+
+year_label = string(minimum(years)) * " - " * string(maximum(years))
+
+# Add coastline to the plot
+p_coast = plot!(coast.idx_east,
+        coast.idx_north,
+        seriestype=:scatter,
+        showaxis=false,
+        grid=false,
+        markersize=0.5,
+        markercolor="black",
+        dpi=600);
+
+
 
 # plot map of emergence day of year
 plot(d.east,
@@ -178,19 +192,14 @@ plot(d.east,
         markersize=0.5,
         markerstrokewidth=0,
         markershape=:square,
-        title="doy = " * string(doy),
+        title="Emergence DOY (Start DOY = " * string(doy) * ",  " * year_label * ")",
         dpi=600);
 
-plot!(coast.idx_east,
-        coast.idx_north,
-        seriestype=:scatter,
-        showaxis=false,
-        grid=false,
-        markersize=0.5,
-        markercolor="black",
-        dpi=600)
-# savefig("test.png")
+p_coast   # add coastline
 
+
+
+# Plot number of generations per year
 plot(d.east,
         d.north,
         zcolor=d.nGen,
@@ -205,23 +214,16 @@ plot(d.east,
         markerstrokewidth=0,
         markershape=:square,
         dpi=600,
-        title="Number of Generations");
+        title="Number of Generations (" * year_label * ")");
 
-plot!(coast.idx_east,
-        coast.idx_north,
-        seriestype=:scatter,
-        showaxis=false,
-        grid=false,
-        markersize=0.5,
-        markercolor="black",
-        dpi=600)
+        p_coast   # add coastline
 
-
+# Save output from the last plot
 savefig("agrilus_ngen_2018_2020.png")
 
 
 # # +++++++++++++++++++++++++++++++++++++++++++
-# # Plot emergence for all locations across Ireland
+# Plot emergence for all locations across Ireland
 # plot(result.DOY,
 #         result.emergeDOY,
 #         group=result.ID,
