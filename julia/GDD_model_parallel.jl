@@ -19,8 +19,8 @@ using JLD2
 
 
 
-nNodes = 5;        # Number of compute nodes to use (if in interactive)
-meteoYear = 2018:2020
+nNodes = 2;        # Number of compute nodes to use (if in interactive)
+meteoYear = 1991:2017
 saveToFile = true;   # If true save the result to a file
 latlonFile = "locations.CSV"  # File a grid of lats longs over Ireland (used for daylength calculations)
 

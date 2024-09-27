@@ -16,7 +16,7 @@ using JLD2
 # Set parameters for the visualisation
 # If more than one year then take average across years
 speciesName = "agrilus"
-years = [2018, 2019, 2020]
+years = collect(1991:2020)
 thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
 doy::Int32 = 1   # Day of year development started
 
@@ -71,9 +71,11 @@ function extract_results(doy::Int32, result::DataFrame)
                 # Find index of result that corresponds to desired day of year (ie doy>=result.DOY)
                 idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY[i]) - 1 + idx1[i] for i = eachindex(idx1)]
 
+                # println(maximum(idx3))
+
                 # Set any missing matches to zero
                 match = startDOY .> 0 .&& idx2 + ones(Int64, size(idx1)) .> idx3
-                complete = result.emergeDOY[idx3] .<= 365
+                complete = result.emergeDOY[idx3] .< 365
 
                 # Increment generations
                 res.nGen[match.&complete] .+= 1
@@ -85,9 +87,9 @@ function extract_results(doy::Int32, result::DataFrame)
 
                 # Reset starting DOY
                 startDOY = zeros(Int32, length(idx1))
-                startDOY[match.&complete] .+= result.emergeDOY[idx3[match.&complete]] .+ 1
+                startDOY[match .& complete] .+= result.emergeDOY[idx3[match .& complete]] .+ 1
 
-                sum(startDOY .> 0)
+                # println([sum(startDOY .> 0), maximum(result.emergeDOY[idx3])])
 
         end
 
@@ -106,6 +108,8 @@ function year_average(years::Vector{Int64}, outDir::String, thin::Int64,
 
         out = []
         for y in eachindex(years)
+                println("Processing data for " * string(years[y]))
+
                 fileName = "result_" * speciesName * string(years[y]) * "_par_thin" * string(thin) * ".jld2"
                 resultFile = joinpath([outDir, speciesName, fileName])
                 result = load(resultFile, "single_stored_object")
@@ -115,14 +119,14 @@ function year_average(years::Vector{Int64}, outDir::String, thin::Int64,
                 if y == 1
                         out = d
                         out.N = ones(size(out.nGen))
-                        out.nGenSD = d.nGen.^2
-                        out.emergeSD = d.emergeDOY.^2
+                        out.nGenSD = d.nGen .^ 2
+                        out.emergeSD = d.emergeDOY .^ 2
                 else
                         idx = [findfirst(x -> x == ID, d.ID) for ID in out.ID]
                         out.nGen[idx] .+= d.nGen
-                        out.nGenSD[idx] .+= d.nGen.^2
+                        out.nGenSD[idx] .+= d.nGen .^ 2
                         out.emergeDOY[idx] .+= d.emergeDOY
-                        out.emergeSD[idx] .+= d.emergeDOY.^2
+                        out.emergeSD[idx] .+= d.emergeDOY .^ 2
                         out.N[idx] .+= 1
                 end
         end
@@ -133,14 +137,49 @@ function year_average(years::Vector{Int64}, outDir::String, thin::Int64,
         out.emergeDOY = tmp ./ out.N
 
         # Calculate standard deviation across years
-        out.nGenSD = (out.nGenSD./ out.N - out.nGen.^2).^0.5
+        out.nGenSD = (out.nGenSD ./ out.N - out.nGen .^ 2) .^ 0.5
         tmp = Float64.(out.emergeSD)
-        out.emergeSD = (tmp ./out.N - out.emergeDOY.^2).^0.5
+        out.emergeSD = (tmp ./ out.N - out.emergeDOY .^ 2) .^ 0.5
 
 
         return out
 end
 
+
+
+# ============================================================
+
+
+function plot_map(varStr::String, data::DataFrame, coast::DataFrame, 
+        titleStr::String="NoTitle", cscale=:matter, discrete=false)
+
+        x = sort(unique(coast.idx_east))
+        y = sort(unique(coast.idx_north))
+        C = fill(NaN, maximum(y), maximum(x)) # make a 2D C with NaNs
+
+        for i in 1:nrow(data)
+                C[data.north[i], data.east[i]] = data[i, varStr]
+        end
+
+        heatmap(C,
+                showaxis=false,
+                grid=false,
+                axis_ratio=:equal,
+                color=cgrad(cscale, categorical=discrete),
+                legend=false,
+                cbar=true,
+                title=titleStr)
+
+        plot!(coast.idx_east,
+                coast.idx_north,
+                seriestype=:scatter,
+                showaxis=false,
+                grid=false,
+                markersize=0.5,
+                markercolor="black",
+                dpi=600)
+
+end
 
 # =================================================================================
 # End of function definitions
@@ -157,8 +196,8 @@ end
 @time d = year_average(years, outDir, thin, speciesName, doy)
 
 
-
-
+# Create discrete number of generations
+d.nGenInt = floor.(d.nGen)
 
 
 
@@ -167,56 +206,18 @@ end
 
 year_label = string(minimum(years)) * " - " * string(maximum(years))
 
-# Add coastline to the plot
-p_coast = plot!(coast.idx_east,
-        coast.idx_north,
-        seriestype=:scatter,
-        showaxis=false,
-        grid=false,
-        markersize=0.5,
-        markercolor="black",
-        dpi=600);
+titleStr = "Emergence DOY (Start DOY = " * string(doy) * ",  " * year_label * ")"
+plot_map("emergeDOY", d, coast, titleStr, :RdYlGn)
 
 
+titleStr="Number of Generations (" * year_label * ")";
+plot_map("nGen", d, coast, titleStr, :PiYG)
+plot_map("nGenInt", d, coast, titleStr, :Dark2_3, true)
 
-# plot map of emergence day of year
-plot(d.east,
-        d.north,
-        seriestype=:scatter,
-        zcolor=d.emergeDOY,
-        axis_ratio=:equal,
-        color=:matter,
-        cbar=true,
-        legend=false,
-        showaxis=false,
-        markersize=0.5,
-        markerstrokewidth=0,
-        markershape=:square,
-        title="Emergence DOY (Start DOY = " * string(doy) * ",  " * year_label * ")",
-        dpi=600);
-
-p_coast   # add coastline
+titleStr="Number of Generations SD (" * year_label * ")";
+plot_map("nGenSD", d, coast, titleStr, :Accent)
 
 
-
-# Plot number of generations per year
-plot(d.east,
-        d.north,
-        zcolor=d.nGen,
-        seriestype=:scatter,
-        color=:Accent_6,
-        axis_ratio=:equal,
-        clims=:auto,
-        cbar=true,
-        legend=false,
-        showaxis=false,
-        markersize=0.5,
-        markerstrokewidth=0,
-        markershape=:square,
-        dpi=600,
-        title="Number of Generations (" * year_label * ")");
-
-        p_coast   # add coastline
 
 # Save output from the last plot
 savefig("agrilus_ngen_2018_2020.png")
