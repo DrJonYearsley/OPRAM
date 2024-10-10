@@ -16,9 +16,9 @@ using JLD2
 # Set parameters for the visualisation
 # If more than one year then take average across years
 speciesName = "agrilus"
-years = collect(1991:2020)
+years = 1961
 thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
-doy::Int32 = 1   # Day of year development started
+doy::Int32 = 10   # Day of year development started
 
 
 
@@ -44,9 +44,9 @@ end
 
 
 # =================================================================================
-# Import results data
+# Import coastline data
 coast = CSV.read(joinpath([meteoDir, "..", "coastline.csv"]), DataFrame,
-        types=[Float64, Float64, Int64, Int64, Int64])
+        types=[Float64, Float64, Int, Int, Int])
 
 
 # =================================================================================
@@ -103,7 +103,7 @@ end
 
 
 
-function year_average(years::Vector{Int64}, outDir::String, thin::Int64,
+function year_average(years::Union{Vector{Int64}, Int64}, outDir::String, thin::Int64,
         speciesName::String, doy::Int32)
 
         out = []
@@ -244,3 +244,12 @@ savefig("agrilus_ngen_2018_2020.png")
 #         nbinsy=100,
 #         xaxis="Start DOY",
 #         yaxis="Emergence DOY")
+
+
+
+
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Find a specific location
+
+d.idx_east

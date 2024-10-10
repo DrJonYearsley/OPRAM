@@ -19,8 +19,8 @@ using JLD2
 
 
 
-nNodes = 2;        # Number of compute nodes to use (if in interactive)
-meteoYear = 1991:2017
+nNodes = 5;        # Number of compute nodes to use (if in interactive)
+meteoYear = 1961
 saveToFile = true;   # If true save the result to a file
 latlonFile = "locations.CSV"  # File a grid of lats longs over Ireland (used for daylength calculations)
 
@@ -92,6 +92,7 @@ if isinteractive() & nworkers() == 1
   # Enable multiple nodes 
   addprocs(nNodes)
 end
+
 
 println("Workers : $(workers())")
 println("interactive : $(isinteractive())")
