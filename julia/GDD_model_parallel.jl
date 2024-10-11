@@ -19,7 +19,7 @@ using JLD2
 
 
 
-nNodes = 5;        # Number of compute nodes to use (if in interactive)
+nNodes = 2;        # Number of compute nodes to use (if in interactive)
 meteoYear = 1961
 saveToFile = true;   # If true save the result to a file
 latlonFile = "locations.CSV"  # File a grid of lats longs over Ireland (used for daylength calculations)
@@ -240,7 +240,7 @@ for year in meteoYear
   # # Save the results (replacing ID indices with original ID values)
   # CSV.write(joinpath([outDir,"result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".csv"]), tm)
 
-  # Save using jld2 format (no saving in file size)
+  # Save using jld2 format
   save_object(joinpath([outDir, "result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), tm)
 
 

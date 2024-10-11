@@ -118,12 +118,14 @@ function year_average(years::Union{Vector{Int64}, Int64}, outDir::String, thin::
                 d = extract_results(doy, result)
                 if y == 1
                         out = d
+                        out.nGenInt = floor.(d.nGen)    
                         out.N = ones(size(out.nGen))
                         out.nGenSD = d.nGen .^ 2
                         out.emergeSD = d.emergeDOY .^ 2
                 else
                         idx = [findfirst(x -> x == ID, d.ID) for ID in out.ID]
                         out.nGen[idx] .+= d.nGen
+                        out.nGenInt[idx] += floor.(d.nGen)   
                         out.nGenSD[idx] .+= d.nGen .^ 2
                         out.emergeDOY[idx] .+= d.emergeDOY
                         out.emergeSD[idx] .+= d.emergeDOY .^ 2
@@ -133,6 +135,7 @@ function year_average(years::Union{Vector{Int64}, Int64}, outDir::String, thin::
 
         # Calculate average across the years
         out.nGen = out.nGen ./ out.N
+        out.nGenInt = out.nGenInt ./ out.N
         tmp = Float64.(out.emergeDOY)
         out.emergeDOY = tmp ./ out.N
 
@@ -196,8 +199,6 @@ end
 @time d = year_average(years, outDir, thin, speciesName, doy)
 
 
-# Create discrete number of generations
-d.nGenInt = floor.(d.nGen)
 
 
 
@@ -252,4 +253,13 @@ savefig("agrilus_ngen_2018_2020.png")
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Find a specific location
 
-d.idx_east
+# Specify eastings and northings
+location = [95000, 21000] 
+latlonFile = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//locations.CSV"
+
+# Import location data
+latlongs = CSV.read(latlonFile, DataFrame)
+
+idx = latlongs.east.==location[1] .&& latlongs.north.==location[2]
+
+d[d.ID.==latlongs.ID[idx],:]
