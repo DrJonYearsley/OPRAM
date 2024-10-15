@@ -256,10 +256,18 @@ savefig("agrilus_ngen_2018_2020.png")
 # Specify eastings and northings
 location = [95000, 21000] 
 latlonFile = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//locations.CSV"
+latlonFile = joinpath(meteoDir,"locations.CSV")
+paulFile = "first_occurrence_threshold_with_date_range_2_1961_Agrilus_anxius_GDD_multiple_dates.csv"
 
 # Import location data
 latlongs = CSV.read(latlonFile, DataFrame)
 
+paul = CSV.read(joinpath(outDir, "Changing_Start_Dates",paulFile),DataFrame)
+
 idx = latlongs.east.==location[1] .&& latlongs.north.==location[2]
 
 d[d.ID.==latlongs.ID[idx],:]
+
+
+
+julia[julia.ID.==16090,:]
