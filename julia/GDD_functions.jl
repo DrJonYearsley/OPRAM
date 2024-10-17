@@ -17,7 +17,7 @@
 # =========================================================
 # ============= Defne functions ===========================
 
-function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32})
+function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32}, threshold)
   # Calculate daylength in hours using the algorithm from the R package geosphere
   # This package uses the algorithm in 
   # Forsythe, William C., Edward J. Rykiel Jr., Randal S. Stahl, Hsin-i Wu and 
@@ -26,6 +26,7 @@ function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32})
 
   # Import location data
   latlongs = CSV.read(latlonFile, DataFrame)
+  
   # Sort latlongs
   latlongs = latlongs[sortperm(latlongs.ID), :]
 
@@ -33,7 +34,8 @@ function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32})
   lat = [latlongs.latitude[searchsortedfirst(latlongs.ID, ID[i])] for i in eachindex(ID)]
 
 
-  daylength = zeros(Float64, length(DOY))
+  daylength = zeros(Float64, length(DOY))        # Calculate day length
+  daylength_change = zeros(Float64, length(DOY)) # Calculate rate of change of daylength
   DOY = convert.(Float64, DOY)     # Convert to Float64 for the calculations
 
   for i in eachindex(DOY)
@@ -43,7 +45,8 @@ function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32})
     daylength[i] = 24.0 - (24.0 / pi) * acos(a)
   end
 
-  return daylength
+  # Return true if daylength allows development to happen
+  return daylength>threshold || DOY.<150
 end
 
 

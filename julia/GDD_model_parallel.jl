@@ -162,9 +162,9 @@ for year in meteoYear
     DOY = [meteo[5][idx[i][1]] for i in eachindex(idx)]
 
     if ismissing(params.diapause_temperature)   # diapause determine by photoperiod
-      no_overwinter = photoperiod(latlonFile, DOY, IDvec) .> params.diapause_photoperiod
-    else # diapause determined by photoperiod and temp
-      no_overwinter = photoperiod(latlonFile, DOY, IDvec) .> params.diapause_photoperiod .||
+      no_overwinter = photoperiod(latlonFile, DOY, IDvec, params.diapause_photoperiod) 
+    else # diapause determined by photoperiod (if day length is decreasing) and temp
+      no_overwinter = photoperiod(latlonFile, DOY, IDvec, params.diapause_photoperiod).||
                       GDD[gdd_update] .> (params.diapause_temperature - params.base_temperature)
     end
 
