@@ -20,9 +20,9 @@ using JLD2
 
 
 nNodes = 2;        # Number of compute nodes to use (if in interactive)
-meteoYear = 1961
+meteoYear = 1961   # Years to run model
 saveToFile = true;   # If true save the result to a file
-latlonFile = "locations.CSV"  # File a grid of lats longs over Ireland (used for daylength calculations)
+latlonFile = "locations.CSV"  # File containing a grid of lats and longs over Ireland (used for daylength calculations)
 
 # Factor to think the spatial grid (2 means sample every 2 km, 5 = sample every 5km)
 thinFactor = 1;
@@ -62,15 +62,15 @@ dummy_species = (base_temperature=1.7f0,            # Degrees C
 
 if isdir("//home//jon//Desktop//OPRAM")
   outDir = "//home//jon//Desktop//OPRAM//results//"
-  meteoDir = "//home//jon//Desktop//OPRAM//Irish_Climate_Data//"
+  meteoDir_IE = "//home//jon//Desktop//OPRAM//Irish_Climate_Data//"
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
-  meteoDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
+  meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
 
 elseif isdir("//users//jon//Desktop//OPRAM//")
   outDir = "//users//jon//Desktop//OPRAM//results//"
-  meteoDir = "//users//jon//Desktop//OPRAM//Irish_Climate_Data//"
+  meteoDir_IE = "//users//jon//Desktop//OPRAM//Irish_Climate_Data//"
 end
 
 
@@ -83,7 +83,7 @@ outDir = joinpath(outDir, outPrefix)
 
 
 # Make complete path to photoperiod file
-latlonFile = joinpath([meteoDir, latlonFile])
+latlonFile = joinpath([meteoDir_IE, latlonFile])
 
 # =========================================================
 # =========================================================
@@ -135,7 +135,7 @@ end
 for year in meteoYear
   # Import weather data along with location and day of year
   println("Importing meteo data starting from year " * string(year))
-  @time meteo = read_meteo(year, meteoDir, thinFactor)
+  @time meteo = read_meteo(year, meteoDir_IE, thinFactor)
 
 
 

@@ -19,7 +19,7 @@ import CodecBzip2
 # =================================================================================
 # Filename to import
 
-paulFile = "Code that is under development//Changing Start Dates//first_occurrence_threshold_with_date_range_2_1961_Agrilus_anxius_GDD_multiple_dates.rds"
+paulFile = "Code that is under development//Changing Start Dates//Updated_Code__Removal_Of_Years//first_occurrence_threshold_with_date_range_1_1961_Agrilus_anxius_GDD_multiple_dates.rds"
 paulFile2 = "WebDeveloper//Web Developer Quote - Shiny App//Model Outputs//Agrilus anxius//1st Occurrence - Select Individual Years//first_occurrence_1961_Agrilus_anxius.rds"
 
 juliaFile = "result_agrilus1961_par_thin1.jld2"
@@ -116,7 +116,7 @@ d_meteo = DataFrame(ID=repeat(ID, inner=length(DOY)),
 
 
 # Pick specific columns from paul
-d_paul = select(paul, :DOY, :Day, :ID2, :east, :north)
+d_paul = select(paul, :DOY, :Day, :ID2, :east, :north, :Date)
 sort!(d_paul, [:ID2, :DOY])
 
 
@@ -124,9 +124,17 @@ sort!(d_paul, [:ID2, :DOY])
 unique(d_jul.ID2)
 unique(d_paul.ID2)
 
-
-d_paul
+idx = findall(diff(d_paul.Day).==1)
+d_paul[idx,:]
 d_jul
+
+
+plot(d_paul.DOY, d_paul.Day, seriestype=:scatter, ms=1, legend=false);
+xlims!(0,366);
+ylims!(0,366)
+plot(d_jul.DOY, d_jul.emergeDOY, seriestype=:scatter, ms=1, legend=false);
+xlims!(0,366);
+ylims!(0,366)
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Check dates of first emergence

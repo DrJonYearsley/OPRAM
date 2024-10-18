@@ -45,7 +45,8 @@ function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32}, 
     daylength[i] = 24.0 - (24.0 / pi) * acos(a)
   end
 
-  # Return true if daylength allows development to happen
+  # Return true if daylength allows development to happen 
+  # (photoperiod not relevant before day 150 of year)
   return daylength>threshold || DOY.<150
 end
 
