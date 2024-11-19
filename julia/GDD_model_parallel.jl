@@ -15,14 +15,15 @@
 # Load packages that will be used
 using Distributed;
 using CSV;
-using JLD2
+using JLD2;
 
 
 
 nNodes = 2;        # Number of compute nodes to use (if in interactive)
 meteoYear = 1961   # Years to run model
 saveToFile = true;   # If true save the result to a file
-latlonFile = "locations.CSV"  # File containing a grid of lats and longs over Ireland (used for daylength calculations)
+gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
+# (used for daylength calculations as well as importing and thining of meteo data)
 
 # Factor to think the spatial grid (2 means sample every 2 km, 5 = sample every 5km)
 thinFactor = 1;
@@ -62,15 +63,21 @@ dummy_species = (base_temperature=1.7f0,            # Degrees C
 
 if isdir("//home//jon//Desktop//OPRAM")
   outDir = "//home//jon//Desktop//OPRAM//results//"
+  dataDir = "//home//jon//Desktop//OPRAM//"
   meteoDir_IE = "//home//jon//Desktop//OPRAM//Irish_Climate_Data//"
+  meteoDir_NI = "//home//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//"
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
+  dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"
   meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
+  meteoDir_NI = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Northern_Ireland_Climate_Data//"
 
 elseif isdir("//users//jon//Desktop//OPRAM//")
   outDir = "//users//jon//Desktop//OPRAM//results//"
+  dataDir = "//users//jon//Desktop//OPRAM//"
   meteoDir_IE = "//users//jon//Desktop//OPRAM//Irish_Climate_Data//"
+  meteoDir_NI = "//users//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//"
 end
 
 
@@ -82,8 +89,6 @@ end
 outDir = joinpath(outDir, outPrefix)
 
 
-# Make complete path to photoperiod file
-latlonFile = joinpath([meteoDir_IE, latlonFile])
 
 # =========================================================
 # =========================================================
@@ -127,6 +132,23 @@ end
 
 
 
+
+# =========================================================
+# =========================================================
+# Import location data and thin it using thinFactor
+
+# Import grid location data
+grid = CSV.read(joinpath([dataDir, gridFile]), DataFrame)
+
+# Sort locations in order of IDs
+grid = grid[sortperm(grid.ID), :]
+
+# Thin the locations  using the thinFactor
+thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(grid.north, (thinFactor * 1e3)) .< 1e-8)
+
+grid_thin = grid[thinInd, :]
+
+
 # =========================================================
 # =========================================================
 # Start the main loop of the program
@@ -134,15 +156,12 @@ end
 
 for year in meteoYear
   # Import weather data along with location and day of year
-  println("Importing meteo data starting from year " * string(year))
-  @time meteo = read_meteo(year, meteoDir_IE, thinFactor)
+  @info "Importing meteo data starting from year " * string(year)
+  @time meteo = read_meteo(year, meteoDir_IE, meteoDir_NI, grid_thin)
 
 
 
-  println("Preparing data for the model")
-
-  # Create ID's for thinned locations
-  ID = meteo[2]
+  @info "Preparing data for the model"
 
   # Calculate average temp (first element of meteo) minus the base temp
   GDD = meteo[1] .- params.base_temperature
@@ -153,18 +172,18 @@ for year in meteoYear
 
   # List ID's for all GDDs above the base temp
   idx = findall(gdd_update)
-  IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]       # Location ID index
+  IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]   # Location ID index
 
 
   # Add in diapause (if necessary)
   if !ismissing(params.diapause_photoperiod)
     # Calulate day of year for all points where GDD > base temp
-    DOY = [meteo[5][idx[i][1]] for i in eachindex(idx)]
+    DOY = [meteo[4][idx[i][1]] for i in eachindex(idx)]
 
     if ismissing(params.diapause_temperature)   # diapause determine by photoperiod
-      no_overwinter = photoperiod(latlonFile, DOY, IDvec, params.diapause_photoperiod) 
+      no_overwinter = photoperiod(grid_thin.latitude, DOY, params.diapause_photoperiod) 
     else # diapause determined by photoperiod (if day length is decreasing) and temp
-      no_overwinter = photoperiod(latlonFile, DOY, IDvec, params.diapause_photoperiod).||
+      no_overwinter = photoperiod(grid_thin.latitude, DOY, params.diapause_photoperiod).||
                       GDD[gdd_update] .> (params.diapause_temperature - params.base_temperature)
     end
 

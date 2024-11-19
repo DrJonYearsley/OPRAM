@@ -17,30 +17,24 @@
 # =========================================================
 # ============= Defne functions ===========================
 
-function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32}, threshold)
+function photoperiod(latitude::Vector{Float64}, DOY::Vector{Int16}, threshold)
   # Calculate daylength in hours using the algorithm from the R package geosphere
   # This package uses the algorithm in 
   # Forsythe, William C., Edward J. Rykiel Jr., Randal S. Stahl, Hsin-i Wu and 
   # Robert M. Schoolfield, 1995. A model comparison for daylength as a function of 
   # latitude and day of the year. Ecological Modeling 80:87-95.
 
-  # Import location data
-  latlongs = CSV.read(latlonFile, DataFrame)
-  
-  # Sort latlongs
-  latlongs = latlongs[sortperm(latlongs.ID), :]
-
-
-  lat = [latlongs.latitude[searchsortedfirst(latlongs.ID, ID[i])] for i in eachindex(ID)]
-
+  # Check latitude and DOY have the same length
+  if length(latitude) != length(DOY) 
+    @warn "function photoperiod: latitude and DOY are not the same length"
+  end
 
   daylength = zeros(Float64, length(DOY))        # Calculate day length
-  daylength_change = zeros(Float64, length(DOY)) # Calculate rate of change of daylength
   DOY = convert.(Float64, DOY)     # Convert to Float64 for the calculations
 
   for i in eachindex(DOY)
     P = asin(0.39795 * cos(0.2163108 + 2 * atan(0.9671396 * tan(0.0086 * (DOY[i] - 186.0)))))
-    a = (sind(0.8333) + sind(lat[i]) * sin(P)) / (cosd(lat[i]) * cos(P))
+    a = (sind(0.8333) + sind(latitude[i]) * sin(P)) / (cosd(latitude[i]) * cos(P))
     a = min(max(a, -1), 1)
     daylength[i] = 24.0 - (24.0 / pi) * acos(a)
   end
@@ -50,67 +44,82 @@ function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32}, 
   return daylength>threshold || DOY.<150
 end
 
-
 # ------------------------------------------------------------------------------------------
 
 
 
-function read_meteo(meteoYear, meteoDir, thinFactor)
-  # Import multiple years of daily min and max temperature and 
-  # create the daily average temp, and the ID, eastings and northings of spatial locations
+function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
+  # Import multiple years of daily min and max temperature for Republic of Ireland and 
+  # Northern Ireland
+  # Then creates the daily average temp for each eastings and northings of spatial locations
+  # Locations are also given a unique ID
   #
   # Arguments:
   #   meteoYear   the starting year to be imported
-  #   meteoDIR    the directory containing the data (the daily maximum/minimum temps are
-  #               assumed to be in folders maxtemp_grids and mintemp_grids)
+  #   meteoDirIE  the directory containing the data for the Republic of Ireland 
+  #               (the daily maximum/minimum temps are assumed to be 
+  #                in folders maxtemp_grids and mintemp_grids)
+  #   meteoDirNI  the directory containing the data for Northern Ireland 
+  #               (the daily maximum/minimum temps are assumed to be 
+  #                in folders NI_TX_daily_grid and NI_TN_daily_grid)
+  #   grid_thin   the grid of locations to use
   #
   # *************************************************************
 
   # Number of years of meteo data to import   
   nYears = 3
-
+  
   # An array containing the years to be imported
   years = collect(meteoYear:meteoYear+nYears-1)
 
+  # Import the weather data
+  meteoIE = read_meteoIE(meteoDir_IE, grid_thin, years)
+  meteoNI = read_meteoNI(meteoDir_NI, grid_thin, years)
+
+
+  return Tavg, meteoCoords.east[thinInd], meteoCoords.north[thinInd], DOY
+
+end
+# ------------------------------------------------------------------------------------------
+
+
+
+function read_meteoIE(meteoDir_IE, grid_thin, years)
+  # Import multiple years of daily min and max temperature for Republic of Ireland and 
+  # create the daily average temp, and the ID, eastings and northings of spatial locations
+  #
+  # Arguments:
+  #   meteoDir_IE the directory containing the data for the Republic of Ireland 
+  #               (the daily maximum/minimum temps are assumed to be 
+  #                in folders maxtemp_grids and mintemp_grids)
+  #   grid_thin   the grid of locations to use
+  #   years       years to be read
+  #
+  # *************************************************************
+
+  
   # Create empty array of arrays to hold average temps 
   TavgVec = Vector{Array{Float32,2}}(undef, length(years) * 12)
 
-
   # Read one meteo file to find locations information and calculate a filter
-  coordFile = filter(x -> occursin("TX_" * string(years[1]) * "01", x), readdir(joinpath(meteoDir, "maxtemp_grids")))
-  meteoCoords = CSV.read(joinpath([meteoDir, "maxtemp_grids", coordFile[1]]), DataFrame, select=[1, 2], types=Int32)
+  coordFile = filter(x -> occursin("TX_" * string(years[1]) * "01", x), readdir(joinpath(meteoDir_IE, "maxtemp_grids")))
+  meteoCoords = CSV.read(joinpath([meteoDir_IE, "maxtemp_grids", coordFile[1]]), DataFrame, select=[1, 2], types=Int32)
 
-  # Create unique eastings and northings values
-  east = sort(unique(meteoCoords.east))
-  north = sort(unique(meteoCoords.north))
-
-  # Thin the meteo data  using the thinFactor
-  thinInd = findall(mod.(meteoCoords.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(meteoCoords.north, (thinFactor * 1e3)) .< 1e-8)
-
-
-  # Create ID for each location in meteo file
-  idxEast = [searchsortedfirst(east, e) for e in meteoCoords.east[thinInd]]
-  idxNorth = [searchsortedfirst(north, n) for n in meteoCoords.north[thinInd]]
-
-  ID = [Int32(idxEast[e] * 1000 + idxNorth[e]) for e in eachindex(idxEast)]
-
-  # Make sure output is in increasing ID order
-  sortIdx = sortperm(ID)
-
-  # Put filtered locations in ID order
-  thinInd = thinInd[sortIdx]
+  # Find indices of meteo data to use
+  factor = unique(diff(unique(grid_thin.east)))  # Recreate the thin factor
+  thinInd = findall(mod.(meteoCoords.east, factor) .< 1e-8 .&& mod.(meteoCoords.north, factor) .< 1e-8)
 
   for y in eachindex(years)
     for month in 1:12
       # Import data for month and year (y)
 
       # Get the correct filename
-      meteoFileTX = filter(x -> occursin("TX_" * string(years[y]) * string(month, pad=2), x), readdir(joinpath(meteoDir, "maxtemp_grids")))
-      meteoFileTN = filter(x -> occursin("TN_" * string(years[y]) * string(month, pad=2), x), readdir(joinpath(meteoDir, "mintemp_grids")))
+      meteoFileTX = filter(x -> occursin("TX_" * string(years[y]) * string(month, pad=2), x), readdir(joinpath(meteoDir_IE, "maxtemp_grids")))
+      meteoFileTN = filter(x -> occursin("TN_" * string(years[y]) * string(month, pad=2), x), readdir(joinpath(meteoDir_IE, "mintemp_grids")))
 
       # Import the data for min and max daily temperature (removing first two coordinate columns)
-      meteoTX = CSV.read(joinpath([meteoDir, "maxtemp_grids", meteoFileTX[1]]), DataFrame, drop=[1, 2], types=Float32)
-      meteoTN = CSV.read(joinpath([meteoDir, "mintemp_grids", meteoFileTN[1]]), DataFrame, drop=[1, 2], types=Float32)
+      meteoTX = CSV.read(joinpath([meteoDir_IE, "maxtemp_grids", meteoFileTX[1]]), DataFrame, drop=[1, 2], types=Float32)
+      meteoTN = CSV.read(joinpath([meteoDir_IE, "mintemp_grids", meteoFileTN[1]]), DataFrame, drop=[1, 2], types=Float32)
 
       # Calculate daily average temp with locations as columns, days as rows
       TavgVec[(y-1)*12+month] = permutedims(Array{Float32,2}((meteoTX[thinInd, :] .+ meteoTN[thinInd, :]) ./ 2.0))
@@ -122,11 +131,71 @@ function read_meteo(meteoYear, meteoDir, thinFactor)
 
   # Calculate day of year (used for photoperiod calculations)
   DOM = size.(TavgVec, 1)      # Day of month
-  DOY = reduce(vcat, [collect(1:sum(DOM[(1+12*(y-1)):12*y])) for y in 1:nYears])  # Day of year
+  DOY = reduce(vcat, [collect(1:sum(DOM[(1+12*(y-1)):12*y])) for y in 1:length(years)])  # Day of year
   DOY = convert.(Int16, DOY)
 
-  return Tavg, ID[sortIdx], meteoCoords.east[thinInd], meteoCoords.north[thinInd], DOY
+  return Tavg, meteoCoords.east[thinInd], meteoCoords.north[thinInd], DOY
 end
+# ------------------------------------------------------------------------------------------
+
+
+
+
+
+function read_meteoNI(meteoDir_NI, grid_thin, years)
+  # Import multiple years of daily mean temperature for Northern Ireland
+  # create the daily average temp, and the ID, eastings and northings of spatial locations
+  #
+  # The data for the entire year are stored in one file
+  #
+  # Arguments:
+  #   meteoDir_NI the directory containing the data for Northern Ireland 
+  #               (the daily maximum/minimum temps are assumed to be 
+  #                in folders NI_TX_daily_grid and NI_TN_daily_grid)
+  #   grid_thin   the grid of locations to use
+  #   years       years to be read
+  # *************************************************************
+
+  # Create empty array of arrays to hold average temps 
+  TavgVec = Vector{Array{Float32,2}}(undef, length(years))
+
+  # Read one meteo file to find locations information and calculate a filter
+  coordFileNI = filter(x -> occursin("TX_daily_grid_" * string(years[1]), x), 
+                     readdir(joinpath(meteoDir_NI, "NI_TX_daily_grid")))
+  meteoCoords_NI = CSV.read(joinpath([meteoDir_NI, "NI_TX_daily_grid", coordFileNI[1]]), DataFrame, select=[1, 2], types=Int32)
+
+  # Find indices of meteo data to use
+  factor = unique(diff(unique(grid_thin.east)))  # Recreate the thin factor
+  thinInd = findall(mod.(meteoCoords_NI.east, factor) .< 1e-8 .&& mod.(meteoCoords_NI.north, factor) .< 1e-8)
+
+
+  for y in eachindex(years)
+      # Import data for year (y)
+
+      # Get the correct filename
+      meteoFileTX = filter(x -> occursin("TX_daily_grid_" * string(years[y]), x), readdir(joinpath(meteoDir_NI, "NI_TX_daily_grid")))
+      meteoFileTN = filter(x -> occursin("TN_daily_grid_" * string(years[y]), x), readdir(joinpath(meteoDir_NI, "NI_TN_daily_grid")))
+
+      # Import the data for min and max daily temperature (removing first two coordinate columns)
+      meteoTX = CSV.read(joinpath([meteoDir_NI, "NI_TX_daily_grid", meteoFileTX[1]]), DataFrame, drop=[1, 2], types=Float32)
+      meteoTN = CSV.read(joinpath([meteoDir_NI, "NI_TN_daily_grid", meteoFileTN[1]]), DataFrame, drop=[1, 2], types=Float32)
+
+      # Calculate daily average temp with locations as columns, days as rows
+      TavgVec[y] = permutedims(Array{Float32,2}((meteoTX[thinInd, :] .+ meteoTN[thinInd, :]) ./ 2.0))
+    end
+
+  # Put all the temperature data together into one Matrix
+  Tavg = reduce(vcat, TavgVec)
+
+
+  # Calculate day of year (used for photoperiod calculations) 
+  DOY = reduce(vcat, [collect(1:size(TavgVec[y],1)) for y in 1:length(years)]) 
+  DOY = convert.(Int16, DOY)  # Day of year
+
+  return Tavg, meteoCoords.east[thinInd], meteoCoords.north[thinInd], DOY
+end
+
+
 
 # ------------------------------------------------------------------------------------------
 
