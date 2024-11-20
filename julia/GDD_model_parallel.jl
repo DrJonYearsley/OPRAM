@@ -26,7 +26,7 @@ gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and lon
 # (used for daylength calculations as well as importing and thining of meteo data)
 
 # Factor to think the spatial grid (2 means sample every 2 km, 5 = sample every 5km)
-thinFactor = 1;
+thinFactor = 10;
 
 # Define species parameters
 outPrefix = "agrilus";   # Prefix to use for results files
@@ -138,15 +138,18 @@ end
 # Import location data and thin it using thinFactor
 
 # Import grid location data
-grid = CSV.read(joinpath([dataDir, gridFile]), DataFrame)
+grid = CSV.read(joinpath([dataDir, gridFile]), DataFrame);
 
 # Sort locations in order of IDs
-grid = grid[sortperm(grid.ID), :]
+grid = grid[sortperm(grid.ID), :];
 
 # Thin the locations  using the thinFactor
-thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(grid.north, (thinFactor * 1e3)) .< 1e-8)
+thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(grid.north, (thinFactor * 1e3)) .< 1e-8);
 
-grid_thin = grid[thinInd, :]
+grid_thin = grid[thinInd, :];
+
+
+
 
 
 # =========================================================

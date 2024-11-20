@@ -76,8 +76,17 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
   meteoIE = read_meteoIE(meteoDir_IE, grid_thin, years)
   meteoNI = read_meteoNI(meteoDir_NI, grid_thin, years)
 
+  
+  # Combine meteo data from NI and IE
+  Tavg = hcat(meteoIE[1], meteoNI[1])
 
-  return Tavg, meteoCoords.east[thinInd], meteoCoords.north[thinInd], DOY
+  # Order meteo data by location ID in grid_thin
+  east = vcat(meteoIE[2],meteoNI[2])
+  north = vcat(meteoIE[3],meteoNI[3])
+
+idx =  findall(x-> x==grid_thin.east , east)
+
+  return Tavg, DOY
 
 end
 # ------------------------------------------------------------------------------------------
@@ -192,7 +201,7 @@ function read_meteoNI(meteoDir_NI, grid_thin, years)
   DOY = reduce(vcat, [collect(1:size(TavgVec[y],1)) for y in 1:length(years)]) 
   DOY = convert.(Int16, DOY)  # Day of year
 
-  return Tavg, meteoCoords.east[thinInd], meteoCoords.north[thinInd], DOY
+  return Tavg, meteoCoords_NI.east[thinInd], meteoCoords_NI.north[thinInd], DOY
 end
 
 
