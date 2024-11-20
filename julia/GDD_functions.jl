@@ -80,10 +80,11 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
   # Combine meteo data from NI and IE
   Tavg = hcat(meteoIE[1], meteoNI[1])
 
-  # Order meteo data by location ID in grid_thin
+  # Combine location data 
   east = vcat(meteoIE[2],meteoNI[2])
   north = vcat(meteoIE[3],meteoNI[3])
 
+    # Order meteo data by location ID in grid_thin
 idx =  findall(x-> x==grid_thin.east , east)
 
   return Tavg, DOY

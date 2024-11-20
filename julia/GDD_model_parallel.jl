@@ -63,9 +63,9 @@ dummy_species = (base_temperature=1.7f0,            # Degrees C
 
 if isdir("//home//jon//Desktop//OPRAM")
   outDir = "//home//jon//Desktop//OPRAM//results//"
-  dataDir = "//home//jon//Desktop//OPRAM//"
-  meteoDir_IE = "//home//jon//Desktop//OPRAM//Irish_Climate_Data//"
-  meteoDir_NI = "//home//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//"
+  dataDir = "//home//jon//DATA//OPRAM//"
+  meteoDir_IE = "//home//jon//DATA//OPRAM//Irish_Climate_Data//"
+  meteoDir_NI = "//home//jon//DATA//OPRAM//Northern_Ireland_Climate_Data//"
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
@@ -84,7 +84,7 @@ end
 # Make directory for the output prefix if one doesn't exist
 if !isdir(joinpath(outDir, outPrefix))
   println("Making directory " * outPrefix)
-  mkdir(joinpath(outDir, outPrefix))
+  mkpath(joinpath(outDir, outPrefix))
 end
 outDir = joinpath(outDir, outPrefix)
 
@@ -99,8 +99,8 @@ if isinteractive() & nworkers() == 1
 end
 
 
-println("Workers : $(workers())")
-println("interactive : $(isinteractive())")
+@info "Workers : $(workers())"
+@info "Interactive Session: $(isinteractive())"
 
 
 @everywhere using SharedArrays
@@ -124,10 +124,10 @@ include("species_params.jl")
 # Find species data corresponding to outPrefix and set this as the variable params
 species_params = filter(x -> occursin(outPrefix, string(x)), names(Main))
 if length(species_params) > 0
-  println("Using parameters for species " * string(species_params[1]))
+  @info "Using parameters for species " * string(species_params[1])
   params = eval(species_params[1])    # Define parameters to use
 else
-  error("Species parameters not found")
+  @error "Species parameters not found"
 end
 
 
