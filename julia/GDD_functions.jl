@@ -85,7 +85,11 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
   north = vcat(meteoIE[3],meteoNI[3])
 
     # Order meteo data by location ID in grid_thin
-idx =  findall(x-> x==grid_thin.east , east)
+    for i in eachindex(east)
+       
+    end
+idx =  [findfirst(east[i].==grid_thin.east .& north[i].==grid_thin.north) for i in eachindex(east)]
+
 
   return Tavg, DOY
 
@@ -115,9 +119,12 @@ function read_meteoIE(meteoDir_IE, grid_thin, years)
   coordFile = filter(x -> occursin("TX_" * string(years[1]) * "01", x), readdir(joinpath(meteoDir_IE, "maxtemp_grids")))
   meteoCoords = CSV.read(joinpath([meteoDir_IE, "maxtemp_grids", coordFile[1]]), DataFrame, select=[1, 2], types=Int32)
 
-  # Find indices of meteo data to use
-  factor = unique(diff(unique(grid_thin.east)))  # Recreate the thin factor
+  # Find indices of meteo data to use 
+  # (needed incase meteo file has missing grid points or different order compared to grid_thin)
+  factor = unique(diff(unique(grid_thin.east)))  # Recreate the thin factor (in units of m)
   thinInd = findall(mod.(meteoCoords.east, factor) .< 1e-8 .&& mod.(meteoCoords.north, factor) .< 1e-8)
+
+  IDidx = [grid_thin.east==meteo_coords.east[i] .& grid_thin.north==meteo_coords.north[i] for i in thinInd]
 
   for y in eachindex(years)
     for month in 1:12
@@ -175,6 +182,7 @@ function read_meteoNI(meteoDir_NI, grid_thin, years)
   meteoCoords_NI = CSV.read(joinpath([meteoDir_NI, "NI_TX_daily_grid", coordFileNI[1]]), DataFrame, select=[1, 2], types=Int32)
 
   # Find indices of meteo data to use
+  # (needed incase meteo file has missing grid points or different order compared to grid_thin)
   factor = unique(diff(unique(grid_thin.east)))  # Recreate the thin factor
   thinInd = findall(mod.(meteoCoords_NI.east, factor) .< 1e-8 .&& mod.(meteoCoords_NI.north, factor) .< 1e-8)
 
