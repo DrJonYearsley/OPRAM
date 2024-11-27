@@ -15,29 +15,36 @@ using JLD2
 # =================================================================================
 # Set parameters for the visualisation
 # If more than one year then take average across years
-speciesName = "agrilus"
-years = 1961
+speciesName = "pseudips"
+years = 2020:2021
 thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
-doy::Int32 = 10   # Day of year development started
+doy::Int32 = 1   # Day of year development started
+save_figs = true  # If true save figures
 
 
 
 
 # =================================================================================
 # Specify directories for import and export of data
-if isdir("//home//jon//DATA//OPRAM")
-        outDir = "//home//jon//DATA//OPRAM//results//"
-        meteoDir = "//home//jon//DATA//OPRAM//Irish_Climate_Data//"
 
-elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
+if isdir("//home//jon//Desktop//OPRAM")
+        outDir = "//home//jon//Desktop//OPRAM//results//"
+        dataDir = "//home//jon//DATA//OPRAM//"
+        meteoDir_IE = "//home//jon//DATA//OPRAM//Irish_Climate_Data//"
+        meteoDir_NI = "//home//jon//DATA//OPRAM//Northern_Ireland_Climate_Data//"
+      
+      elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
         outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
-        meteoDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
-
-elseif isdir("//users//jon//Desktop//OPRAM//")
+        dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"
+        meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
+        meteoDir_NI = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Northern_Ireland_Climate_Data//"
+      
+      elseif isdir("//users//jon//Desktop//OPRAM//")
         outDir = "//users//jon//Desktop//OPRAM//results//"
-        meteoDir = "//users//jon//Desktop//OPRAM//Irish_Climate_Data//"
-end
-
+        dataDir = "//users//jon//Desktop//OPRAM//"
+        meteoDir_IE = "//users//jon//Desktop//OPRAM//Irish_Climate_Data//"
+        meteoDir_NI = "//users//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//"
+      end
 
 
 
@@ -45,7 +52,7 @@ end
 
 # =================================================================================
 # Import coastline data
-coast = CSV.read(joinpath([meteoDir, "..", "coastline.csv"]), DataFrame,
+coast = CSV.read(joinpath([dataDir, "coastline.csv"]), DataFrame,
         types=[Float64, Float64, Int, Int, Int])
 
 
@@ -54,6 +61,18 @@ coast = CSV.read(joinpath([meteoDir, "..", "coastline.csv"]), DataFrame,
 function extract_results(doy::Int32, result::DataFrame)
         # Function to calculate number of generations per year, and first
         # day of adult emergence based on a starting development on doy
+        #
+        #   doy    day of year when larval development begins
+        #   result data frame containing the results from the model
+        #  
+        #  Output:
+        #   a data frame with the following columns:
+        #       ID            unique ID for each soatial location        
+        #       emergeDOY     adult emergence day of year 
+        #       nGen          the number of generations within the year
+        #       east          index for eastings of the unique spatial locations in result
+        #       north         index for northings of the unique spatial location in result
+        ########################################################################
 
         # Find start and end indicies for each location
         idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
@@ -89,7 +108,7 @@ function extract_results(doy::Int32, result::DataFrame)
                 startDOY = zeros(Int32, length(idx1))
                 startDOY[match .& complete] .+= result.emergeDOY[idx3[match .& complete]] .+ 1
 
-                # println([sum(startDOY .> 0), maximum(result.emergeDOY[idx3])])
+                println([sum(startDOY .> 0), maximum(result.emergeDOY[idx3])])
 
         end
 
@@ -103,12 +122,36 @@ end
 
 
 
-function year_average(years::Union{Vector{Int64}, Int64}, outDir::String, thin::Int64,
-        speciesName::String, doy::Int32)
+function year_average(years::Union{Vector{Int64}, Int64}, 
+                      outDir::String, 
+                      thin::Int64,
+                      speciesName::String, doy::Int32)
+        # Import model data for several years, extract results for a specific starting day and
+        # average the results across all years
+        #
+        #    years       The years to import model results and average over
+        #    outDir      Directory for saving results
+        #    thin        The spatial thining parameter
+        #    speciesName The species for which results will be calculated
+        #
+        #   Output:
+        #     a data frame with columns:
+        #       ID            unique ID for each soatial location
+        #       east          eastings of the spatial locations in result
+        #       north         northings of the spatial location in result
+        #       emergeDOY     adult emergence day of year (average over years)
+        #       nGen          number of generations within the year (average over years)
+        #                     Can be fractional for each year representing partial development 
+        #       nGenInt       number of generations within the year (average over years)
+        #                     This is nGen rounded down to nearest whole number 
+        #       emergeDOYSD   adult emergence day of year (std. dev. average over years)
+        #       nGenSD        number of generations within the year (std. dev. over years)
+        #       N             number of years being averaged over
+        #############################################################
 
         out = []
         for y in eachindex(years)
-                println("Processing data for " * string(years[y]))
+                @info "Processing data for " * string(years[y])
 
                 fileName = "result_" * speciesName * string(years[y]) * "_par_thin" * string(thin) * ".jld2"
                 resultFile = joinpath([outDir, speciesName, fileName])
@@ -153,8 +196,11 @@ end
 # ============================================================
 
 
-function plot_map(varStr::String, data::DataFrame, coast::DataFrame, 
-        titleStr::String="NoTitle", cscale=:matter, discrete=false)
+function plot_map(varStr::String, 
+                  data::DataFrame, 
+                  coast::DataFrame, 
+                  titleStr::String="NoTitle", 
+                  cscale=:matter, discrete=false)
 
         x = sort(unique(coast.idx_east))
         y = sort(unique(coast.idx_north))
@@ -191,8 +237,8 @@ end
 
 
 
-
-
+# Make sure years is a vector
+years = collect(years)
 
 # Create data to visualised
 # number of generations and first day of emergence
@@ -205,23 +251,34 @@ end
 # ===================================================================
 # Visualise output
 
-year_label = string(minimum(years)) * " - " * string(maximum(years))
+if length(years)==1
+        year_label = string(years)
+else
+  year_label = string(minimum(years)) * " - " * string(maximum(years))
+end
 
 titleStr = "Emergence DOY (Start DOY = " * string(doy) * ",  " * year_label * ")"
-plot_map("emergeDOY", d, coast, titleStr, :RdYlGn)
-
+plot_map("emergeDOY", d, coast, titleStr, :PiYG)
+# Save output from the last plot
+if save_figs
+        savefig(speciesName * "_emergence_" * year_label * ".png")
+end
 
 titleStr="Number of Generations (" * year_label * ")";
 plot_map("nGen", d, coast, titleStr, :PiYG)
+# Save output from the last plot
+if save_figs
+        savefig(speciesName * "_ngen_" * year_label * ".png")
+end
+
 plot_map("nGenInt", d, coast, titleStr, :Dark2_3, true)
+# Save output from the last plot
 
 titleStr="Number of Generations SD (" * year_label * ")";
 plot_map("nGenSD", d, coast, titleStr, :Accent)
 
 
 
-# Save output from the last plot
-savefig("agrilus_ngen_2018_2020.png")
 
 
 # # +++++++++++++++++++++++++++++++++++++++++++
@@ -256,13 +313,13 @@ savefig("agrilus_ngen_2018_2020.png")
 # Specify eastings and northings
 location = [95000, 21000] 
 latlonFile = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//locations.CSV"
-latlonFile = joinpath(meteoDir,"locations.CSV")
+latlonFile = joinpath(dataDir,"IE_grid_locations.csv")
 paulFile = "first_occurrence_threshold_with_date_range_2_1961_Agrilus_anxius_GDD_multiple_dates.csv"
 
 # Import location data
 latlongs = CSV.read(latlonFile, DataFrame)
 
-paul = CSV.read(joinpath(outDir, "Changing_Start_Dates",paulFile),DataFrame)
+# paul = CSV.read(joinpath(outDir, "Code that is under development//Changing_Start_Dates",paulFile),DataFrame)
 
 idx = latlongs.east.==location[1] .&& latlongs.north.==location[2]
 
@@ -270,4 +327,4 @@ d[d.ID.==latlongs.ID[idx],:]
 
 
 
-julia[julia.ID.==16090,:]
+# julia[julia.ID.==16090,:]
