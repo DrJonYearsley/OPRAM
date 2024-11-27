@@ -24,7 +24,7 @@ function photoperiod(latitude::Vector{Float64}, DOY::Vector{Int16}, threshold)
   # Robert M. Schoolfield, 1995. A model comparison for daylength as a function of 
   # latitude and day of the year. Ecological Modeling 80:87-95.
 
-  # Check latitude and DOY have the same length
+  # Check latitude and doy have the same length
   if length(latitude) != length(DOY) 
     @warn "function photoperiod: latitude and DOY are not the same length"
   end
@@ -67,7 +67,7 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
   # *************************************************************
 
   # Number of years of meteo data to import   
-  nYears = 3
+  nYears = 2
   
   # An array containing the years to be imported
   years = collect(meteoYear:meteoYear+nYears-1)
@@ -77,21 +77,27 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
   meteoNI = read_meteoNI(meteoDir_NI, grid_thin, years)
 
   
+  # Find duplicate locations and remove NI data
+  NI_keep = [isdisjoint(meteoNI[2][i], meteoIE[2]) for i in eachindex(meteoNI[2])]
+
   # Combine meteo data from NI and IE
-  Tavg = hcat(meteoIE[1], meteoNI[1])
+  Tavg = hcat(meteoIE[1], meteoNI[1][:,NI_keep])
 
   # Combine location data 
-  east = vcat(meteoIE[2],meteoNI[2])
-  north = vcat(meteoIE[3],meteoNI[3])
+  ID = vcat(meteoIE[2],meteoNI[2][NI_keep])
 
-    # Order meteo data by location ID in grid_thin
-    for i in eachindex(east)
-       
-    end
-idx =  [findfirst(east[i].==grid_thin.east .& north[i].==grid_thin.north) for i in eachindex(east)]
+  # Check days of year are the same for both data sets
+  if (meteoIE[3]==meteoNI[3])
+    local DOY = meteoIE[3]
+  else
+    @error "IE and NI meteo files have different number of days!"
+  end
+  
+  # Order meteo data by location ID in grid_thin
+  sort_idx = sortperm(ID)
 
-
-  return Tavg, DOY
+  # Return sorted data
+  return Tavg[:,sort_idx], DOY, ID[sort_idx]
 
 end
 # ------------------------------------------------------------------------------------------
@@ -121,10 +127,8 @@ function read_meteoIE(meteoDir_IE, grid_thin, years)
 
   # Find indices of meteo data to use 
   # (needed incase meteo file has missing grid points or different order compared to grid_thin)
-  factor = unique(diff(unique(grid_thin.east)))  # Recreate the thin factor (in units of m)
-  thinInd = findall(mod.(meteoCoords.east, factor) .< 1e-8 .&& mod.(meteoCoords.north, factor) .< 1e-8)
-
-  IDidx = [grid_thin.east==meteo_coords.east[i] .& grid_thin.north==meteo_coords.north[i] for i in thinInd]
+  IDidx = [findfirst(abs.(grid_thin.east.-meteoCoords.east[i]).==0 .&& abs.(grid_thin.north.-meteoCoords.north[i]).==0) for i in 1:nrow(meteoCoords)]
+  idx = findall(IDidx .!= nothing)
 
   for y in eachindex(years)
     for month in 1:12
@@ -139,7 +143,7 @@ function read_meteoIE(meteoDir_IE, grid_thin, years)
       meteoTN = CSV.read(joinpath([meteoDir_IE, "mintemp_grids", meteoFileTN[1]]), DataFrame, drop=[1, 2], types=Float32)
 
       # Calculate daily average temp with locations as columns, days as rows
-      TavgVec[(y-1)*12+month] = permutedims(Array{Float32,2}((meteoTX[thinInd, :] .+ meteoTN[thinInd, :]) ./ 2.0))
+      TavgVec[(y-1)*12+month] = permutedims(Array{Float32,2}((meteoTX[idx, :] .+ meteoTN[idx, :]) ./ 2.0))
     end
   end
 
@@ -148,10 +152,10 @@ function read_meteoIE(meteoDir_IE, grid_thin, years)
 
   # Calculate day of year (used for photoperiod calculations)
   DOM = size.(TavgVec, 1)      # Day of month
-  DOY = reduce(vcat, [collect(1:sum(DOM[(1+12*(y-1)):12*y])) for y in 1:length(years)])  # Day of year
+  local DOY = reduce(vcat, [collect(1:sum(DOM[(1+12*(y-1)):12*y])) for y in 1:length(years)])  # Day of year
   DOY = convert.(Int16, DOY)
 
-  return Tavg, meteoCoords.east[thinInd], meteoCoords.north[thinInd], DOY
+  return Tavg, grid_thin.ID[IDidx[idx]], DOY
 end
 # ------------------------------------------------------------------------------------------
 
@@ -179,12 +183,12 @@ function read_meteoNI(meteoDir_NI, grid_thin, years)
   # Read one meteo file to find locations information and calculate a filter
   coordFileNI = filter(x -> occursin("TX_daily_grid_" * string(years[1]), x), 
                      readdir(joinpath(meteoDir_NI, "NI_TX_daily_grid")))
-  meteoCoords_NI = CSV.read(joinpath([meteoDir_NI, "NI_TX_daily_grid", coordFileNI[1]]), DataFrame, select=[1, 2], types=Int32)
+  meteoCoords = CSV.read(joinpath([meteoDir_NI, "NI_TX_daily_grid", coordFileNI[1]]), DataFrame, select=[1, 2], types=Int32)
 
   # Find indices of meteo data to use
   # (needed incase meteo file has missing grid points or different order compared to grid_thin)
-  factor = unique(diff(unique(grid_thin.east)))  # Recreate the thin factor
-  thinInd = findall(mod.(meteoCoords_NI.east, factor) .< 1e-8 .&& mod.(meteoCoords_NI.north, factor) .< 1e-8)
+  IDidx = [findfirst(abs.(grid_thin.east.-meteoCoords.east[i]).==0 .&& abs.(grid_thin.north.-meteoCoords.north[i]).==0) for i in 1:nrow(meteoCoords)]
+  idx = findall(IDidx .!= nothing)
 
 
   for y in eachindex(years)
@@ -199,7 +203,7 @@ function read_meteoNI(meteoDir_NI, grid_thin, years)
       meteoTN = CSV.read(joinpath([meteoDir_NI, "NI_TN_daily_grid", meteoFileTN[1]]), DataFrame, drop=[1, 2], types=Float32)
 
       # Calculate daily average temp with locations as columns, days as rows
-      TavgVec[y] = permutedims(Array{Float32,2}((meteoTX[thinInd, :] .+ meteoTN[thinInd, :]) ./ 2.0))
+      TavgVec[y] = permutedims(Array{Float32,2}((meteoTX[idx, :] .+ meteoTN[idx, :]) ./ 2.0))
     end
 
   # Put all the temperature data together into one Matrix
@@ -207,10 +211,10 @@ function read_meteoNI(meteoDir_NI, grid_thin, years)
 
 
   # Calculate day of year (used for photoperiod calculations) 
-  DOY = reduce(vcat, [collect(1:size(TavgVec[y],1)) for y in 1:length(years)]) 
+  local DOY = reduce(vcat, [collect(1:size(TavgVec[y],1)) for y in 1:length(years)]) 
   DOY = convert.(Int16, DOY)  # Day of year
 
-  return Tavg, meteoCoords_NI.east[thinInd], meteoCoords_NI.north[thinInd], DOY
+  return Tavg, grid_thin.ID[IDidx[idx]], DOY
 end
 
 

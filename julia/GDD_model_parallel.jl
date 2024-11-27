@@ -19,17 +19,17 @@ using JLD2;
 
 
 
-nNodes = 2;        # Number of compute nodes to use (if in interactive)
-meteoYear = 1961   # Years to run model
+nNodes = 3;        # Number of compute nodes to use (if in interactive)
+meteoYear = 2018:2021   # Years to run model
 saveToFile = true;   # If true save the result to a file
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 # (used for daylength calculations as well as importing and thining of meteo data)
 
 # Factor to think the spatial grid (2 means sample every 2 km, 5 = sample every 5km)
-thinFactor = 10;
+thinFactor = 1;
 
 # Define species parameters
-outPrefix = "agrilus";   # Prefix to use for results files
+outPrefix = "pseudips";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 
@@ -83,7 +83,7 @@ end
 
 # Make directory for the output prefix if one doesn't exist
 if !isdir(joinpath(outDir, outPrefix))
-  println("Making directory " * outPrefix)
+  @info "Making directory " * outPrefix
   mkpath(joinpath(outDir, outPrefix))
 end
 outDir = joinpath(outDir, outPrefix)
@@ -159,10 +159,8 @@ grid_thin = grid[thinInd, :];
 
 for year in meteoYear
   # Import weather data along with location and day of year
-  @info "Importing meteo data starting from year " * string(year)
-  @time meteo = read_meteo(year, meteoDir_IE, meteoDir_NI, grid_thin)
-
-
+  @info "Calculating for starting year " * string(year)
+  @time "Imported meteo data" local meteo = read_meteo(year, meteoDir_IE, meteoDir_NI, grid_thin)
 
   @info "Preparing data for the model"
 
@@ -172,16 +170,14 @@ for year in meteoYear
   # Calculate days where development updates
   gdd_update = GDD .> 0
 
-
   # List ID's for all GDDs above the base temp
   idx = findall(gdd_update)
   IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]   # Location ID index
 
-
   # Add in diapause (if necessary)
   if !ismissing(params.diapause_photoperiod)
     # Calulate day of year for all points where GDD > base temp
-    DOY = [meteo[4][idx[i][1]] for i in eachindex(idx)]
+    DOY = [meteo[2][idx[i][1]] for i in eachindex(idx)]
 
     if ismissing(params.diapause_temperature)   # diapause determine by photoperiod
       no_overwinter = photoperiod(grid_thin.latitude, DOY, params.diapause_photoperiod) 
@@ -220,7 +216,6 @@ for year in meteoYear
 
   # Free up more memory
   meteo = nothing     # Remove the meteo data
-  thinInd = nothing
   gdd_update = nothing
   GDD = nothing
   idx = nothing
@@ -228,16 +223,12 @@ for year in meteoYear
 
 
   # Loop over all locations and run the model
-  println("Running the model")
+  @info "Running the model"
 
   @everywhere thresh = convert(Float32, $params.threshold)
-  @time location_loop!(locInd1, locInd2, result, GDDsh, thresh)
+  @time "looping around locations" location_loop!(locInd1, locInd2, result, GDDsh, thresh)
 
-
-  # Loop over all locations and run the model
-  println("Saving the results")
-
-
+  @info "Saving the results"
   # Clean up the data
 
   # Remove rows that have emergeDOY>0 
@@ -256,7 +247,7 @@ for year in meteoYear
 
 
   # Create a data frame, using real location ID (second element of meteo)
-  tm = DataFrame(ID=ID[IDvec[idxKeep]], DOY=result[idxKeep, 1], emergeDOY=result[idxKeep, 2])
+  tm = DataFrame(ID=grid_thin.ID[IDvec[idxKeep]], DOY=result[idxKeep, 1], emergeDOY=result[idxKeep, 2])
 
 
   # # Save the results (replacing ID indices with original ID values)
