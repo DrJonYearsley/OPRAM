@@ -16,7 +16,7 @@ using JLD2
 # Set parameters for the visualisation
 # If more than one year then take average across years
 speciesName = "pseudips"
-years = 2020:2021
+years = 2018:2021
 thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
 doy::Int32 = 1   # Day of year development started
 save_figs = true  # If true save figures
@@ -75,13 +75,16 @@ function extract_results(doy::Int32, result::DataFrame)
         ########################################################################
 
         # Find start and end indicies for each location
-        idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
-        idx2 = [searchsortedlast(result.ID, loc) for loc in unique(result.ID)]
+        # @time idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
+        # @time idx2 = [searchsortedlast(result.ID, loc) for loc in unique(result.ID)]
+        @time idx1 = indexin(unique(result.ID),result.ID) 
+        @time idx2 = nrow(result) + 1 .- indexin(unique(result.ID),reverse(result.ID)) 
+
 
         # Create data frame to hold number of generations
-        res = DataFrame(ID=result.ID[idx1], nGen=0.0, emergeDOY=0)
-        res.north = mod.(res.ID, 1000)
-        res.east = div.((res.ID .- res.north), 1000)
+        out = DataFrame(ID=result.ID[idx1], nGen=0.0, emergeDOY=0)
+        out.north = mod.(out.ID, 1000)
+        out.east = div.((out.ID .- out.north), 1000)
 
         # Count number of generations per year
         startDOY = zeros(Int32, length(idx1)) .+ doy
@@ -90,18 +93,18 @@ function extract_results(doy::Int32, result::DataFrame)
                 # Find index of result that corresponds to desired day of year (ie doy>=result.DOY)
                 idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY[i]) - 1 + idx1[i] for i = eachindex(idx1)]
 
-                # println(maximum(idx3))
+                println(maximum(idx3))
 
                 # Set any missing matches to zero
                 match = startDOY .> 0 .&& idx2 + ones(Int64, size(idx1)) .> idx3
-                complete = result.emergeDOY[idx3] .< 365
+                complete = result.emergeDOY[idx3] .<= 365   # Is the generation complete within the year?
 
                 # Increment generations
-                res.nGen[match.&complete] .+= 1
-                res.nGen[match.&.!complete] .+= (365 .- startDOY[match.&.!complete]) ./
+                out.nGen[match.&complete] .+= 1
+                out.nGen[match.&.!complete] .+= (365 .- startDOY[match.&.!complete]) ./
                                                 (result.emergeDOY[idx3[match.&.!complete]] - startDOY[match.&.!complete])
                 if startDOY[1] == doy
-                        res.emergeDOY[match.&complete] .+= result.emergeDOY[idx3[match.&complete]]
+                        out.emergeDOY[match.&complete] .+= result.emergeDOY[idx3[match.&complete]]
                 end
 
                 # Reset starting DOY
@@ -109,11 +112,10 @@ function extract_results(doy::Int32, result::DataFrame)
                 startDOY[match .& complete] .+= result.emergeDOY[idx3[match .& complete]] .+ 1
 
                 println([sum(startDOY .> 0), maximum(result.emergeDOY[idx3])])
-
         end
 
 
-        return (res)
+        return (out)
 end
 
 
@@ -166,13 +168,15 @@ function year_average(years::Union{Vector{Int64}, Int64},
                         out.nGenSD = d.nGen .^ 2
                         out.emergeSD = d.emergeDOY .^ 2
                 else
-                        idx = [findfirst(x -> x == ID, d.ID) for ID in out.ID]
-                        out.nGen[idx] .+= d.nGen
-                        out.nGenInt[idx] += floor.(d.nGen)   
-                        out.nGenSD[idx] .+= d.nGen .^ 2
-                        out.emergeDOY[idx] .+= d.emergeDOY
-                        out.emergeSD[idx] .+= d.emergeDOY .^ 2
-                        out.N[idx] .+= 1
+                        # idx = [findfirst(x -> x == ID, d.ID) for ID in out.ID]
+                        idx = indexin(d.ID, out.ID)
+                        use = idx.!=nothing
+                        out.nGen[idx[use]] .+= d.nGen[use]
+                        out.nGenInt[idx[use]] += floor.(d.nGen[use])   
+                        out.nGenSD[idx[use]] .+= d.nGen[use] .^ 2
+                        out.emergeDOY[idx[use]] .+= d.emergeDOY[use]
+                        out.emergeSD[idx[use]] .+= d.emergeDOY[use] .^ 2
+                        out.N[idx[use]] .+= 1
                 end
         end
 

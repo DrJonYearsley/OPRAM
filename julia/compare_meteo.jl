@@ -6,7 +6,7 @@ using JLD2;
 using SharedArrays
 using DataFrames
 
-years = 2020:2021
+years = 2018:2019
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 
 

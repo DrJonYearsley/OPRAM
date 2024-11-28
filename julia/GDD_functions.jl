@@ -67,7 +67,7 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
   # *************************************************************
 
   # Number of years of meteo data to import   
-  nYears = 2
+  nYears = 3
   
   # An array containing the years to be imported
   years = collect(meteoYear:meteoYear+nYears-1)
@@ -229,6 +229,9 @@ end
   #   cumGDD_doy  days of year for each cumGDD
   #   threshold   the threshold cumulative GDD for development
   #
+  # Output:
+  #  emergeDOY    the day of year for adult emergence 
+  #               (zero indicates no emergence within the period)
   # *************************************************************
 
   # Initialise emergeDOY
@@ -271,6 +274,7 @@ function location_loop!(locInd1::Vector{Int64}, locInd2::Vector{Int64}, result::
   #   GDD         average daily temp minus base temp for each spatial location in locs
   #                (each location must be ordered chronologically)
   #   result      a DataFrame to store the results (this is pre-defined for all locations)
+  #               this dataframe will be updated (in place) with the results
   #   threshold   an integer threshold for the emergence model
   #
   # *************************************************************

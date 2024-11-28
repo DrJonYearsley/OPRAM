@@ -20,7 +20,7 @@ using JLD2;
 
 
 nNodes = 3;        # Number of compute nodes to use (if in interactive)
-meteoYear = 2018:2021   # Years to run model
+meteoYear = 2010:2021   # Years to run model
 saveToFile = true;   # If true save the result to a file
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 # (used for daylength calculations as well as importing and thining of meteo data)
@@ -160,7 +160,8 @@ grid_thin = grid[thinInd, :];
 for year in meteoYear
   # Import weather data along with location and day of year
   @info "Calculating for starting year " * string(year)
-  @time "Imported meteo data" local meteo = read_meteo(year, meteoDir_IE, meteoDir_NI, grid_thin)
+  @info "Importing meteo data"
+  @time "Imported meteo data" meteo = read_meteo(year, meteoDir_IE, meteoDir_NI, grid_thin)
 
   @info "Preparing data for the model"
 
@@ -234,12 +235,18 @@ for year in meteoYear
   # Remove rows that have emergeDOY>0 
   idxKeep = result[:, 2] .> 0
 
+  # # Find locations with no data!
+  # sp =  setdiff(unique(IDvec), unique(IDvec[idxKeep]))
+  # scatter(grid_thin.east, grid_thin.north, markersize=0.5)
+  # scatter!(grid_thin.east[sp], grid_thin.north[sp], markersize=2, color="red")
+
   # Remove rows where the final prediction doesn't change (they can be recalculated later)
-  idxKeep2 = (IDvec[1:end-1] .!= IDvec[2:end, 1]) .|| (IDvec[1:end-1] .== IDvec[2:end, 1] .&& result[1:end-1, 2] .!= result[2:end, 2])
+  idxKeep2 = (IDvec[1:end-1] .!= IDvec[2:end]) .|| (IDvec[1:end-1] .== IDvec[2:end] .&& result[1:end-1, 2] .!= result[2:end, 2])
   push!(idxKeep2, true)    # Add a true value at the end
 
   # Remove all but the first result with DOY >= 365 (results only for 1 year)
-  idxKeep3 = result[2:end, 1] .< 365 .|| (IDvec[1:end-1] .== IDvec[2:end, 1] .&& (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
+  # Keep data with DOY<=365 or when DOY>365 and the previous result was less than 365
+  idxKeep3 = result[2:end, 1] .<= 365 .|| (IDvec[1:end-1] .== IDvec[2:end] .&& (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
   pushfirst!(idxKeep3, true)    # Add a true value at the start
 
   # Combine all 3 indices together
