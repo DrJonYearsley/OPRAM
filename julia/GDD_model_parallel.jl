@@ -172,8 +172,8 @@ for year in meteoYear
   gdd_update = GDD .> 0
 
   # List ID's for all GDDs above the base temp
-  idx = findall(gdd_update)
-  IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]   # Location ID index
+  idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
+  IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # Location ID index (column coord in idx)
 
   # Add in diapause (if necessary)
   if !ismissing(params.diapause_photoperiod)
@@ -198,7 +198,7 @@ for year in meteoYear
     no_overwinter = nothing
   end
 
-  # Make GDD array a shared array
+  # Make GDD array a 1D shared array
   GDDsh = SharedArray{Float32,1}(GDD[gdd_update])
 
   # Find indices separatng different locations
@@ -210,7 +210,7 @@ for year in meteoYear
   # Create a shared array to hold results for every day when GDD updates
   result = SharedArray{Int16,2}(sum(gdd_update), 3)
 
-  # Fill the first 2 columns of results
+  # Fill the first column of results
   result[:, 1] = [idx[i][1] for i in eachindex(idx)]  # Calculate day of year
   result[:, 2] .= Int16(-1)
   result[:, 3] .= Int16(-1)
@@ -230,9 +230,8 @@ for year in meteoYear
   @time "looping around locations" location_loop!(locInd1, locInd2, result, GDDsh, thresh)
 
   @info "Saving the results"
-  # Clean up the data
 
-  # Remove rows that have emergeDOY>0 
+  # Remove rows that have emergeDOY<=0 
   idxKeep = result[:, 2] .> 0
 
   # # Find locations with no data!

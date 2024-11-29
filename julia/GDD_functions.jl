@@ -64,6 +64,15 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
   #                in folders NI_TX_daily_grid and NI_TN_daily_grid)
   #   grid_thin   the grid of locations to use
   #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of average daily temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:   A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Third entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
+  #
   # *************************************************************
 
   # Number of years of meteo data to import   
@@ -275,6 +284,7 @@ function location_loop!(locInd1::Vector{Int64}, locInd2::Vector{Int64}, result::
   #                (each location must be ordered chronologically)
   #   result      a DataFrame to store the results (this is pre-defined for all locations)
   #               this dataframe will be updated (in place) with the results
+  #               Col 1: starting day of year, Col 2: emergence day of year, Col 3: cpu number
   #   threshold   an integer threshold for the emergence model
   #
   # *************************************************************
