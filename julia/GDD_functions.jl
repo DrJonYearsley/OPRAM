@@ -87,17 +87,17 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
 
   
   # Find duplicate locations and remove NI data
-  NI_keep = [isdisjoint(meteoNI[2][i], meteoIE[2]) for i in eachindex(meteoNI[2])]
+  NI_keep = [isdisjoint(meteoNI[3][i], meteoIE[3]) for i in eachindex(meteoNI[3])]
 
   # Combine meteo data from NI and IE
   Tavg = hcat(meteoIE[1], meteoNI[1][:,NI_keep])
 
   # Combine location data 
-  ID = vcat(meteoIE[2],meteoNI[2][NI_keep])
+  ID = vcat(meteoIE[3],meteoNI[3][NI_keep])
 
   # Check days of year are the same for both data sets
-  if (meteoIE[3]==meteoNI[3])
-    local DOY = meteoIE[3]
+  if (meteoIE[2]==meteoNI[2])
+    local DOY = meteoIE[2]
   else
     @error "IE and NI meteo files have different number of days!"
   end
@@ -123,6 +123,15 @@ function read_meteoIE(meteoDir_IE, grid_thin, years)
   #                in folders maxtemp_grids and mintemp_grids)
   #   grid_thin   the grid of locations to use
   #   years       years to be read
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of average daily temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:   A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Third entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
   #
   # *************************************************************
 
@@ -164,7 +173,7 @@ function read_meteoIE(meteoDir_IE, grid_thin, years)
   local DOY = reduce(vcat, [collect(1:sum(DOM[(1+12*(y-1)):12*y])) for y in 1:length(years)])  # Day of year
   DOY = convert.(Int16, DOY)
 
-  return Tavg, grid_thin.ID[IDidx[idx]], DOY
+  return Tavg, DOY, grid_thin.ID[IDidx[idx]]
 end
 # ------------------------------------------------------------------------------------------
 
@@ -184,6 +193,15 @@ function read_meteoNI(meteoDir_NI, grid_thin, years)
   #                in folders NI_TX_daily_grid and NI_TN_daily_grid)
   #   grid_thin   the grid of locations to use
   #   years       years to be read
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of average daily temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:   A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Third entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
   # *************************************************************
 
   # Create empty array of arrays to hold average temps 
@@ -223,7 +241,7 @@ function read_meteoNI(meteoDir_NI, grid_thin, years)
   local DOY = reduce(vcat, [collect(1:size(TavgVec[y],1)) for y in 1:length(years)]) 
   DOY = convert.(Int16, DOY)  # Day of year
 
-  return Tavg, grid_thin.ID[IDidx[idx]], DOY
+  return Tavg, DOY, grid_thin.ID[IDidx[idx]]
 end
 
 

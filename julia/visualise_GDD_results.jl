@@ -16,7 +16,7 @@ using JLD2
 # Set parameters for the visualisation
 # If more than one year then take average across years
 speciesName = "pseudips"
-years = 2018:2021
+years = collect(2011:2020)  # Either a single year or collect(year1:year2)
 thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
 doy::Int32 = 1   # Day of year development started
 save_figs = true  # If true save figures
@@ -32,19 +32,19 @@ if isdir("//home//jon//Desktop//OPRAM")
         dataDir = "//home//jon//DATA//OPRAM//"
         meteoDir_IE = "//home//jon//DATA//OPRAM//Irish_Climate_Data//"
         meteoDir_NI = "//home//jon//DATA//OPRAM//Northern_Ireland_Climate_Data//"
-      
-      elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
+
+elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
         outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
         dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"
         meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
         meteoDir_NI = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Northern_Ireland_Climate_Data//"
-      
-      elseif isdir("//users//jon//Desktop//OPRAM//")
+
+elseif isdir("//users//jon//Desktop//OPRAM//")
         outDir = "//users//jon//Desktop//OPRAM//results//"
         dataDir = "//users//jon//Desktop//OPRAM//"
         meteoDir_IE = "//users//jon//Desktop//OPRAM//Irish_Climate_Data//"
         meteoDir_NI = "//users//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//"
-      end
+end
 
 
 
@@ -77,45 +77,69 @@ function extract_results(doy::Int32, result::DataFrame)
         # Find start and end indicies for each location
         # @time idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
         # @time idx2 = [searchsortedlast(result.ID, loc) for loc in unique(result.ID)]
-        @time idx1 = indexin(unique(result.ID),result.ID) 
-        @time idx2 = nrow(result) + 1 .- indexin(unique(result.ID),reverse(result.ID)) 
+        @time idx1 = indexin(unique(result.ID), result.ID)
+        @time idx2 = vcat(idx1[2:end] .- 1, length(result.ID))
 
 
         # Create data frame to hold number of generations
-        out = DataFrame(ID=result.ID[idx1], nGen=0.0, emergeDOY=0)
-        out.north = mod.(out.ID, 1000)
-        out.east = div.((out.ID .- out.north), 1000)
+        out_res = DataFrame(ID=result.ID[idx1], nGen=0.0, emergeDOY=0)
+        out_res.north = mod.(out_res.ID, 1000)
+        out_res.east = div.((out_res.ID .- out_res.north), 1000)
 
         # Count number of generations per year
         startDOY = zeros(Int32, length(idx1)) .+ doy
+        first_pass = true
 
+        # Set startDOY to zero for a location if no more generations can be completed in the year
         while any(startDOY .> 0)
                 # Find index of result that corresponds to desired day of year (ie doy>=result.DOY)
                 idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY[i]) - 1 + idx1[i] for i = eachindex(idx1)]
 
                 println(maximum(idx3))
 
-                # Set any missing matches to zero
-                match = startDOY .> 0 .&& idx2 + ones(Int64, size(idx1)) .> idx3
-                complete = result.emergeDOY[idx3] .<= 365   # Is the generation complete within the year?
+                # Find out if end of current developmental generation is in the results (i.e. occurs before data on next location)
+                development_complete = startDOY .> 0 .&& idx2 .+ 1 .> idx3
 
-                # Increment generations
-                out.nGen[match.&complete] .+= 1
-                out.nGen[match.&.!complete] .+= (365 .- startDOY[match.&.!complete]) ./
-                                                (result.emergeDOY[idx3[match.&.!complete]] - startDOY[match.&.!complete])
-                if startDOY[1] == doy
-                        out.emergeDOY[match.&complete] .+= result.emergeDOY[idx3[match.&complete]]
+                # Find out if development happens within the first year
+                if (idx3[end] == nrow(result) + 1)
+                        # If final entry resulted in no developement (i.e. index is nrow+1) then set within year to false
+                        within_a_year = result.emergeDOY[idx3[1:end-1]] .<= 365   # Is the generation complete within the year?
+                        push!(within_a_year, false)
+                else
+                        within_a_year = result.emergeDOY[idx3] .<= 365   # Is the generation complete within the year?
                 end
 
-                # Reset starting DOY
-                startDOY = zeros(Int32, length(idx1))
-                startDOY[match .& complete] .+= result.emergeDOY[idx3[match .& complete]] .+ 1
+                # Increment generations
+                full_generation = development_complete .& within_a_year
+                partial_generation = development_complete .& .!within_a_year
 
-                println([sum(startDOY .> 0), maximum(result.emergeDOY[idx3])])
+                # Add on one full generation
+                out_res.nGen[full_generation] .+= 1
+
+                # Calculate end of year fraction of time towards next generation
+                out_res.nGen[partial_generation] .+= (365 .- startDOY[partial_generation]) ./
+                                                     (result.emergeDOY[idx3[partial_generation]] - startDOY[partial_generation])
+
+                # If this is the first time through the loop, record the emergance day
+                if first_pass
+                        out_res.emergeDOY[full_generation] .= result.emergeDOY[idx3[full_generation]]
+                        first_pass = false
+                end
+
+                # Reset starting DOY to zero
+                startDOY = zeros(Int32, length(idx1))
+
+                # If a full gneration completed within the year, update starting doy
+                startDOY[full_generation] .= result.emergeDOY[idx3[full_generation]] .+ 1
+
+                # Remove startDOY >= 365
+                startDOY[startDOY.>=365] .= 0
+
+                # println([sum(startDOY .> 0), maximum(result.emergeDOY[idx3])])
         end
 
 
-        return (out)
+        return (out_res)
 end
 
 
@@ -124,10 +148,10 @@ end
 
 
 
-function year_average(years::Union{Vector{Int64}, Int64}, 
-                      outDir::String, 
-                      thin::Int64,
-                      speciesName::String, doy::Int32)
+function year_average(years::Union{Vector{Int64},Int64},
+        outDir::String,
+        thin::Int64,
+        speciesName::String, doy::Int32)
         # Import model data for several years, extract results for a specific starting day and
         # average the results across all years
         #
@@ -152,6 +176,7 @@ function year_average(years::Union{Vector{Int64}, Int64},
         #############################################################
 
         out = []
+
         for y in eachindex(years)
                 @info "Processing data for " * string(years[y])
 
@@ -163,16 +188,15 @@ function year_average(years::Union{Vector{Int64}, Int64},
                 d = extract_results(doy, result)
                 if y == 1
                         out = d
-                        out.nGenInt = floor.(d.nGen)    
+                        out.nGenInt = floor.(d.nGen)
                         out.N = ones(size(out.nGen))
                         out.nGenSD = d.nGen .^ 2
                         out.emergeSD = d.emergeDOY .^ 2
                 else
-                        # idx = [findfirst(x -> x == ID, d.ID) for ID in out.ID]
-                        idx = indexin(d.ID, out.ID)
-                        use = idx.!=nothing
+                        idx = indexin(d.ID, out.ID)    # Equate spatial IDs in d to spatial IDs in out
+                        use = idx .!= nothing .&& d.emergeDOY .!= 0  # Ignore locations with emerge DOY of zero
                         out.nGen[idx[use]] .+= d.nGen[use]
-                        out.nGenInt[idx[use]] += floor.(d.nGen[use])   
+                        out.nGenInt[idx[use]] += floor.(d.nGen[use])
                         out.nGenSD[idx[use]] .+= d.nGen[use] .^ 2
                         out.emergeDOY[idx[use]] .+= d.emergeDOY[use]
                         out.emergeSD[idx[use]] .+= d.emergeDOY[use] .^ 2
@@ -200,28 +224,36 @@ end
 # ============================================================
 
 
-function plot_map(varStr::String, 
-                  data::DataFrame, 
-                  coast::DataFrame, 
-                  titleStr::String="NoTitle", 
-                  cscale=:matter, discrete=false)
+function plot_map(varStr::String,
+        data::DataFrame,
+        coast::DataFrame,
+        titleStr::String="NoTitle",
+        cscale=:matter, discrete=false)
 
         x = sort(unique(coast.idx_east))
         y = sort(unique(coast.idx_north))
-        C = fill(NaN, maximum(y), maximum(x)) # make a 2D C with NaNs
 
+
+
+
+
+        C = fill(NaN, maximum(y), maximum(x)) # make a 2D C with NaNs
         for i in 1:nrow(data)
                 C[data.north[i], data.east[i]] = data[i, varStr]
         end
 
+
         heatmap(C,
                 showaxis=false,
-                grid=false,
+                grid=true,
                 axis_ratio=:equal,
                 color=cgrad(cscale, categorical=discrete),
                 legend=false,
                 cbar=true,
                 title=titleStr)
+
+
+
 
         plot!(coast.idx_east,
                 coast.idx_north,
@@ -240,10 +272,6 @@ end
 
 
 
-
-# Make sure years is a vector
-years = collect(years)
-
 # Create data to visualised
 # number of generations and first day of emergence
 @time d = year_average(years, outDir, thin, speciesName, doy)
@@ -255,20 +283,21 @@ years = collect(years)
 # ===================================================================
 # Visualise output
 
-if length(years)==1
+if length(years) == 1
         year_label = string(years)
 else
-  year_label = string(minimum(years)) * " - " * string(maximum(years))
+        year_label = string(minimum(years)) * " - " * string(maximum(years))
 end
 
 titleStr = "Emergence DOY (Start DOY = " * string(doy) * ",  " * year_label * ")"
-plot_map("emergeDOY", d, coast, titleStr, :PiYG)
+d_subset = d[d.emergeDOY.!=0,:]
+plot_map("emergeDOY", d_subset, coast, titleStr, :matter)
 # Save output from the last plot
 if save_figs
         savefig(speciesName * "_emergence_" * year_label * ".png")
 end
 
-titleStr="Number of Generations (" * year_label * ")";
+titleStr = "Number of Generations (" * year_label * ")";
 plot_map("nGen", d, coast, titleStr, :PiYG)
 # Save output from the last plot
 if save_figs
@@ -278,57 +307,9 @@ end
 plot_map("nGenInt", d, coast, titleStr, :Dark2_3, true)
 # Save output from the last plot
 
-titleStr="Number of Generations SD (" * year_label * ")";
+titleStr = "Number of Generations SD (" * year_label * ")";
 plot_map("nGenSD", d, coast, titleStr, :Accent)
 
 
-
-
-
-# # +++++++++++++++++++++++++++++++++++++++++++
-# Plot emergence for all locations across Ireland
-# plot(result.DOY,
-#         result.emergeDOY,
-#         group=result.ID,
-#         aspect_ratio=:equal,
-#         lc=:black,
-#         alpha=RGBA(0, 0, 0, 0.05),
-#         xaxis="Start DOY",
-#         yaxis="Emergence DOY",
-#         legend=false)
-# plot!([1:365], [1:365])
-
-
-# # Same result visualised as a 2D histogram
-# histogram2d(result.DOY,
-#         result.emergeDOY,
-#         nbinsx=200,
-#         nbinsy=100,
-#         xaxis="Start DOY",
-#         yaxis="Emergence DOY")
-
-
-
-
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Find a specific location
-
-# Specify eastings and northings
-location = [95000, 21000] 
-latlonFile = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//locations.CSV"
-latlonFile = joinpath(dataDir,"IE_grid_locations.csv")
-paulFile = "first_occurrence_threshold_with_date_range_2_1961_Agrilus_anxius_GDD_multiple_dates.csv"
-
-# Import location data
-latlongs = CSV.read(latlonFile, DataFrame)
-
-# paul = CSV.read(joinpath(outDir, "Code that is under development//Changing_Start_Dates",paulFile),DataFrame)
-
-idx = latlongs.east.==location[1] .&& latlongs.north.==location[2]
-
-d[d.ID.==latlongs.ID[idx],:]
-
-
-
-# julia[julia.ID.==16090,:]
+titleStr = "Number of Years (" * year_label * ")";
+plot_map("N", d, coast, titleStr, :Dark2_6, true)
