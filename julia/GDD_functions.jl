@@ -17,7 +17,7 @@
 # =========================================================
 # ============= Defne functions ===========================
 
-function photoperiod(latitude::Vector{Float64}, DOY::Vector{Int16}, threshold)
+function photoperiod2(latitude::Vector{Float64}, DOY::Vector{Int16}, threshold)
   # Calculate daylength in hours using the algorithm from the R package geosphere
   # This package uses the algorithm in 
   # Forsythe, William C., Edward J. Rykiel Jr., Randal S. Stahl, Hsin-i Wu and 
@@ -25,23 +25,65 @@ function photoperiod(latitude::Vector{Float64}, DOY::Vector{Int16}, threshold)
   # latitude and day of the year. Ecological Modeling 80:87-95.
 
   # Check latitude and doy have the same length
-  if length(latitude) != length(DOY) 
+  if length(latitude) != length(DOY)
     @warn "function photoperiod: latitude and DOY are not the same length"
   end
 
-  daylength = zeros(Float64, length(DOY))        # Calculate day length
-  DOY = convert.(Float64, DOY)     # Convert to Float64 for the calculations
+   # daylength only affects overwintering at end of year (i.e entering diapause)
+   doy150_idx = findall(DOY.>150)
 
-  for i in eachindex(DOY)
-    P = asin(0.39795 * cos(0.2163108 + 2 * atan(0.9671396 * tan(0.0086 * (DOY[i] - 186.0)))))
-    a = (sind(0.8333) + sind(latitude[i]) * sin(P)) / (cosd(latitude[i]) * cos(P))
-    a = min(max(a, -1), 1)
-    daylength[i] = 24.0 - (24.0 / pi) * acos(a)
+  # Return true if daylength allows diapause to happen 
+  # (diapause not relevant before day 150 of year)
+  overwinterBool = Vector{Bool}(undef, length(DOY))  # True if overwintering 
+  for i in eachindex(doy150_idx)
+      P = asin(0.39795 * cos(0.2163108 + 2 * atan(0.9671396 * tan(0.0086 * (convert(Float64, DOY[doy150_idx[i]]) - 186.0)))))
+      a = (sind(0.8333) + sind(latitude[doy150_idx[i]]) * sin(P)) / (cosd(latitude[doy150_idx[i]]) * cos(P))
+      a = min(max(a, -1), 1)
+
+      # Overwintering if daylength less than threshold     
+      overwinterBool[doy150_idx[i]] = 24.0 - (24.0 / pi) * acos(a) < threshold
   end
 
   # Return true if daylength allows development to happen 
-  # (photoperiod not relevant before day 150 of year)
-  return daylength>threshold || DOY.<150
+  # (daylength not relevant before day 150 of year)
+  return .!overwinterBool
+end
+
+
+function photoperiod(latitude::Vector{Float64}, DOY::UnitRange{Int64}, threshold::Float64)
+  # Calculate daylength in hours using the algorithm from the R package geosphere
+  # This package uses the algorithm in 
+  # Forsythe, William C., Edward J. Rykiel Jr., Randal S. Stahl, Hsin-i Wu and 
+  # Robert M. Schoolfield, 1995. A model comparison for daylength as a function of 
+  # latitude and day of the year. Ecological Modeling 80:87-95.
+  #
+  # Output:
+  #   A vector giving the DOY on which daylength diapause threshold is reached for each latitude
+  #   in the input
+  #
+  # ========================================================================================
+
+
+
+  # overwinterBool is true if daylength allows diapause to happen 
+  # (other conditions may be needed to start diapause)
+  overwinterBool = Array{Bool}(undef, (length(latitude),length(DOY)))  # True if overwintering 
+
+  for i in eachindex(DOY)
+      P = asin(0.39795 * cos(0.2163108 + 2 * atan(0.9671396 * tan(0.0086 * (convert(Float64, DOY[i]) - 186.0)))))
+
+      a = (sind.(0.8333) .+ sind.(latitude) .* sin(P)) ./ (cosd.(latitude) .* cos(P))
+      a = min.(max.(a, -1), 1)
+
+      # Overwintering if daylength less than threshold     
+      overwinterBool[:,i] = 24.0 .- (24.0 / pi) .* acos.(a) .< threshold
+  end
+
+  # Return DOY on which diapause can start for each latitude 
+  diapause_DOY = [findfirst(overwinterBool[i,:]) + minimum(DOY) - 1 for i in eachindex(latitude)] 
+  # If diapause threshold cannot be met this will give diapause_DOY = 367 (meaning no diapause)
+
+  return diapause_DOY
 end
 
 # ------------------------------------------------------------------------------------------
@@ -77,7 +119,7 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
 
   # Number of years of meteo data to import   
   nYears = 3
-  
+
   # An array containing the years to be imported
   years = collect(meteoYear:meteoYear+nYears-1)
 
@@ -85,28 +127,28 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
   meteoIE = read_meteoIE(meteoDir_IE, grid_thin, years)
   meteoNI = read_meteoNI(meteoDir_NI, grid_thin, years)
 
-  
+
   # Find duplicate locations and remove NI data
   NI_keep = [isdisjoint(meteoNI[3][i], meteoIE[3]) for i in eachindex(meteoNI[3])]
 
   # Combine meteo data from NI and IE
-  Tavg = hcat(meteoIE[1], meteoNI[1][:,NI_keep])
+  Tavg = hcat(meteoIE[1], meteoNI[1][:, NI_keep])
 
   # Combine location data 
-  ID = vcat(meteoIE[3],meteoNI[3][NI_keep])
+  ID = vcat(meteoIE[3], meteoNI[3][NI_keep])
 
   # Check days of year are the same for both data sets
-  if (meteoIE[2]==meteoNI[2])
+  if (meteoIE[2] == meteoNI[2])
     local DOY = meteoIE[2]
   else
     @error "IE and NI meteo files have different number of days!"
   end
-  
+
   # Order meteo data by location ID in grid_thin
   sort_idx = sortperm(ID)
 
   # Return sorted data
-  return Tavg[:,sort_idx], DOY, ID[sort_idx]
+  return Tavg[:, sort_idx], DOY, ID[sort_idx]
 
 end
 # ------------------------------------------------------------------------------------------
@@ -135,7 +177,7 @@ function read_meteoIE(meteoDir_IE, grid_thin, years)
   #
   # *************************************************************
 
-  
+
   # Create empty array of arrays to hold average temps 
   TavgVec = Vector{Array{Float32,2}}(undef, length(years) * 12)
 
@@ -145,7 +187,7 @@ function read_meteoIE(meteoDir_IE, grid_thin, years)
 
   # Find indices of meteo data to use 
   # (needed incase meteo file has missing grid points or different order compared to grid_thin)
-  IDidx = [findfirst(abs.(grid_thin.east.-meteoCoords.east[i]).==0 .&& abs.(grid_thin.north.-meteoCoords.north[i]).==0) for i in 1:nrow(meteoCoords)]
+  IDidx = [findfirst(abs.(grid_thin.east .- meteoCoords.east[i]) .== 0 .&& abs.(grid_thin.north .- meteoCoords.north[i]) .== 0) for i in 1:nrow(meteoCoords)]
   idx = findall(IDidx .!= nothing)
 
   for y in eachindex(years)
@@ -208,37 +250,37 @@ function read_meteoNI(meteoDir_NI, grid_thin, years)
   TavgVec = Vector{Array{Float32,2}}(undef, length(years))
 
   # Read one meteo file to find locations information and calculate a filter
-  coordFileNI = filter(x -> occursin("TX_daily_grid_" * string(years[1]), x), 
-                     readdir(joinpath(meteoDir_NI, "NI_TX_daily_grid")))
+  coordFileNI = filter(x -> occursin("TX_daily_grid_" * string(years[1]), x),
+    readdir(joinpath(meteoDir_NI, "NI_TX_daily_grid")))
   meteoCoords = CSV.read(joinpath([meteoDir_NI, "NI_TX_daily_grid", coordFileNI[1]]), DataFrame, select=[1, 2], types=Int32)
 
   # Find indices of meteo data to use
   # (needed incase meteo file has missing grid points or different order compared to grid_thin)
-  IDidx = [findfirst(abs.(grid_thin.east.-meteoCoords.east[i]).==0 .&& abs.(grid_thin.north.-meteoCoords.north[i]).==0) for i in 1:nrow(meteoCoords)]
+  IDidx = [findfirst(abs.(grid_thin.east .- meteoCoords.east[i]) .== 0 .&& abs.(grid_thin.north .- meteoCoords.north[i]) .== 0) for i in 1:nrow(meteoCoords)]
   idx = findall(IDidx .!= nothing)
 
 
   for y in eachindex(years)
-      # Import data for year (y)
+    # Import data for year (y)
 
-      # Get the correct filename
-      meteoFileTX = filter(x -> occursin("TX_daily_grid_" * string(years[y]), x), readdir(joinpath(meteoDir_NI, "NI_TX_daily_grid")))
-      meteoFileTN = filter(x -> occursin("TN_daily_grid_" * string(years[y]), x), readdir(joinpath(meteoDir_NI, "NI_TN_daily_grid")))
+    # Get the correct filename
+    meteoFileTX = filter(x -> occursin("TX_daily_grid_" * string(years[y]), x), readdir(joinpath(meteoDir_NI, "NI_TX_daily_grid")))
+    meteoFileTN = filter(x -> occursin("TN_daily_grid_" * string(years[y]), x), readdir(joinpath(meteoDir_NI, "NI_TN_daily_grid")))
 
-      # Import the data for min and max daily temperature (removing first two coordinate columns)
-      meteoTX = CSV.read(joinpath([meteoDir_NI, "NI_TX_daily_grid", meteoFileTX[1]]), DataFrame, drop=[1, 2], types=Float32)
-      meteoTN = CSV.read(joinpath([meteoDir_NI, "NI_TN_daily_grid", meteoFileTN[1]]), DataFrame, drop=[1, 2], types=Float32)
+    # Import the data for min and max daily temperature (removing first two coordinate columns)
+    meteoTX = CSV.read(joinpath([meteoDir_NI, "NI_TX_daily_grid", meteoFileTX[1]]), DataFrame, drop=[1, 2], types=Float32)
+    meteoTN = CSV.read(joinpath([meteoDir_NI, "NI_TN_daily_grid", meteoFileTN[1]]), DataFrame, drop=[1, 2], types=Float32)
 
-      # Calculate daily average temp with locations as columns, days as rows
-      TavgVec[y] = permutedims(Array{Float32,2}((meteoTX[idx, :] .+ meteoTN[idx, :]) ./ 2.0))
-    end
+    # Calculate daily average temp with locations as columns, days as rows
+    TavgVec[y] = permutedims(Array{Float32,2}((meteoTX[idx, :] .+ meteoTN[idx, :]) ./ 2.0))
+  end
 
   # Put all the temperature data together into one Matrix
   Tavg = reduce(vcat, TavgVec)
 
 
   # Calculate day of year (used for photoperiod calculations) 
-  local DOY = reduce(vcat, [collect(1:size(TavgVec[y],1)) for y in 1:length(years)]) 
+  local DOY = reduce(vcat, [collect(1:size(TavgVec[y], 1)) for y in 1:length(years)])
   DOY = convert.(Int16, DOY)  # Day of year
 
   return Tavg, DOY, grid_thin.ID[IDidx[idx]]

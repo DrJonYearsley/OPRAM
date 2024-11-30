@@ -29,7 +29,7 @@ gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and lon
 thinFactor = 1;
 
 # Define species parameters
-outPrefix = "pseudips";   # Prefix to use for results files
+outPrefix = "ips_typo";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 
@@ -149,7 +149,15 @@ thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(grid.nort
 grid_thin = grid[thinInd, :];
 
 
-
+# =========================================================
+# =========================================================
+# Calculate whether daylength allows diapause for each DOY and latitude
+# Returns a matrix where rows are unique latitudes and columns are days of year
+if !ismissing(params.diapause_photoperiod)
+  @info "Calculating DOY threshold for diapause"
+  diapause_minDOY = 150
+  diapauseDOY_threshold = photoperiod(grid_thin.latitude, diapause_minDOY:366, params.diapause_photoperiod)
+end
 
 
 # =========================================================
@@ -177,25 +185,27 @@ for year in meteoYear
 
   # Add in diapause (if necessary)
   if !ismissing(params.diapause_photoperiod)
-    # Calulate day of year for all points where GDD > base temp
-    DOY = [meteo[2][idx[i][1]] for i in eachindex(idx)]
+    @info "Removing days when diapause"
 
-    if ismissing(params.diapause_temperature)   # diapause determine by photoperiod
-      no_overwinter = photoperiod(grid_thin.latitude, DOY, params.diapause_photoperiod) 
-    else # diapause determined by photoperiod (if day length is decreasing) and temp
-      no_overwinter = photoperiod(grid_thin.latitude, DOY, params.diapause_photoperiod).||
-                      GDD[gdd_update] .> (params.diapause_temperature - params.base_temperature)
+
+    # Identify when diapuse will occur
+    if ismissing(params.diapause_temperature)   # diapause determine only by photoperiod
+       # Is DOY past the diapause threshold DOY?
+      overwinterBool =  [meteo[2][idx[i][1]] .>= diapauseDOY_threshold[idx[i][2]] for i in eachindex(idx)]
+
+    else # diapause determine by photoperiod AND temp
+      overwinterBool = [GDD[idx[i]] <= (params.diapause_temperature - params.base_temperature) && 
+                        meteo[2][idx[i][1]] >= diapauseDOY_threshold[idx[i][2]]  for i in eachindex(idx)]                        
     end
 
     # Update gdd_update, idx and IDvec to remove overwintering days
-    gdd_update[gdd_update] = no_overwinter
-    idx = idx[no_overwinter]
-    IDvec = IDvec[no_overwinter]
+    gdd_update[idx[overwinterBool]] .= false
+    idx = idx[.!overwinterBool]
+    IDvec = IDvec[.!overwinterBool]
 
     # Free up some memory
     DOY = nothing
-    latitude = nothing
-    no_overwinter = nothing
+    overwinterBool = nothing
   end
 
   # Make GDD array a 1D shared array
@@ -233,11 +243,6 @@ for year in meteoYear
 
   # Remove rows that have emergeDOY<=0 
   idxKeep = result[:, 2] .> 0
-
-  # # Find locations with no data!
-  # sp =  setdiff(unique(IDvec), unique(IDvec[idxKeep]))
-  # scatter(grid_thin.east, grid_thin.north, markersize=0.5)
-  # scatter!(grid_thin.east[sp], grid_thin.north[sp], markersize=2, color="red")
 
   # Remove rows where the final prediction doesn't change (they can be recalculated later)
   idxKeep2 = (IDvec[1:end-1] .!= IDvec[2:end]) .|| (IDvec[1:end-1] .== IDvec[2:end] .&& result[1:end-1, 2] .!= result[2:end, 2])
