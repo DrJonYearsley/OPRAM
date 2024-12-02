@@ -20,7 +20,7 @@ using JLD2;
 
 
 nNodes = 3;        # Number of compute nodes to use (if in interactive)
-meteoYear = 2010:2021   # Years to run model
+meteoYear = 2010:2011   # Years to run model
 saveToFile = true;   # If true save the result to a file
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 # (used for daylength calculations as well as importing and thining of meteo data)
@@ -29,7 +29,7 @@ gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and lon
 thinFactor = 1;
 
 # Define species parameters
-outPrefix = "ips_typo";   # Prefix to use for results files
+outPrefix = "leptinotarsa";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 
@@ -185,27 +185,28 @@ for year in meteoYear
 
   # Add in diapause (if necessary)
   if !ismissing(params.diapause_photoperiod)
-    @info "Removing days when diapause"
 
+    @info "Removing days when insect is in diapause"
+    @time "Diapause" begin
+      # Identify when diapuse will occur
+      if ismissing(params.diapause_temperature)   # diapause determined only by photoperiod
+        # Is DOY past the diapause threshold DOY?
+        overwinterBool = [meteo[2][idx[i][1]] .>= diapauseDOY_threshold[idx[i][2]] for i in eachindex(idx)]
 
-    # Identify when diapuse will occur
-    if ismissing(params.diapause_temperature)   # diapause determine only by photoperiod
-       # Is DOY past the diapause threshold DOY?
-      overwinterBool =  [meteo[2][idx[i][1]] .>= diapauseDOY_threshold[idx[i][2]] for i in eachindex(idx)]
+      else # diapause determined by photoperiod AND temp
+        overwinterBool = [GDD[idx[i]] <= (params.diapause_temperature - params.base_temperature) &&
+                          meteo[2][idx[i][1]] >= diapauseDOY_threshold[idx[i][2]] for i in eachindex(idx)]
+      end
 
-    else # diapause determine by photoperiod AND temp
-      overwinterBool = [GDD[idx[i]] <= (params.diapause_temperature - params.base_temperature) && 
-                        meteo[2][idx[i][1]] >= diapauseDOY_threshold[idx[i][2]]  for i in eachindex(idx)]                        
+      # Update gdd_update, idx and IDvec to remove overwintering days
+      gdd_update[idx[overwinterBool]] .= false
+      idx = idx[.!overwinterBool]
+      IDvec = IDvec[.!overwinterBool]
+
+      # Free up some memory
+      DOY = nothing
+      overwinterBool = nothing
     end
-
-    # Update gdd_update, idx and IDvec to remove overwintering days
-    gdd_update[idx[overwinterBool]] .= false
-    idx = idx[.!overwinterBool]
-    IDvec = IDvec[.!overwinterBool]
-
-    # Free up some memory
-    DOY = nothing
-    overwinterBool = nothing
   end
 
   # Make GDD array a 1D shared array
@@ -235,32 +236,34 @@ for year in meteoYear
 
   # Loop over all locations and run the model
   @info "Running the model"
+  @time "Model calculations:" begin
 
-  @everywhere thresh = convert(Float32, $params.threshold)
-  @time "looping around locations" location_loop!(locInd1, locInd2, result, GDDsh, thresh)
+    @everywhere thresh = convert(Float32, $params.threshold)
+    location_loop!(locInd1, locInd2, result, GDDsh, thresh)
+
+
+
+    # Remove rows that have emergeDOY<=0 
+    idxKeep = result[:, 2] .> 0
+
+    # Remove rows where the final prediction doesn't change (they can be recalculated later)
+    idxKeep2 = (IDvec[1:end-1] .!= IDvec[2:end]) .|| (IDvec[1:end-1] .== IDvec[2:end] .&& result[1:end-1, 2] .!= result[2:end, 2])
+    push!(idxKeep2, true)    # Add a true value at the end
+
+    # Remove all but the first result with DOY >= 365 (results only for 1 year)
+    # Keep data with DOY<=365 or when DOY>365 and the previous result was less than 365
+    idxKeep3 = result[2:end, 1] .<= 365 .|| (IDvec[1:end-1] .== IDvec[2:end] .&& (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
+    pushfirst!(idxKeep3, true)    # Add a true value at the start
+
+    # Combine all 3 indices together
+    idxKeep = idxKeep .&& idxKeep2 .&& idxKeep3
+
+
+    # Create a data frame, using real location ID (second element of meteo)
+    tm = DataFrame(ID=grid_thin.ID[IDvec[idxKeep]], DOY=result[idxKeep, 1], emergeDOY=result[idxKeep, 2])
+  end
 
   @info "Saving the results"
-
-  # Remove rows that have emergeDOY<=0 
-  idxKeep = result[:, 2] .> 0
-
-  # Remove rows where the final prediction doesn't change (they can be recalculated later)
-  idxKeep2 = (IDvec[1:end-1] .!= IDvec[2:end]) .|| (IDvec[1:end-1] .== IDvec[2:end] .&& result[1:end-1, 2] .!= result[2:end, 2])
-  push!(idxKeep2, true)    # Add a true value at the end
-
-  # Remove all but the first result with DOY >= 365 (results only for 1 year)
-  # Keep data with DOY<=365 or when DOY>365 and the previous result was less than 365
-  idxKeep3 = result[2:end, 1] .<= 365 .|| (IDvec[1:end-1] .== IDvec[2:end] .&& (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
-  pushfirst!(idxKeep3, true)    # Add a true value at the start
-
-  # Combine all 3 indices together
-  idxKeep = idxKeep .&& idxKeep2 .&& idxKeep3
-
-
-  # Create a data frame, using real location ID (second element of meteo)
-  tm = DataFrame(ID=grid_thin.ID[IDvec[idxKeep]], DOY=result[idxKeep, 1], emergeDOY=result[idxKeep, 2])
-
-
   # # Save the results (replacing ID indices with original ID values)
   # CSV.write(joinpath([outDir,"result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".csv"]), tm)
 
