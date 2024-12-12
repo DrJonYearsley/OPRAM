@@ -15,8 +15,8 @@ using JLD2
 # =================================================================================
 # Set parameters for the visualisation
 # If more than one year then take average across years
-speciesName = "pseudips"
-years = collect(2011:2020)  # Either a single year or collect(year1:year2)
+speciesName = "ips_typo"
+years = collect(2000:2009)  # Either a single year or collect(year1:year2)
 thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
 doy::Int32 = 1   # Day of year development started
 save_figs = true  # If true save figures
@@ -297,6 +297,8 @@ if save_figs
         savefig(speciesName * "_emergence_" * year_label * ".png")
 end
 
+
+
 titleStr = "Number of Generations (" * year_label * ")";
 plot_map("nGen", d, coast, titleStr, :PiYG)
 # Save output from the last plot
@@ -304,12 +306,13 @@ if save_figs
         savefig(speciesName * "_ngen_" * year_label * ".png")
 end
 
+titleStr = "Number of Whole Generations (" * year_label * ")";
 plot_map("nGenInt", d, coast, titleStr, :Dark2_3, true)
-# Save output from the last plot
+
 
 titleStr = "Number of Generations SD (" * year_label * ")";
 plot_map("nGenSD", d, coast, titleStr, :Accent)
 
 
-titleStr = "Number of Years (" * year_label * ")";
+titleStr = "Number of Years of Data (" * year_label * ")";
 plot_map("N", d, coast, titleStr, :Dark2_6, true)

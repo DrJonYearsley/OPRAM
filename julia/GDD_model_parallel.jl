@@ -20,7 +20,7 @@ using JLD2;
 
 
 nNodes = 3;        # Number of compute nodes to use (if in interactive)
-meteoYear = 2010:2011   # Years to run model
+meteoYear = 2000:2005   # Years to run model
 saveToFile = true;   # If true save the result to a file
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 # (used for daylength calculations as well as importing and thining of meteo data)
@@ -29,7 +29,7 @@ gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and lon
 thinFactor = 1;
 
 # Define species parameters
-outPrefix = "leptinotarsa";   # Prefix to use for results files
+outPrefix = "oulema";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 

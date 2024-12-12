@@ -84,11 +84,18 @@ leptinotarsa_decemlineata = (base_temperature = 10.0,       # Degrees C
 #=   Oulema melanopus (cereal leaf beetle)
 # Obligate diapause 
 =#
-oulema_melanopus = (base_temperature = 9.0,       # Degrees C
-            threshold = 553.0,                                # Degrees C
+
+# This Paul's Model 2
+oulema_melanopus_model2 = (base_temperature = 10.0,                   # Degrees C
+            threshold = 491.7,                                # Degrees C
             diapause_photoperiod = 12.0,                      # Hours
             diapause_temperature = missing)                   # Degrees C
 
+            # This Paul's Model 1
+oulema_melanopus_model1 = (base_temperature = 9.0,       # Degrees C
+            threshold = 553.0,                                # Degrees C
+            diapause_photoperiod = 12.0,                      # Hours
+            diapause_temperature = missing)                   # Degrees C
 
 
 #=  Species: Halyomorpha halys (brown marmorated stink bug)
@@ -104,7 +111,14 @@ oulema_melanopus = (base_temperature = 9.0,       # Degrees C
 #=   Ips typographus (European spruce bark beetle)
 # Facultative diapause 
 =#
-ips_typographus = (base_temperature = 8.3,       # Degrees C
+# These values are the same as the RITY2 model (Ogris et al, 2019)
+# https://doi.org/10.1016/j.ecolmodel.2019.108775
+# Warning: 
+#   The RITY2 model uses bark temperature NOT air temperature
+#   RITY2 does not have a diapause temperature... but see
+#       https://doi.org/10.1111/j.1439-0418.2006.01123.x
+
+ips_typographus = (base_temperature = 8.3,             # Degrees C
         threshold = 557.0,                             # Degrees C
         diapause_photoperiod = 14.5,                   # Hours
         diapause_temperature = 14.5)                   # Degrees C
