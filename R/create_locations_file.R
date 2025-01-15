@@ -5,7 +5,7 @@
 #
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-
+rm(list=ls())
 
 require(tidyr, quietly = TRUE)
 require(sf, quietly = TRUE)
@@ -18,7 +18,6 @@ dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
 
 # Admin boundary data
 provFile= "GIS//Census2011_Province_generalised20m.shp"
-ieFile= "GIS//country.shp"
 
 # Use directories containing max daily temps
 NI_Dir = "Northern_Ireland_Climate_Data/NI_TX_daily_grid/"
@@ -49,10 +48,12 @@ convert_to_lonlat <- function(df) {
 
 
 
-# Import province data
+# Import province data and coastline boundary
 p = st_read(file.path(dataDir,provFile))
-IE = st_read(file.path(dataDir,ieFile))
 
+# Make sure Ulster name is just Ulster
+pNames = p$PROVNAME
+pNames[grepl("Ulster", pNames)] = "Ulster"
 
 
 # Pick one file to import for NI and ROI
@@ -75,6 +76,30 @@ locations_tmp = rbind(data_IE[,c('east','north')],
                   data_NI[,c('east','north')])
 
 locations = unique(locations_tmp)
+
+# Include hectad (i.e. 10km square)
+source("eastnorth2os.R")
+
+hectad = eastnorth2os(as.matrix(locations[,c("east","north")]+500), 
+                   system="OSI", 
+                   format="hectad")
+
+# Include country and province boundary info 
+# (add 500 to move to middle of 1km grid square)
+sp_ig <- sf::st_as_sf(locations+500, 
+                      coords=c("east","north"),
+                      crs=29903)
+p = sf::st_transform(p, crs=29903)
+sp_province = st_covers(p, sp_ig)
+
+locations$province = "Ulster"
+locations$country = "NI"
+for (i in 1:length(pNames)) {
+  locations$province[sp_province[[i]]] = pNames[i]
+  locations$country[sp_province[[i]]] = "IE"
+}
+
+
 
 
 # Include latitude and longitude of each point
@@ -99,6 +124,9 @@ ID = match(locations$east,east_list)*1000 + match(locations$north,north_list)
 df_final = data.frame(ID=ID, 
                       east=locations$east, 
                       north=locations$north,
+                      hectad=hectad$GR,
+                      country=locations$country,
+                      province=locations$province,
                       longitude=locations_lonlat[,1],
                       latitude=locations_lonlat[,2])
 write.csv(df_final, 
