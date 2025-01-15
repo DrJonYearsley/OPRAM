@@ -10,10 +10,15 @@
 require(tidyr, quietly = TRUE)
 require(sf, quietly = TRUE)
 require(data.table, quietly = TRUE)
+require(sf, quietly=TRUE)
 
 
 # Set the directory containing the data
 dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
+
+# Admin boundary data
+provFile= "GIS//Census2011_Province_generalised20m.shp"
+ieFile= "GIS//country.shp"
 
 # Use directories containing max daily temps
 NI_Dir = "Northern_Ireland_Climate_Data/NI_TX_daily_grid/"
@@ -43,6 +48,10 @@ convert_to_lonlat <- function(df) {
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
+
+# Import province data
+p = st_read(file.path(dataDir,provFile))
+IE = st_read(file.path(dataDir,ieFile))
 
 
 
