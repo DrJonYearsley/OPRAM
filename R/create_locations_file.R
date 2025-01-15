@@ -6,7 +6,7 @@
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 rm(list=ls())
-
+setwd("~/git_repos/OPRAM/R")
 require(tidyr, quietly = TRUE)
 require(sf, quietly = TRUE)
 require(data.table, quietly = TRUE)
@@ -17,7 +17,7 @@ require(sf, quietly=TRUE)
 dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
 
 # Admin boundary data
-provFile= "GIS//Census2011_Province_generalised20m.shp"
+provFile= "GIS//Province.shp"
 
 # Use directories containing max daily temps
 NI_Dir = "Northern_Ireland_Climate_Data/NI_TX_daily_grid/"
@@ -52,7 +52,7 @@ convert_to_lonlat <- function(df) {
 p = st_read(file.path(dataDir,provFile))
 
 # Make sure Ulster name is just Ulster
-pNames = p$PROVNAME
+pNames = p$geographic
 pNames[grepl("Ulster", pNames)] = "Ulster"
 
 
@@ -71,11 +71,20 @@ data_IE = data.table::fread(IE_file)
 data_NI = data.table::fread(NI_file)
 
 
+
 # Create a list of all unique locations (with duplicates removed)
 locations_tmp = rbind(data_IE[,c('east','north')],
                   data_NI[,c('east','north')])
 
 locations = unique(locations_tmp)
+locations$country = "NI"
+# Find all locations that are in the IE data set (takes a minute)
+logInd = mapply(function(x,y) which.min(abs(x-data_IE$east)+abs(y-data_IE$north)), 
+  x=locations$east, 
+  y=locations$north)
+# Set points in IE data set equal to "IE"
+locations$country[logInd] = "IE"
+
 
 # Include hectad (i.e. 10km square)
 source("eastnorth2os.R")
@@ -84,22 +93,34 @@ hectad = eastnorth2os(as.matrix(locations[,c("east","north")]+500),
                    system="OSI", 
                    format="hectad")
 
-# Include country and province boundary info 
-# (add 500 to move to middle of 1km grid square)
-sp_ig <- sf::st_as_sf(locations+500, 
+
+###################### Province
+# Include province boundary info 
+sp_ig <- sf::st_as_sf(locations, 
                       coords=c("east","north"),
                       crs=29903)
 p = sf::st_transform(p, crs=29903)
-sp_province = st_covers(p, sp_ig)
+# sp_province = st_covers(p, sp_ig)
+sp_province = st_intersects(p,sp_ig)
 
-locations$province = "Ulster"
-locations$country = "NI"
+locations$province = NA
 for (i in 1:length(pNames)) {
   locations$province[sp_province[[i]]] = pNames[i]
-  locations$country[sp_province[[i]]] = "IE"
 }
+locations$province[locations$country=="NI"] = "Ulster"
 
 
+# Find points not given a province and give them the nearest province.
+noProv = which(is.na(locations$province))
+sp_noProv <- sf::st_as_sf(locations[noProv,], 
+                      coords=c("east","north"),
+                      crs=29903)
+closest <- array(NA,dim=length(noProv))
+for(i in seq_len(nrow(sp_noProv))){
+  a=p[which.min(st_distance(p, sp_noProv[i,])),]
+  closest[i] <- a$OBJECTID
+}
+locations$province[noProv] = pNames[as.numeric(closest)]
 
 
 # Include latitude and longitude of each point
@@ -133,3 +154,12 @@ write.csv(df_final,
           file = file.path(dataDir, fileout),
           quote=FALSE,
           row.names = FALSE)
+
+
+
+library(ggplot2)
+ggplot(data=locations,
+       aes(x=east,
+           y=north,
+           colour=province)) + 
+  geom_point(size=0.05)
