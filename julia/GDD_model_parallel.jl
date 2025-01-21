@@ -165,73 +165,20 @@ end
 # Start the main loop of the program
 
 
+
 for year in meteoYear
-  # Import weather data along with location and day of year
-  @info "Calculating for starting year " * string(year)
-  @info "Importing meteo data"
-  @time "Imported meteo data" meteo = read_meteo(year, meteoDir_IE, meteoDir_NI, grid_thin)
 
-  @info "Preparing data for the model"
-
-  # Calculate average temp (first element of meteo) minus the base temp
-  GDD = meteo[1] .- params.base_temperature
-
-  # Calculate days where development updates
-  gdd_update = GDD .> 0
-
-  # List ID's for all GDDs above the base temp
-  idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
-  IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # Location ID index (column coord in idx)
-
-  # Add in diapause (if necessary)
-  if !ismissing(params.diapause_photoperiod)
-
-    @info "Removing days when insect is in diapause"
-    @time "Diapause" begin
-      # Identify when diapuse will occur
-      if ismissing(params.diapause_temperature)   # diapause determined only by photoperiod
-        # Is DOY past the diapause threshold DOY?
-        overwinterBool = [meteo[2][idx[i][1]] .>= diapauseDOY_threshold[idx[i][2]] for i in eachindex(idx)]
-
-      else # diapause determined by photoperiod AND temp
-        overwinterBool = [GDD[idx[i]] <= (params.diapause_temperature - params.base_temperature) &&
-                          meteo[2][idx[i][1]] >= diapauseDOY_threshold[idx[i][2]] for i in eachindex(idx)]
-      end
-
-      # Update gdd_update, idx and IDvec to remove overwintering days
-      gdd_update[idx[overwinterBool]] .= false
-      idx = idx[.!overwinterBool]
-      IDvec = IDvec[.!overwinterBool]
-
-      # Free up some memory
-      DOY = nothing
-      overwinterBool = nothing
-    end
-  end
-
-  # Make GDD array a 1D shared array
-  GDDsh = SharedArray{Float32,1}(GDD[gdd_update])
-
-  # Find indices separatng different locations
-  ind = vec(sum(gdd_update, dims=1))
-  locInd2 = accumulate(+, ind)  # End locations
-  locInd1 = vcat(1, locInd2[1:end-1] .+ 1)
-
+  # Import meteo data and calculate degree days
+  @info "Importing meteo data and calculating degree days"
+  @time GDDsh, idx, IDvec, locInd1, locInd2 = calculate_GDD(meteoYear[1], params, grid_thin, [meteoDir_IE, meteoDir_NI])
 
   # Create a shared array to hold results for every day when GDD updates
-  result = SharedArray{Int16,2}(sum(gdd_update), 3)
+  result = SharedArray{Int16,2}(length(GDDsh), 3)
 
   # Fill the first column of results
   result[:, 1] = [idx[i][1] for i in eachindex(idx)]  # Calculate day of year
   result[:, 2] .= Int16(-1)
   result[:, 3] .= Int16(-1)
-
-  # Free up more memory
-  meteo = nothing     # Remove the meteo data
-  gdd_update = nothing
-  GDD = nothing
-  idx = nothing
-
 
 
   # Loop over all locations and run the model
@@ -264,9 +211,7 @@ for year in meteoYear
   end
 
   @info "Saving the results"
-  # # Save the results (replacing ID indices with original ID values)
-  # CSV.write(joinpath([outDir,"result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".csv"]), tm)
-
+  
   # Save using jld2 format
   save_object(joinpath([outDir, "result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), tm)
 

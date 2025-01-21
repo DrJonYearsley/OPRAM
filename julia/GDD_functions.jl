@@ -90,7 +90,7 @@ end
 
 
 
-function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
+function read_meteo(meteoYear, meteoDirs, grid_thin)
   # Import multiple years of daily min and max temperature for Republic of Ireland and 
   # Northern Ireland
   # Then creates the daily average temp for each eastings and northings of spatial locations
@@ -98,10 +98,10 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
   #
   # Arguments:
   #   meteoYear   the starting year to be imported
-  #   meteoDirIE  the directory containing the data for the Republic of Ireland 
+  #   meteoDirs[1]the directory containing the data for the Republic of Ireland 
   #               (the daily maximum/minimum temps are assumed to be 
   #                in folders maxtemp_grids and mintemp_grids)
-  #   meteoDirNI  the directory containing the data for Northern Ireland 
+  #   meteoDirs[2] the directory containing the data for Northern Ireland 
   #               (the daily maximum/minimum temps are assumed to be 
   #                in folders NI_TX_daily_grid and NI_TN_daily_grid)
   #   grid_thin   the grid of locations to use
@@ -124,8 +124,8 @@ function read_meteo(meteoYear, meteoDir_IE, meteoDir_NI, grid_thin)
   years = collect(meteoYear:meteoYear+nYears-1)
 
   # Import the weather data
-  meteoIE = read_meteoIE(meteoDir_IE, grid_thin, years)
-  meteoNI = read_meteoNI(meteoDir_NI, grid_thin, years)
+  meteoIE = read_meteoIE(meteoDirs[1], grid_thin, years)
+  meteoNI = read_meteoNI(meteoDirs[2], grid_thin, years)
 
 
   # Find duplicate locations and remove NI data
@@ -360,6 +360,87 @@ function location_loop!(locInd1::Vector{Int64}, locInd2::Vector{Int64}, result::
   end
 
 end
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+function calculate_GDD(year::Int64, params, grid_thin, meteoDirs::Vector{String})
+  # Function to calculate growing degree days from meteo data for a range of years
+  #
+  # Arguments:
+  #   year        starting year for calculations
+  #   params      parameters of the degree day model
+  #   grid_thin   data frame giving spatial grid of locations
+  #   meteoDirs   a 2-element array giving the directories for ROI and NI meteo data 
+  #               (in this order)
+  #
+  # Output:
+  #   GDDsh       shared array of growing degree days (only giving days when 
+  #               GDD are accumulated)
+  #   idx         row, column indices of TRUE elements in gdd_update (where GDD accumulates)
+  #   IDvec       Location ID index (column index in idx)
+  #   locInd1     Start index in GDDsh for each spatial location
+  #   locInd2     End index in GDDsh for each spatial location
+  # *************************************************************
+
+
+    # Import weather data along with location and day of year
+    @info "Calculating for starting year " * string(year)
+  
+    @time "Imported meteo data" meteo = read_meteo(year, meteoDirs, grid_thin)
+  
+  
+    # Calculate average temp (first element of meteo) minus the base temp
+    GDD = meteo[1] .- params.base_temperature
+  
+    # Calculate days where development updates
+    gdd_update = GDD .> 0
+  
+    # List ID's for all GDDs above the base temp
+    idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
+    IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # Location ID index (column coord in idx)
+  
+    # Add in diapause (if necessary)
+    if !ismissing(params.diapause_photoperiod)
+  
+      @info "Removing days when insect is in diapause"
+      @time "Diapause" begin
+        # Identify when diapuse will occur
+        if ismissing(params.diapause_temperature)   # diapause determined only by photoperiod
+          # Is DOY past the diapause threshold DOY?
+          overwinterBool = [meteo[2][idx[i][1]] .>= diapauseDOY_threshold[idx[i][2]] for i in eachindex(idx)]
+  
+        else # diapause determined by photoperiod AND temp
+          overwinterBool = [GDD[idx[i]] <= (params.diapause_temperature - params.base_temperature) &&
+                            meteo[2][idx[i][1]] >= diapauseDOY_threshold[idx[i][2]] for i in eachindex(idx)]
+        end
+  
+        # Update gdd_update, idx and IDvec to remove overwintering days
+        gdd_update[idx[overwinterBool]] .= false
+        idx = idx[.!overwinterBool]
+        IDvec = IDvec[.!overwinterBool]
+  
+        # Free up some memory
+        DOY = nothing
+        overwinterBool = nothing
+      end
+    end
+
+  
+    # Make GDD array a 1D shared array
+    GDDsh = SharedArray{Float32,1}(GDD[gdd_update])
+
+
+  # Find indices separatng different locations
+  ind = vec(sum(gdd_update, dims=1))
+  locInd2 = accumulate(+, ind)  # End locations
+  locInd1 = vcat(1, locInd2[1:end-1] .+ 1)
+
+    return GDDsh, idx, IDvec, locInd1, locInd2
+
+  end
 
 # ================ End of Function Definitions ======================
 # ===================================================================
