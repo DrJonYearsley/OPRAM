@@ -60,6 +60,8 @@ dummy_species = (base_temperature=1.7f0,            # Degrees C
 # =========================================================
 
 # Specify directories for import and export of data
+# Set meteoDir to nothing to stop importing these data
+#    e.g. meteoDir_NI = nothing
 
 if isdir("//home//jon//Desktop//OPRAM")
   outDir = "//home//jon//Desktop//OPRAM//results//"
@@ -211,7 +213,7 @@ for year in meteoYear
   end
 
   @info "Saving the results"
-  
+
   # Save using jld2 format
   save_object(joinpath([outDir, "result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), tm)
 
