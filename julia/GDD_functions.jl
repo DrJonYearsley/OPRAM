@@ -4,10 +4,14 @@
 #
 # This file contains the following functions
 # function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32})
-# function read_meteo(meteoYear, meteoDirs, thinFactor)
+# function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame)
+# function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
+# function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years::Vector{Int64})
+# function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years::Vector{Int64})
 # function emergence(cumGDD::Vector{Float32}, cumGDD_doy::Vector{Int16}, threshold::Float32)
 # function location_loop(locInd1::Vector{Int64}, locInd2::Vector{Int64}, result::SharedMatrix{Int16}, 
 #                        GDD::SharedVector{Float32}, threshold::Float32)
+# function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame, meteoDirs::Vector)
 #
 # Jon Yearsley (jon.yearsley@ucd.ie)
 # 7th Aug 2024
@@ -50,7 +54,7 @@ function photoperiod2(latitude::Vector{Float64}, DOY::Vector{Int16}, threshold)
 end
 
 
-function photoperiod(latitude::Vector{Float64}, DOY::UnitRange{Int64}, threshold::Float64)
+function photoperiod(latitude::Vector{Float64}, minDOY::Int64, threshold::Float64)
   # Calculate daylength in hours using the algorithm from the R package geosphere
   # This package uses the algorithm in 
   # Forsythe, William C., Edward J. Rykiel Jr., Randal S. Stahl, Hsin-i Wu and 
@@ -67,20 +71,21 @@ function photoperiod(latitude::Vector{Float64}, DOY::UnitRange{Int64}, threshold
 
   # overwinterBool is true if daylength allows diapause to happen 
   # (other conditions may be needed to start diapause)
+  DOY = convert.(Float64,collect(minDOY:366))
   overwinterBool = Array{Bool}(undef, (length(latitude), length(DOY)))  # True if overwintering 
 
   for i in eachindex(DOY)
-    P = asin(0.39795 * cos(0.2163108 + 2 * atan(0.9671396 * tan(0.0086 * (convert(Float64, DOY[i]) - 186.0)))))
+    P = asin(0.39795 * cos(0.2163108 + 2 * atan(0.9671396 * tan(0.0086 * (DOY[i] - 186.0)))))
 
     a = (sind.(0.8333) .+ sind.(latitude) .* sin(P)) ./ (cosd.(latitude) .* cos(P))
     a = min.(max.(a, -1), 1)
-
+    
     # Overwintering if daylength less than threshold     
     overwinterBool[:, i] = 24.0 .- (24.0 / pi) .* acos.(a) .< threshold
   end
 
   # Return DOY on which diapause can start for each latitude 
-  diapause_DOY = [findfirst(overwinterBool[i, :]) + minimum(DOY) - 1 for i in eachindex(latitude)]
+  diapause_DOY = [findfirst(overwinterBool[i, :]) + minDOY - 1 for i in eachindex(latitude)]
   # If diapause threshold cannot be met this will give diapause_DOY = 367 (meaning no diapause)
 
   return diapause_DOY
@@ -90,7 +95,7 @@ end
 
 
 
-function read_meteo(meteoYear, meteoDirs, grid_thin)
+function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame)
   # Import multiple years of daily min and max temperature for Republic of Ireland and 
   # Northern Ireland
   # Then creates the daily average temp for each eastings and northings of spatial locations
@@ -129,30 +134,30 @@ function read_meteo(meteoYear, meteoDirs, grid_thin)
 
   # ROI data
   if !isnothing(meteoDirs[1])   
-    if length(filter(x -> occursin(".jld2", x), readdir(meteoDir_IE))) > 0
+    if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[1]))) > 0
       # Check for jld2 files and import them
-      Tavg_IE, DOY_IE, ID_IE = read_jld2_meteoIE(meteoDirs[1], grid_thin, years)
+      Tavg_IE, DOY_IE, ID_IE = read_JLD2_meteo(meteoDirs[1], years, grid_thin.ID, "IE");
     else
       # Otherwise import csv files
-      Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE(meteoDirs[1], grid_thin, years)
+      Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE(meteoDirs[1], grid_thin, years);
     end
   end
 
 
   # Northern Ireland data
   if !isnothing(meteoDirs[2])
-    if length(filter(x -> occursin(".jld2", x), readdir(meteoDir_NI))) > 0
+    if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
       # Check for jld2 files and import them
-      Tavg_NI, DOY_NI, ID_NI = read_jld2_meteoNI(meteoDirs[2], grid_thin, years)
+      Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, "NI");
     else
       # Otherwise import csv files
-    Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDirs[2], grid_thin, years)
+    Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDirs[2], grid_thin, years);
     end
   end
 
   if isnothing(meteoDirs[2])
     # Order meteo data by location ID in grid_thin
-    sort_idx = sortperm(ID)
+    sort_idx = sortperm(ID_IE)
 
     # Return sorted data
     return Tavg_IE[:, sort_idx], DOY_IE, ID_IE[sort_idx]
@@ -189,11 +194,73 @@ function read_meteo(meteoYear, meteoDirs, grid_thin)
     return Tavg[:, sort_idx], DOY_IE, ID[sort_idx]
   end
 end
+
+
+# ------------------------------------------------------------------------------------------
+
+function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
+  # Import multiple years of daily min and max temperature from a jld2 file 
+  # for Republic of Ireland and create the daily average temp, and 
+  # the ID, eastings and northings of spatial locations
+  #
+  # Arguments:
+  #   meteoDir    the directory containing the meteo data in JLD2 format 
+  #   years       years to be read
+  #   IDgrid      ID of locations in grid_thin
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of average daily temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:   A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Third entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
+  #
+  # *************************************************************
+
+
+  # Create empty array of arrays to hold average temps 
+  TavgVec = Vector{Array{Float32,2}}(undef, length(years))
+  DOYVec = Vector{Array{Int16,1}}(undef, length(years))
+  IDVec = Vector{Array{Int64,1}}(undef, length(years))
+
+  for y in eachindex(years)
+      # Get the correct filename
+      meteoFile = filter(x -> occursin("meteo" * country * "_Tavg_" * string(years[y]), x), 
+                        readdir(meteoDir_IE))
+
+      # Import the data for Tavg
+      f = jldopen(joinpath(meteoDir_IE,meteoFile[1]), "r");
+      TavgVec[y] = read(f, "Tavg")
+      DOYVec[y] = read(f, "DOY") 
+      IDVec[y] = read(f, "ID")
+      close(f)
+  end
+
+  # Check all ID's are equivalent
+  if any(IDVec[1].!=IDVec[2]) || any(IDVec[2].!=IDVec[3])
+    @error "Locations in different meteo files are not the same"
+  end
+
+  # Find ID's that are in grid_thin
+  ID = intersect(IDgrid, IDVec[1])
+
+  # Put all the temperature data together into one Matrix
+  Tavg = reduce(vcat, TavgVec)
+  DOY = reduce(vcat, DOYVec)
+
+  # Put location ID's (columns of Tavg) in order of ID
+  idx = [findfirst(IDVec[1] .== id) for id in ID]
+  Tavg = Tavg[:,idx]
+  return Tavg, DOY, ID
+end
+
 # ------------------------------------------------------------------------------------------
 
 
 
-function read_CSV_meteoIE(meteoDir_IE, grid_thin, years)
+function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years::Vector{Int64})
   # Import multiple years of daily min and max temperature from a CSV file
   # for Republic of Ireland and create the daily average temp, and 
   # the ID, eastings and northings of spatial locations
@@ -256,79 +323,13 @@ function read_CSV_meteoIE(meteoDir_IE, grid_thin, years)
 
   return Tavg, DOY, grid_thin.ID[IDidx[idx]]
 end
-# ------------------------------------------------------------------------------------------
 
-
-
-function read_jld2_meteoIE(meteoDir_IE, grid_thin, years)
-  # Import multiple years of daily min and max temperature from a jld2 file 
-  # for Republic of Ireland and create the daily average temp, and 
-  # the ID, eastings and northings of spatial locations
-  #
-  # Arguments:
-  #   meteoDir_IE the directory containing the data for the Republic of Ireland 
-  #               (the daily maximum/minimum temps are assumed to be 
-  #                in folders maxtemp_grids and mintemp_grids)
-  #   grid_thin   the grid of locations to use
-  #   years       years to be read
-  #
-  # Output:
-  #   A list with three entries
-  #     First entry:     Matrix of average daily temperature for the period 
-  #                      (Columns are spatial locations, rows are days of year)
-  #     Second entry:   A vector of days of year (could span several years, length 
-  #                      equals the number of rows of temp matrix)
-  #     Third entry:    A vector of unique location ID's 
-  #                      (length equals number of columns temp matrix)
-  #
-  # *************************************************************
-
-
-  # Create empty array of arrays to hold average temps 
-  TavgVec = Vector{Array{Float32,2}}(undef, length(years) * 12)
-
-  # Read one meteo file to find locations information and calculate a filter
-  coordFile = filter(x -> occursin("meteoIE_Tavg_" * string(years[1]), x), readdir(meteoDir_IE))
-  meteoCoords = CSV.read(joinpath([meteoDir_IE, coordFile[1]]), DataFrame, select=[1, 2], types=Int32)
-
-  # Find indices of meteo data to use 
-  # (needed in case meteo file has missing grid points or different order compared to grid_thin)
-  IDidx = [findfirst(abs.(grid_thin.east .- meteoCoords.east[i]) .== 0 .&& abs.(grid_thin.north .- meteoCoords.north[i]) .== 0) for i in 1:nrow(meteoCoords)]
-  idx = findall(IDidx .!= nothing)
-
-  for y in eachindex(years)
-    for month in 1:12
-      # Import data for month and year (y)
-
-      # Get the correct filename
-      meteoFileTX = filter(x -> occursin("TX_" * string(years[y]) * string(month, pad=2), x), readdir(joinpath(meteoDir_IE, "maxtemp_grids")))
-      meteoFileTN = filter(x -> occursin("TN_" * string(years[y]) * string(month, pad=2), x), readdir(joinpath(meteoDir_IE, "mintemp_grids")))
-
-      # Import the data for min and max daily temperature (removing first two coordinate columns)
-      meteoTX = CSV.read(joinpath([meteoDir_IE, "maxtemp_grids", meteoFileTX[1]]), DataFrame, drop=[1, 2], types=Float32)
-      meteoTN = CSV.read(joinpath([meteoDir_IE, "mintemp_grids", meteoFileTN[1]]), DataFrame, drop=[1, 2], types=Float32)
-
-      # Calculate daily average temp with locations as columns, days as rows
-      TavgVec[(y-1)*12+month] = permutedims(Array{Float32,2}((meteoTX[idx, :] .+ meteoTN[idx, :]) ./ 2.0))
-    end
-  end
-
-  # Put all the temperature data together into one Matrix
-  Tavg = reduce(vcat, TavgVec)
-
-  # Calculate day of year (used for photoperiod calculations)
-  DOM = size.(TavgVec, 1)      # Day of month
-  local DOY = reduce(vcat, [collect(1:sum(DOM[(1+12*(y-1)):12*y])) for y in 1:length(years)])  # Day of year
-  DOY = convert.(Int16, DOY)
-
-  return Tavg, DOY, grid_thin.ID[IDidx[idx]]
-end
 # ------------------------------------------------------------------------------------------
 
 
 
 
-function read_CSV_meteoNI(meteoDir_NI, grid_thin, years)
+function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years::Vector{Int64})
   # Import multiple years of daily mean temperature for Northern Ireland
   # create the daily average temp, and the ID, eastings and northings of spatial locations
   #
@@ -471,7 +472,8 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function calculate_GDD(year::Int64, params, grid_thin, meteoDirs::Vector{String})
+function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame, 
+                        meteoDirs::Vector, diapauseDOY::Vector{Int64})
   # Function to calculate growing degree days from meteo data for a range of years
   #
   # Arguments:
@@ -494,48 +496,49 @@ function calculate_GDD(year::Int64, params, grid_thin, meteoDirs::Vector{String}
   # Import weather data along with location and day of year
   @info "Calculating for starting year " * string(year)
 
-  @time "Imported meteo data" meteo = read_meteo(year, meteoDirs, grid_thin)
+  @time "Imported meteo data" Tavg, DOY, ID  = read_meteo(year, meteoDirs, grid_thin)
 
-
-  # Calculate average temp (first element of meteo) minus the base temp
-  GDD = meteo[1] .- params.base_temperature
-
-  # Calculate days where development updates
-  gdd_update = GDD .> 0
-
-  # List ID's for all GDDs above the base temp
-  idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
-  IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # Location ID index (column coord in idx)
+  # Make diapauseDOY and grid_thin consisent with ID's from meteo
+  idx=[id in ID for id in grid_thin.ID]
+  diapauseDOY = diapauseDOY[idx]
+  grid_thin = grid_thin[idx,:]
 
   # Add in diapause (if necessary)
   if !ismissing(params.diapause_photoperiod)
-
     @info "Removing days when insect is in diapause"
     @time "Diapause" begin
+      uniqueDiapause = unique(diapauseDOY) # Unique DOY when diapause starts
+      overwinterBool = falses(size(Tavg))  # True if overwintering 
+
       # Identify when diapuse will occur
       if ismissing(params.diapause_temperature)   # diapause determined only by photoperiod
         # Is DOY past the diapause threshold DOY?
-        overwinterBool = [meteo[2][idx[i][1]] .>= diapauseDOY_threshold[idx[i][2]] for i in eachindex(idx)]
+        for i in eachindex(uniqueDiapause)
+          locidx = findall(x-> x==uniqueDiapause[i], diapauseDOY)
+          DOYidx = findall(x -> x >= uniqueDiapause[i], DOY)
 
+          overwinterBool[DOYidx, locidx] .= true
+        end
       else # diapause determined by photoperiod AND temp
-        overwinterBool = [GDD[idx[i]] <= (params.diapause_temperature - params.base_temperature) &&
-                          meteo[2][idx[i][1]] >= diapauseDOY_threshold[idx[i][2]] for i in eachindex(idx)]
+        for i in eachindex(uniqueDiapause)
+          locidx = findall(x-> x==uniqueDiapause[i], diapauseDOY)
+          DOYidx = findall(x -> x >= uniqueDiapause[i], DOY)
+
+          overwinterBool[DOYidx, locidx] = Tavg[DOYidx, locidx] .<= params.diapause_temperature
+        end
       end
-
-      # Update gdd_update, idx and IDvec to remove overwintering days
-      gdd_update[idx[overwinterBool]] .= false
-      idx = idx[.!overwinterBool]
-      IDvec = IDvec[.!overwinterBool]
-
-      # Free up some memory
-      DOY = nothing
-      overwinterBool = nothing
     end
   end
 
+  # Calculate days where development updates (Tavg>baseline and no overwintering)
+  gdd_update = Tavg .> params.base_temperature .&& .!overwinterBool
 
-  # Make GDD array a 1D shared array
-  GDDsh = SharedArray{Float32,1}(GDD[gdd_update])
+  # List ID's for all GDDs above the base temp
+  idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
+  # IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # Location ID index (column coord in idx)
+
+  # Calculate GDD as a shared array
+  GDDsh = SharedArray{Float32,1}(Tavg[gdd_update] .- params.base_temperature)
 
 
   # Find indices separatng different locations
@@ -543,7 +546,7 @@ function calculate_GDD(year::Int64, params, grid_thin, meteoDirs::Vector{String}
   locInd2 = accumulate(+, ind)  # End locations
   locInd1 = vcat(1, locInd2[1:end-1] .+ 1)
 
-  return GDDsh, idx, IDvec, locInd1, locInd2
+  return GDDsh, idx, locInd1, locInd2
 
 end
 

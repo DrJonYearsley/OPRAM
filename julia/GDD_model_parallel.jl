@@ -29,7 +29,7 @@ gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and lon
 thinFactor = 1;
 
 # Define species parameters
-outPrefix = "oulema";   # Prefix to use for results files
+outPrefix = "halyomorpha";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 
@@ -74,6 +74,8 @@ elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"
   meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
   meteoDir_NI = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Northern_Ireland_Climate_Data//"
+     meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+     meteoDir_NI = nothing
 
 elseif isdir("//users//jon//Desktop//OPRAM//")
   outDir = "//users//jon//Desktop//OPRAM//results//"
@@ -142,14 +144,18 @@ end
 # Import grid location data
 grid = CSV.read(joinpath([dataDir, gridFile]), DataFrame);
 
+# Remove locations not in the meteo data
+if isnothing(meteoDir_IE)
+  subset!(grid, :country => c->c.!="IE")
+elseif isnothing(meteoDir_NI)
+  subset!(grid, :country => c->c.!="NI")
+end
+
 # Sort locations in order of IDs
 grid = grid[sortperm(grid.ID), :];
 
 # Thin the locations  using the thinFactor
-thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(grid.north, (thinFactor * 1e3)) .< 1e-8);
-
-grid_thin = grid[thinInd, :];
-
+subset!(grid, :east=> x-> mod.(x, (thinFactor * 1e3)) .< 1e-8,  :north=> x-> mod.(x, (thinFactor * 1e3)) .< 1e-8 )
 
 # =========================================================
 # =========================================================
@@ -158,7 +164,9 @@ grid_thin = grid[thinInd, :];
 if !ismissing(params.diapause_photoperiod)
   @info "Calculating DOY threshold for diapause"
   diapause_minDOY = 150
-  diapauseDOY_threshold = photoperiod(grid_thin.latitude, diapause_minDOY:366, params.diapause_photoperiod)
+  diapauseDOY_threshold = photoperiod(grid.latitude, diapause_minDOY, params.diapause_photoperiod)
+else
+  diapauseDOY_threshold = nothing
 end
 
 
@@ -166,13 +174,11 @@ end
 # =========================================================
 # Start the main loop of the program
 
-
-
-for year in meteoYear
+@time "Total Calculation time: " for year in meteoYear
 
   # Import meteo data and calculate degree days
-  @info "Importing meteo data and calculating degree days"
-  @time GDDsh, idx, IDvec, locInd1, locInd2 = calculate_GDD(meteoYear[1], params, grid_thin, [meteoDir_IE, meteoDir_NI])
+  @info "Running model for year" * string(year)
+  @time "Total GDD calculation" GDDsh, idx, locInd1, locInd2 = calculate_GDD(year, params, grid, [meteoDir_IE, meteoDir_NI], diapauseDOY_threshold)
 
   # Create a shared array to hold results for every day when GDD updates
   result = SharedArray{Int16,2}(length(GDDsh), 3)
@@ -190,18 +196,19 @@ for year in meteoYear
     @everywhere thresh = convert(Float32, $params.threshold)
     location_loop!(locInd1, locInd2, result, GDDsh, thresh)
 
-
-
     # Remove rows that have emergeDOY<=0 
     idxKeep = result[:, 2] .> 0
 
-    # Remove rows where the final prediction doesn't change (they can be recalculated later)
-    idxKeep2 = (IDvec[1:end-1] .!= IDvec[2:end]) .|| (IDvec[1:end-1] .== IDvec[2:end] .&& result[1:end-1, 2] .!= result[2:end, 2])
+    # Extract location index for every row in result (column coord in idx)
+    loc_idx = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # ID[loc_idx] will give the location's ID 
+    
+    # Remove rows where the final prediction at the same location doesn't change (they can be recalculated later)
+    idxKeep2 = (loc_idx[1:end-1] .!= loc_idx[2:end]) .|| (loc_idx[1:end-1] .== loc_idx[2:end] .&& result[1:end-1, 2] .!= result[2:end, 2])
     push!(idxKeep2, true)    # Add a true value at the end
 
     # Remove all but the first result with DOY >= 365 (results only for 1 year)
     # Keep data with DOY<=365 or when DOY>365 and the previous result was less than 365
-    idxKeep3 = result[2:end, 1] .<= 365 .|| (IDvec[1:end-1] .== IDvec[2:end] .&& (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
+    idxKeep3 = result[2:end, 1] .<= 365 .|| (loc_idx[1:end-1] .== loc_idx[2:end] .&& (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
     pushfirst!(idxKeep3, true)    # Add a true value at the start
 
     # Combine all 3 indices together
@@ -209,15 +216,15 @@ for year in meteoYear
 
 
     # Create a data frame, using real location ID (second element of meteo)
-    tm = DataFrame(ID=grid_thin.ID[IDvec[idxKeep]], DOY=result[idxKeep, 1], emergeDOY=result[idxKeep, 2])
+    adult_emerge = DataFrame(ID=grid.ID[loc_idx[idxKeep]], 
+                               DOY=result[idxKeep, 1], 
+                               emergeDOY=result[idxKeep, 2])
   end
 
   @info "Saving the results"
-
   # Save using jld2 format
-  save_object(joinpath([outDir, "result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), tm)
-
-
+  save_object(joinpath([outDir, "result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), adult_emerge)
+  println(" ")
 end
 
 if isinteractive()
