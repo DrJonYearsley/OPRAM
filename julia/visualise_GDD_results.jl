@@ -7,6 +7,7 @@
 # If more than one year is give an average over the years is plotted
 
 using DataFrames
+using Statistics
 using CSV
 using Dates
 using Plots
@@ -15,12 +16,12 @@ using JLD2
 # =================================================================================
 # Set parameters for the visualisation
 # If more than one year then take average across years
-speciesName = "oulema"
-years = collect(2000:2005)  # Either a single year or collect(year1:year2)
+speciesName = "ips_cembrae"
+years = collect(2000:2002)  # Either a single year or collect(year1:year2)
 thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
 doy::Int32 = 1   # Day of year development started
 save_figs = true  # If true save figures
-
+hectad = true     # If true aggregate data into 10km squares
 
 
 
@@ -55,6 +56,15 @@ end
 coast = CSV.read(joinpath([dataDir, "coastline.csv"]), DataFrame,
         types=[Float64, Float64, Int, Int, Int])
 
+
+# =================================================================================
+# Import grid location data
+grid = CSV.read(joinpath([dataDir, "IE_grid_locations.csv"]), DataFrame,
+        types=[Int, Int, Int, String, String, String, Float64, Float64])
+
+# Calculate east and north of hectad bottom left corner
+grid.east_hectad = 10000.0 .* floor.(grid.east/10000)
+grid.north_hectad = 10000.0 .* floor.(grid.north/10000)
 
 # =================================================================================
 # Start of function definitions
@@ -151,7 +161,9 @@ end
 function year_average(years::Union{Vector{Int64},Int64},
         outDir::String,
         thin::Int64,
-        speciesName::String, doy::Int32)
+        speciesName::String, 
+        doy::Int32,
+        hectad::Bool)
         # Import model data for several years, extract results for a specific starting day and
         # average the results across all years
         #
@@ -159,6 +171,8 @@ function year_average(years::Union{Vector{Int64},Int64},
         #    outDir      Directory for saving results
         #    thin        The spatial thining parameter
         #    speciesName The species for which results will be calculated
+        #    doy         Day of year for development to start
+        #    hectad      Average data over 10km squares
         #
         #   Output:
         #     a data frame with columns:
@@ -228,7 +242,8 @@ function plot_map(varStr::String,
         data::DataFrame,
         coast::DataFrame,
         titleStr::String="NoTitle",
-        cscale=:matter, discrete=false)
+        cscale=:matter, 
+        discrete=false)
 
         x = sort(unique(coast.idx_east))
         y = sort(unique(coast.idx_north))
@@ -274,11 +289,17 @@ end
 
 # Create data to visualised
 # number of generations and first day of emergence
-@time d = year_average(years, outDir, thin, speciesName, doy)
+@time d = year_average(years, outDir, thin, speciesName, doy, hectad)
 
+# Combine grid and results
+d2 = leftjoin(d, grid[:,[1,4,5,6]], on=:ID)
 
+# Aggregate by hectad
+d3a = combine(groupby(d2, :hectad), [:nGen] .=> maximum)
+d3b = combine(groupby(d2, :hectad), [:emergeDOY] .=> minimum)
+d3c = leftjoin(d3a, d3b, on=:hectad)
 
-
+d3 = leftjoin(d3c, grid, on=:hectad)
 
 # ===================================================================
 # Visualise output
@@ -319,4 +340,66 @@ plot_map("emergeSD", d, coast, titleStr, :BuPu)
 
 
 titleStr = "Number of Years of Data (" * year_label * ")";
-plot_map("N", d, coast, titleStr, :BrBg, true)
+plot_map("N", d, coast, titleStr, :YlGnBu_5, true)
+# Save output from the last plot
+if save_figs
+        savefig(speciesName * "_ndatayears_" * year_label * ".png")
+end
+
+
+
+# Try plotting just hectads
+plot(d3.east_hectad,
+     d3.north_hectad,
+        seriestype=:scatter,
+        zcolor=d3.nGen_maximum,
+        color=cgrad(:PiYG, categorical=false),
+        showaxis=false,
+        legend=false,
+        grid=false,
+        cbar=true,
+        clims=(minimum(d.nGen),maximum(d.nGen)),
+        markersize=3,
+        aspect_ratio=:equal,
+        dpi=600,
+        title="Maximum Number of Generations (" * year_label * ")");
+
+plot!(coast.east,
+        coast.north,
+                seriestype=:scatter,
+                showaxis=false,
+                grid=false,
+                markersize=1,
+                markercolor="black",
+                dpi=600)
+if save_figs
+        savefig(speciesName * "_hectads_ngen_" * year_label * ".png")
+end
+
+
+plot(d3.east_hectad,
+     d3.north_hectad,
+        seriestype=:scatter,
+        zcolor=d3.emergeDOY_minimum,
+        color=cgrad(:matter, categorical=false),
+        showaxis=false,
+        legend=false,
+        grid=false,
+        cbar=true,
+        clims=(minimum(d.emergeDOY[d.emergeDOY.>0]),maximum(d.emergeDOY)),
+        markersize=3,
+        aspect_ratio=:equal,
+        dpi=600,
+        title="Minimum Emergence DOY (Start DOY = " * string(doy) * ",  " * year_label * ")");
+
+plot!(coast.east,
+        coast.north,
+                seriestype=:scatter,
+                showaxis=false,
+                grid=false,
+                markersize=1,
+                markercolor="black",
+                dpi=600)
+if save_figs
+        savefig(speciesName * "_hectads_emergence_" * year_label * ".png")
+end
