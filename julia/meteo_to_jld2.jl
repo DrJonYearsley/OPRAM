@@ -10,7 +10,7 @@ using SharedArrays;
 include("GDD_functions.jl")  # Includes functions to import meteo data
 
 
-years = 1991:2017    # The years to import
+years = collect(1991:2023)    # The years to import
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 
 
@@ -62,18 +62,23 @@ grid = grid[sortperm(grid.ID), :];
 
 for y in years
 
+    # +++++++++++++++++++++++++++++++++++++++++++++++++++
     # Import the IE data
     @info "Importing data for year " * string(y)
-    Tavg, DOY, ID = read_CSV_meteoIE(meteoDir_IE, grid, y)
+    Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE(meteoDir_IE, grid, y)
 
     # Save this to a JLD2 file
-    @info "Saving data for year " * string(y)
+   
     outfile = joinpath([outDir, "meteoIE_Tavg_" * string(y) * ".jld2"])
-    jldsave(outfile; Tavg, DOY, ID)   
+    @info "Saving file " * outfile
+    jldsave(outfile; Tavg=Tavg_IE, DOY=DOY_IE, ID=ID_IE)   
 
+        # +++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Import the IE data
+    Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDir_NI, grid, y)
+
+    # Save this to a JLD2 file
+    outfile = joinpath([outDir, "meteoNI_Tavg_" * string(y) * ".jld2"])
+    @info "Saving file " * outfile
+    jldsave(outfile; Tavg=Tavg_NI, DOY=DOY_NI, ID=ID_NI)   
 end
-
-
-# # Example for loading the data
-# outfile = joinpath([meteoDir_IE, "meteoIE_Tavg_" * string(y) * ".jld2"])
-# @time @load outfile Tavg DOY ID
