@@ -20,7 +20,7 @@ using JLD2;
 
 
 nNodes = 3;        # Number of compute nodes to use (if in interactive)
-meteoYear = 2000:2005   # Years to run model
+meteoYear = 2021:2023   # Years to run model
 saveToFile = true;   # If true save the result to a file
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 # (used for daylength calculations as well as importing and thining of meteo data)
@@ -29,7 +29,7 @@ gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and lon
 thinFactor = 1;
 
 # Define species parameters
-outPrefix = "halyomorpha";   # Prefix to use for results files
+outPrefix = "ips_cembrae";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 
@@ -72,10 +72,10 @@ if isdir("//home//jon//Desktop//OPRAM")
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
   dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"
-  meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
-  meteoDir_NI = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Northern_Ireland_Climate_Data//"
-     meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
-     meteoDir_NI = nothing
+  # meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
+  # meteoDir_NI = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Northern_Ireland_Climate_Data//"
+  meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+  meteoDir_NI = nothing
 
 elseif isdir("//users//jon//Desktop//OPRAM//")
   outDir = "//users//jon//Desktop//OPRAM//results//"
@@ -154,7 +154,7 @@ end
 # Sort locations in order of IDs
 grid = grid[sortperm(grid.ID), :];
 
-# Thin the locations  using the thinFactor
+# Thin the locations using the thinFactor
 subset!(grid, :east=> x-> mod.(x, (thinFactor * 1e3)) .< 1e-8,  :north=> x-> mod.(x, (thinFactor * 1e3)) .< 1e-8 )
 
 # =========================================================
@@ -177,7 +177,7 @@ end
 @time "Total Calculation time: " for year in meteoYear
 
   # Import meteo data and calculate degree days
-  @info "Running model for year" * string(year)
+  @info "Running model for year " * string(year)
   @time "Total GDD calculation" GDDsh, idx, locInd1, locInd2 = calculate_GDD(year, params, grid, [meteoDir_IE, meteoDir_NI], diapauseDOY_threshold)
 
   # Create a shared array to hold results for every day when GDD updates

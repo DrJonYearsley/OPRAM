@@ -228,10 +228,10 @@ function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{
   for y in eachindex(years)
       # Get the correct filename
       meteoFile = filter(x -> occursin("meteo" * country * "_Tavg_" * string(years[y]), x), 
-                        readdir(meteoDir_IE))
+                        readdir(meteoDir))
 
       # Import the data for Tavg
-      f = jldopen(joinpath(meteoDir_IE,meteoFile[1]), "r");
+      f = jldopen(joinpath(meteoDir,meteoFile[1]), "r");
       TavgVec[y] = read(f, "Tavg")
       DOYVec[y] = read(f, "DOY") 
       IDVec[y] = read(f, "ID")
@@ -260,7 +260,7 @@ end
 
 
 
-function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years::Vector{Int64})
+function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years)
   # Import multiple years of daily min and max temperature from a CSV file
   # for Republic of Ireland and create the daily average temp, and 
   # the ID, eastings and northings of spatial locations
@@ -270,7 +270,7 @@ function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years::Vect
   #               (the daily maximum/minimum temps are assumed to be 
   #                in folders maxtemp_grids and mintemp_grids)
   #   grid_thin   the grid of locations to use
-  #   years       years to be read
+  #   years       years to be read (could be a vector or a scalar)
   #
   # Output:
   #   A list with three entries
@@ -321,15 +321,13 @@ function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years::Vect
   local DOY = reduce(vcat, [collect(1:sum(DOM[(1+12*(y-1)):12*y])) for y in 1:length(years)])  # Day of year
   DOY = convert.(Int16, DOY)
 
+  # Return mean daily temp, day of year and location ID
   return Tavg, DOY, grid_thin.ID[IDidx[idx]]
 end
 
 # ------------------------------------------------------------------------------------------
 
-
-
-
-function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years::Vector{Int64})
+function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years)
   # Import multiple years of daily mean temperature for Northern Ireland
   # create the daily average temp, and the ID, eastings and northings of spatial locations
   #
@@ -389,10 +387,9 @@ function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years::Vect
   local DOY = reduce(vcat, [collect(1:size(TavgVec[y], 1)) for y in 1:length(years)])
   DOY = convert.(Int16, DOY)  # Day of year
 
+  # Return mean daily temp, day of year and location ID
   return Tavg, DOY, grid_thin.ID[IDidx[idx]]
 end
-
-
 
 # ------------------------------------------------------------------------------------------
 
@@ -469,25 +466,85 @@ end
 
 
 
+
+# ------------------------------------------------------------------------------------------
+
+
+function prepare_data(grid_path::String, thin_factor::Float64, params::NamedTuple)
+# Function to prepare the data for the degree day model
+#
+# Arguments:
+#   grid_path   path to the file containing the grid of locations
+#   thin_factor factor for thining spatial grid 
+#      (thin_factor = 10, every 10th grid point, i.e. 10km spacing)
+#   params      parameters of the degree day model
+#
+# Output:
+#   GDDsh       shared array of growing degree days (only giving days when 
+#               GDD are accumulated)
+#   idx         row, column indices of TRUE elements in gdd_update (where GDD accumulates)
+#   locInd1     Start index in GDDsh for each spatial location
+#   locInd2     End index in GDDsh for each spatial location
+# *************************************************************
+
+# =========================================================
+# =========================================================
+# Import location data and thin it using thinFactor
+
+@info "Importing spatial grid"
+# Import grid location data
+grid = CSV.read(grid_path, DataFrame);
+
+# Remove locations not in the meteo data
+if isnothing(meteoDirs[1])
+  subset!(grid, :country => c->c.!="IE")
+elseif isnothing(meteoDirs[2])
+  subset!(grid, :country => c->c.!="NI")
+end
+
+# Sort locations in order of IDs
+grid = grid[sortperm(grid.ID), :];
+
+# Thin the locations  using the thinFactor
+subset!(grid, :east=> x-> mod.(x, (thinFactor * 1e3)) .< 1e-8,  :north=> x-> mod.(x, (thinFactor * 1e3)) .< 1e-8 )
+
+
+# =========================================================
+# =========================================================
+# Calculate whether daylength allows diapause for each DOY and latitude
+# Returns a matrix where rows are unique latitudes and columns are days of year
+if !ismissing(params.diapause_photoperiod)
+  @info "Calculating DOY threshold for diapause"
+  diapause_minDOY = 150
+  diapauseDOY_threshold = photoperiod(grid.latitude, diapause_minDOY, params.diapause_photoperiod)
+else
+  diapauseDOY_threshold = nothing
+end
+
+
+
+
+  return grid, diapauseDOY_threshold
+end
+
 # ------------------------------------------------------------------------------------------
 
 
 function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame, 
-                        meteoDirs::Vector, diapauseDOY::Vector{Int64})
+                        meteoDirs::Vector, diapauseDOY::Union{Vector{Int64}, Nothing}=nothing)
   # Function to calculate growing degree days from meteo data for a range of years
   #
   # Arguments:
   #   year        starting year for calculations
   #   params      parameters of the degree day model
   #   grid_thin   data frame giving spatial grid of locations
-  #   meteoDirs   a 2-element array giving the directories for ROI and NI meteo data 
-  #               (in this order)
+  #   meteoDirs   a 2-element array giving the paths to directories containing
+  #               ROI and NI meteo data  (in this order)
   #
   # Output:
   #   GDDsh       shared array of growing degree days (only giving days when 
   #               GDD are accumulated)
   #   idx         row, column indices of TRUE elements in gdd_update (where GDD accumulates)
-  #   IDvec       Location ID index (column index in idx)
   #   locInd1     Start index in GDDsh for each spatial location
   #   locInd2     End index in GDDsh for each spatial location
   # *************************************************************
@@ -498,16 +555,24 @@ function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
 
   @time "Imported meteo data" Tavg, DOY, ID  = read_meteo(year, meteoDirs, grid_thin)
 
-  # Make diapauseDOY and grid_thin consisent with ID's from meteo
+  # Make grid_thin consisent with ID's from meteo
   idx=[id in ID for id in grid_thin.ID]
-  diapauseDOY = diapauseDOY[idx]
   grid_thin = grid_thin[idx,:]
+
+  # Calculate days where development updates (Tavg>baseline)
+  gdd_update = Tavg .> params.base_temperature
 
   # Add in diapause (if necessary)
   if !ismissing(params.diapause_photoperiod)
     @info "Removing days when insect is in diapause"
     @time "Diapause" begin
+      # Make grid_thin consisent with ID's from meteo
+      diapauseDOY = diapauseDOY[idx]
+
+      # Find unique DOY in diapauseDOY
       uniqueDiapause = unique(diapauseDOY) # Unique DOY when diapause starts
+
+      # Create overwinteringBool
       overwinterBool = falses(size(Tavg))  # True if overwintering 
 
       # Identify when diapuse will occur
@@ -527,11 +592,11 @@ function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
           overwinterBool[DOYidx, locidx] = Tavg[DOYidx, locidx] .<= params.diapause_temperature
         end
       end
+
+      # Remove overwintering from gdd_update
+      gdd_update[gdd_update .&& overwinteringBool] .= false
     end
   end
-
-  # Calculate days where development updates (Tavg>baseline and no overwintering)
-  gdd_update = Tavg .> params.base_temperature .&& .!overwinterBool
 
   # List ID's for all GDDs above the base temp
   idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
