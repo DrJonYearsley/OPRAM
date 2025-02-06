@@ -19,9 +19,9 @@ using JLD2;
 
 
 
-nNodes = 3;        # Number of compute nodes to use (if in interactive)
-meteoYear = 2021:2023   # Years to run model
-saveToFile = true;   # If true save the result to a file
+nNodes = 3;                         # Number of compute nodes to use (if in interactive)
+meteoYear = 1991:2021               # Years to run model
+saveToFile = true;                  # If true save the result to a file
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 # (used for daylength calculations as well as importing and thining of meteo data)
 
@@ -29,7 +29,7 @@ gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and lon
 thinFactor = 1;
 
 # Define species parameters
-outPrefix = "ips_cembrae";   # Prefix to use for results files
+outPrefix = "agrilus_anxius";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 
@@ -50,7 +50,8 @@ outPrefix = "ips_cembrae";   # Prefix to use for results files
 
 # Pre-defined parameters for some species are in species_params.jl
 # or you can define your own parameters below in dummy_species
-dummy_species = (base_temperature=1.7f0,            # Degrees C
+dummy_species = (name="to be defined",
+  base_temperature=1.7f0,            # Degrees C
   threshold=1004.0f0,                        # Degrees C
   diapause_photoperiod=missing,              # Hours
   diapause_temperature=missing);             # Degrees C
@@ -97,7 +98,7 @@ outDir = joinpath(outDir, outPrefix)
 # =========================================================
 # =========================================================
 
-if isinteractive() & nworkers() == 1
+if isinteractive() & nprocs()==1
   # Enable multiple nodes 
   addprocs(nNodes)
 end

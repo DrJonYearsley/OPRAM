@@ -594,7 +594,7 @@ function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
       end
 
       # Remove overwintering from gdd_update
-      gdd_update[gdd_update .&& overwinteringBool] .= false
+      gdd_update[gdd_update .&& overwinterBool] .= false
     end
   end
 

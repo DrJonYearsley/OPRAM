@@ -16,8 +16,8 @@ using JLD2
 # =================================================================================
 # Set parameters for the visualisation
 # If more than one year then take average across years
-speciesName = "ips_cembrae"
-years = collect(2000:2002)  # Either a single year or collect(year1:year2)
+speciesName = "pseudips_mexicanus"
+years = collect(1991:2020)  # Either a single year or collect(year1:year2)
 thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
 doy::Int32 = 1   # Day of year development started
 save_figs = true  # If true save figures
@@ -240,17 +240,20 @@ end
 
 function plot_map(varStr::String,
         data::DataFrame,
-        coast::DataFrame,
+        coast::Union{Nothing,DataFrame},
         titleStr::String="NoTitle",
         cscale=:matter, 
-        discrete=false)
+        discrete=false,
+        size=0.5)
 
+if coast==nothing
+        x=sort(unique(data.east))
+        y=sort(unique(data.north))
+else
         x = sort(unique(coast.idx_east))
         y = sort(unique(coast.idx_north))
 
-
-
-
+end
 
         C = fill(NaN, maximum(y), maximum(x)) # make a 2D C with NaNs
         for i in 1:nrow(data)
@@ -260,7 +263,7 @@ function plot_map(varStr::String,
 
         heatmap(C,
                 showaxis=false,
-                grid=true,
+                grid=false,
                 axis_ratio=:equal,
                 color=cgrad(cscale, categorical=discrete),
                 legend=false,
@@ -269,15 +272,17 @@ function plot_map(varStr::String,
 
 
 
+       if coast!=nothing
 
         plot!(coast.idx_east,
                 coast.idx_north,
                 seriestype=:scatter,
                 showaxis=false,
                 grid=false,
-                markersize=0.5,
+                markersize=size,
                 markercolor="black",
                 dpi=600)
+        end
 
 end
 
@@ -295,11 +300,17 @@ end
 d2 = leftjoin(d, grid[:,[1,4,5,6]], on=:ID)
 
 # Aggregate by hectad
-d3a = combine(groupby(d2, :hectad), [:nGen] .=> maximum)
-d3b = combine(groupby(d2, :hectad), [:emergeDOY] .=> minimum)
+d3a = combine(groupby(d2, :hectad), [:nGen] .=> x -> quantile(x,0.95))
+d3b = combine(groupby(d2, :hectad), [:emergeDOY] .=> x -> quantile(x,0.05))
 d3c = leftjoin(d3a, d3b, on=:hectad)
 
 d3 = leftjoin(d3c, grid, on=:hectad)
+
+
+
+# Create subset for Munster
+d_munster = subset(d2, :province => x-> x.=="Munster")
+
 
 # ===================================================================
 # Visualise output
@@ -347,12 +358,12 @@ if save_figs
 end
 
 
-
+# =================================================
 # Try plotting just hectads
 plot(d3.east_hectad,
      d3.north_hectad,
         seriestype=:scatter,
-        zcolor=d3.nGen_maximum,
+        zcolor=d3.nGen_function,
         color=cgrad(:PiYG, categorical=false),
         showaxis=false,
         legend=false,
@@ -360,9 +371,10 @@ plot(d3.east_hectad,
         cbar=true,
         clims=(minimum(d.nGen),maximum(d.nGen)),
         markersize=3,
+        markerstrokewidth=0.5,
         aspect_ratio=:equal,
         dpi=600,
-        title="Maximum Number of Generations (" * year_label * ")");
+        title="90th Percentile in\n Number of Generations (" * year_label * ")");
 
 plot!(coast.east,
         coast.north,
@@ -380,7 +392,7 @@ end
 plot(d3.east_hectad,
      d3.north_hectad,
         seriestype=:scatter,
-        zcolor=d3.emergeDOY_minimum,
+        zcolor=d3.emergeDOY_function,
         color=cgrad(:matter, categorical=false),
         showaxis=false,
         legend=false,
@@ -388,9 +400,10 @@ plot(d3.east_hectad,
         cbar=true,
         clims=(minimum(d.emergeDOY[d.emergeDOY.>0]),maximum(d.emergeDOY)),
         markersize=3,
+        markerstrokewidth=0.5,
         aspect_ratio=:equal,
         dpi=600,
-        title="Minimum Emergence DOY (Start DOY = " * string(doy) * ",  " * year_label * ")");
+        title="10th Percentile in \n Emergence DOY (Start DOY = " * string(doy) * ",  " * year_label * ")");
 
 plot!(coast.east,
         coast.north,
@@ -403,3 +416,38 @@ plot!(coast.east,
 if save_figs
         savefig(speciesName * "_hectads_emergence_" * year_label * ".png")
 end
+
+
+# Plot Munster region
+
+coast_munster = subset(coast, 
+:idx_east => x->x.>=minimum(d_munster.east),
+:idx_east => x->x.<=maximum(d_munster.east), 
+:idx_north => x->x.>=minimum(d_munster.north),
+:idx_north => x->x.<=maximum(d_munster.north))
+
+
+titleStr = "Number of Generations \n(" * year_label * ", Munster)";
+plot_map("nGen", d_munster, nothing, titleStr, :PiYG, false, 1)
+
+
+# Save output from the last plot
+if save_figs
+        savefig(speciesName * "_ngen_munster_" * year_label * ".png")
+end
+
+
+titleStr = "Emergence DOY \n(Start DOY = " * string(doy) * ",  " * year_label * ", Munster)"
+plot_map("emergeDOY", 
+        subset(d_munster,:emergeDOY=> x->x.!=0),
+        coast_munster, 
+        titleStr, 
+        :matter,
+        false,
+        1)
+
+# Save output from the last plot
+if save_figs
+        savefig(speciesName * "_emergence_munster" * year_label * ".png")
+end
+coast
