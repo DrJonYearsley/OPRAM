@@ -18,6 +18,8 @@ dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
 
 # Admin boundary data
 provFile= "GIS//Province.shp"
+countyFile_IE = "GIS//counties.shp"
+countyFile_UK = "GIS//gadm41_GBR_3.shp"
 
 # Use directories containing max daily temps
 NI_Dir = "Northern_Ireland_Climate_Data/NI_TX_daily_grid/"
@@ -48,12 +50,23 @@ convert_to_lonlat <- function(df) {
 
 
 
-# Import province data and coastline boundary
+# Import province, county data and coastline boundary
 p = st_read(file.path(dataDir,provFile))
+county_IE = st_read(file.path(dataDir,countyFile_IE))
+county_UK = st_read(file.path(dataDir,countyFile_UK))
+
+county_NI = county_UK[county_UK$NAME_1=="Northern Ireland",]
+
+county = st_join(county_IE, county_NI)
+
 
 # Make sure Ulster name is just Ulster
 pNames = p$geographic
 pNames[grepl("Ulster", pNames)] = "Ulster"
+
+countyNames_IE = unique(county_IE$NAME_TAG)
+countyNames_NI = unique(county_NI$NAME_3)
+
 
 
 # Pick one file to import for NI and ROI
@@ -100,7 +113,7 @@ sp_ig <- sf::st_as_sf(locations,
                       coords=c("east","north"),
                       crs=29903)
 p = sf::st_transform(p, crs=29903)
-# sp_province = st_covers(p, sp_ig)
+
 sp_province = st_intersects(p,sp_ig)
 
 locations$province = NA
