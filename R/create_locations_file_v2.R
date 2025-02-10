@@ -18,6 +18,7 @@ dataDir = "//users//jon//Research//Data"
 
 # Admin boundary data
 regionFile= "GIS//FranceBoundaries//gadm41_FRA_2.shp"
+regionFile= "GIS//FranceBoundaries//gadm41_FRA_2.shp"
 
 # Use directories containing max daily temps
 eobsFile = "Climate//eobs_0.1deg_v30.0_France_1965_1979.csv"

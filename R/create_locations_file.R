@@ -19,14 +19,15 @@ dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
 # Admin boundary data
 provFile= "GIS//Province.shp"
 countyFile_IE = "GIS//counties.shp"
-countyFile_UK = "GIS//gadm41_GBR_3.shp"
+
+county_NI = c("Antrim","Down","Armagh","Fermanagh","Tyrone","Derry")
 
 # Use directories containing max daily temps
 NI_Dir = "Northern_Ireland_Climate_Data/NI_TX_daily_grid/"
 IE_Dir = "Irish Climate Data/maxtemp_grids/"
 
 # Output filename
-fileout = "IE_grid_locations.csv"
+fileout = "IE_grid_locations_test.csv"
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -53,20 +54,44 @@ convert_to_lonlat <- function(df) {
 # Import province, county data and coastline boundary
 p = st_read(file.path(dataDir,provFile))
 county_IE = st_read(file.path(dataDir,countyFile_IE))
-county_UK = st_read(file.path(dataDir,countyFile_UK))
 
-county_NI = county_UK[county_UK$NAME_1=="Northern Ireland",]
+# Change Londonderry to Derry
+county_IE$NAME_TAG[grepl("London",county_IE$NAME_TAG)] = "Derry"
 
-county = st_join(county_IE, county_NI)
+# Add in country info
+county_IE$country="IE"
+county_IE$country[county_IE$NAME_TAG %in% county_NI] = "NI"
 
 
 # Make sure Ulster name is just Ulster
 pNames = p$geographic
 pNames[grepl("Ulster", pNames)] = "Ulster"
 
-countyNames_IE = unique(county_IE$NAME_TAG)
-countyNames_NI = unique(county_NI$NAME_3)
+# Remember county names
+countyNames = county_IE$NAME_TAG
 
+
+# Convert to EPSG29903
+p = sf::st_transform(p, crs=29903)
+county_IE = sf::st_transform(county_IE, crs=29903)
+
+
+# Add province into county_IE
+county_IE$province = NA
+for (i in 1:nrow(county_IE)) {
+  tmp = st_intersection(county_IE[i,], p)
+  if (nrow(tmp)==0) {
+    county_IE$province[i] = "Ulster"
+  } else {
+  provInd = which.max(st_area(tmp))
+  county_IE$province[i] = pNames[as.numeric(tmp$OBJECTID[provInd])]
+  }
+}
+
+
+# Check country, county and provinces (looks OK)
+table(county_IE$province, county_IE$country)
+table(county_IE$NAME_TAG, county_IE$province)
 
 
 # Pick one file to import for NI and ROI
@@ -86,54 +111,48 @@ data_NI = data.table::fread(NI_file)
 
 
 # Create a list of all unique locations (with duplicates removed)
-locations_tmp = rbind(data_IE[,c('east','north')],
-                  data_NI[,c('east','north')])
+locations = unique(rbind(data_IE[,c('east','north')],
+                         data_NI[,c('east','north')]))
 
-locations = unique(locations_tmp)
-locations$country = "NI"
-# Find all locations that are in the IE data set (takes a minute)
-logInd = mapply(function(x,y) which.min(abs(x-data_IE$east)+abs(y-data_IE$north)), 
-  x=locations$east, 
-  y=locations$north)
-# Set points in IE data set equal to "IE"
-locations$country[logInd] = "IE"
+# Move grid coords to centre of the grid
+loc_tmp = locations
+loc_tmp$east = loc_tmp$east+500
+loc_tmp$north = loc_tmp$north+500
+sp_ig <- sf::st_as_sf(loc_tmp, 
+                      coords=c("east","north"),
+                      crs=29903)
+
+
+# Assign county names to each grid ============ 
+locations$county = NA
+sp_county = st_intersects(county_IE, sp_ig)
+for (i in 1:length(countyNames)) {
+  locations$county[sp_county[[i]]] = countyNames[i]
+}
+# Find points not given a province and give them the nearest province.
+noCounty = which(is.na(locations$county))
+for(i in seq_len(length(noCounty))){
+  a=which.min(st_distance(county_IE, sp_ig[noCounty[i],]))
+  locations$county[noCounty[i]] = county_IE$NAME_TAG[a]
+}
+
+# Assign province names =================
+locations$province = county_IE$province[match(locations$county, county_IE$NAME_TAG)]
+
+# Assign country names =================
+locations$country = county_IE$country[match(locations$county, county_IE$NAME_TAG)]
+
+
+# Plot points with missing county
+ind = is.na(locations$county)
 
 
 # Include hectad (i.e. 10km square)
 source("eastnorth2os.R")
 
-hectad = eastnorth2os(as.matrix(locations[,c("east","north")]+500), 
+hectad = eastnorth2os(as.matrix(loc_tmp[,c("east","north")]), 
                    system="OSI", 
                    format="hectad")
-
-
-###################### Province
-# Include province boundary info 
-sp_ig <- sf::st_as_sf(locations, 
-                      coords=c("east","north"),
-                      crs=29903)
-p = sf::st_transform(p, crs=29903)
-
-sp_province = st_intersects(p,sp_ig)
-
-locations$province = NA
-for (i in 1:length(pNames)) {
-  locations$province[sp_province[[i]]] = pNames[i]
-}
-locations$province[locations$country=="NI"] = "Ulster"
-
-
-# Find points not given a province and give them the nearest province.
-noProv = which(is.na(locations$province))
-sp_noProv <- sf::st_as_sf(locations[noProv,], 
-                      coords=c("east","north"),
-                      crs=29903)
-closest <- array(NA,dim=length(noProv))
-for(i in seq_len(nrow(sp_noProv))){
-  a=p[which.min(st_distance(p, sp_noProv[i,])),]
-  closest[i] <- a$OBJECTID
-}
-locations$province[noProv] = pNames[as.numeric(closest)]
 
 
 # Include latitude and longitude of each point
@@ -141,8 +160,16 @@ locations_lonlat = convert_to_lonlat(locations)
 
 
 # Plot locations to check
-plot(locations$east, locations$north, pch=".")
-plot(locations_lonlat[,1], locations_lonlat[,2], pch=".")
+# plot(locations$east, locations$north, pch=".")
+# plot(locations_lonlat[,1], locations_lonlat[,2], pch=".", col=locations$county)
+
+library(ggplot2)
+ggplot(data=locations,
+       aes(x=east,
+           y=north,
+           colour=county)) +
+  geom_point(size=0.1) + 
+  theme(legend.position = "none")
 
 
 
@@ -159,20 +186,26 @@ df_final = data.frame(ID=ID,
                       east=locations$east, 
                       north=locations$north,
                       hectad=hectad$GR,
+                      longitude=locations_lonlat[,1],
+                      latitude=locations_lonlat[,2],
                       country=locations$country,
                       province=locations$province,
-                      longitude=locations_lonlat[,1],
-                      latitude=locations_lonlat[,2])
+                      county=locations$county)
+
+
+library(ggplot2)
+ggplot(data=df_final,
+       aes(x=east,
+           y=north)) +
+  geom_point(aes(colour=county),size=0.1) + 
+  theme(legend.position = "none")
+
+
+
 write.csv(df_final, 
           file = file.path(dataDir, fileout),
           quote=FALSE,
           row.names = FALSE)
 
 
-
-library(ggplot2)
-ggplot(data=locations,
-       aes(x=east,
-           y=north,
-           colour=province)) + 
-  geom_point(size=0.05)
+table(locations$county)
