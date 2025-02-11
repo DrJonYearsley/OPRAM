@@ -17,7 +17,7 @@ using JLD2
 # Set parameters for the visualisation
 # If more than one year then take average across years
 speciesName = "pseudips_mexicanus"
-years = collect(1991:2020)  # Either a single year or collect(year1:year2)
+years = collect(1991)  # Either a single year or collect(year1:year2)
 thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
 doy::Int32 = 1   # Day of year development started
 save_figs = true  # If true save figures
@@ -60,7 +60,7 @@ coast = CSV.read(joinpath([dataDir, "coastline.csv"]), DataFrame,
 # =================================================================================
 # Import grid location data
 grid = CSV.read(joinpath([dataDir, "IE_grid_locations.csv"]), DataFrame,
-        types=[Int, Int, Int, String, String, String, Float64, Float64])
+        types=[Int, Int, Int, String,  Float64, Float64,String, String,String])
 
 # Calculate east and north of hectad bottom left corner
 grid.east_hectad = 10000.0 .* floor.(grid.east/10000)
@@ -360,8 +360,8 @@ end
 
 # =================================================
 # Try plotting just hectads
-plot(d3.east_hectad,
-     d3.north_hectad,
+plot(d3.east_hectad+5000,
+     d3.north_hectad+5000,
         seriestype=:scatter,
         zcolor=d3.nGen_function,
         color=cgrad(:PiYG, categorical=false),
