@@ -1,24 +1,31 @@
 # Extract meteo data for BIOL20060 module
 # Saves data for 10 years from one random location in each of four counties
 
-
-using Distributed
 using CSV;
 using JLD2;
-using SharedArrays
 using DataFrames
 using StatsBase;
 
 # ===========================================================================
 # Set parameters ============================================================
-years = 2011:2020                                 # Specify the 10 years
+years = 2016:2020                                 # Specify the 10 years
 county = ["Waterford"]   # Specify the 4 counties
 gridFile = "IE_grid_locations.csv"                # File containing a 1km grid
 outPrefix = "BIOL20060"                           # Output file prefix
 # ===========================================================================
-# ===========================================================================
+# =============================================
 
+# Kate's sites
+# Location 1: Wicklow mts, high altitude, low temperature. (53.189607, -6.275902)
+# Location 2: Rosslare Harbour, Co. Wexford, high temperature, coastal, port. (52.24747, -6.349449)
+# Location 3: Somewhere in the midlands, inland, temperate and altitude not too high or too low, not as extreme as some of the others. (53.465285, -8.094387)
+# Location 4: Shannon Foynes Port, Co. Limerick, coastal, port, quite high temperatures, very low altitude. (52.611098, -9.070196)
 
+# The lat and long for each region
+regions = [(53.189607, -6.275902),
+    (52.24747, -6.349449),
+    (53.465285, -8.094387),
+    (52.611098, -9.070196)]
 
 # Specify directories for import and export of data
 if isdir("//home//jon//Desktop//OPRAM")
@@ -41,7 +48,7 @@ if isdir("//home//jon//Desktop//OPRAM")
   end
 
   # Include the functions to import the data 
-include("GDD_functions.jl")
+include("import_functions.jl")
 
 # =========================================================
 # =========================================================
@@ -57,6 +64,65 @@ grid = grid[sortperm(grid.ID), :];
 thinInd = findall(mod.(grid.east, (1 * 1e3)) .< 1e-8 .&& mod.(grid.north, (1 * 1e3)) .< 1e-8);
 
 grid_thin = grid[thinInd, :];
+
+# Find 10 ID's from each location in regions
+ID_sample = Array{Int64}(undef, 6,length(regions))
+for r in eachindex(regions)
+idx = abs.(regions[r][1] .- grid_thin.latitude).<0.02 .&& 
+      abs.(regions[r][2] .- grid_thin.longitude).<0.02
+
+
+ID_sample[:,r] = sample(grid.ID[idx], 6)
+end
+
+df = Vector{DataFrame}(undef, length(regions))
+
+
+for y in eachindex(years)
+  @time "Imported meteo data" Tavg, DOY, ID  = read_meteo(years[y], [meteoDir_IE, meteoDir_NI], grid_thin)
+
+  
+  for r in eachindex(regions)
+    # Indices of locations in the meteo data
+    idx = findall([x in ID_sample[:,r] for x in ID])
+
+    for i in eachindex(idx)  # Loop around each idx in the meteo data
+    grid_idx = findfirst(grid_thin.ID.==ID[idx[i]])
+  
+    if y==1 & i==1
+       df[r] = DataFrame(ID = ID[idx[i]], 
+                        east=grid_thin.east[grid_idx],
+                        north=grid_thin.north[grid_idx],                        
+                        county=grid_thin.county[grid_idx],
+                        year = years[y],
+                        DOY=DOY[1:365],
+                        Tavg = Tavg[1:365,idx[i]])
+    else
+        tmp = DataFrame(ID = ID[idx[i]], 
+                        east=grid_thin.east[grid_idx],
+                        north=grid_thin.north[grid_idx],
+                        county=grid_thin.county[grid_idx],
+                        year = years[y],
+                        DOY=DOY[1:365],
+                        Tavg = Tavg[1:365,idx[i]]) 
+        df[r] = vcat(df[r],tmp)
+    end
+  end
+  end
+end
+
+
+for i in eachindex(county)
+    CSV.write(joinpath([outDir, county[i] * "_" * outPrefix * ".csv"]), df[i])
+end
+
+
+
+
+
+
+# ====================================================================================
+# Extract data for different counties
 
 # Find one location in each county
 ID_sample = [sample(grid.ID[grid.county.==x]) for x in county]
