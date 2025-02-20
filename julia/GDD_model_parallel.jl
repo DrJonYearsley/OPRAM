@@ -73,8 +73,6 @@ if isdir("//home//jon//Desktop//OPRAM")
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
   dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"
-  # meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
-  # meteoDir_NI = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Northern_Ireland_Climate_Data//"
   meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
   meteoDir_NI = nothing
 
@@ -119,7 +117,7 @@ end
 # Include the functions to import the data and run the degree day model
 include("GDD_functions.jl")
 include("species_params.jl")
-
+include("import_functions.jl")
 
 
 

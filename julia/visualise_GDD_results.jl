@@ -450,4 +450,3 @@ plot_map("emergeDOY",
 if save_figs
         savefig(speciesName * "_emergence_munster" * year_label * ".png")
 end
-coast
