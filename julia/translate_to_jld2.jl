@@ -15,6 +15,8 @@
 using CSV;
 using JLD2;
 using DataFrames;
+using Interpolations;
+using NetCDF;
 
 include("import_functions.jl")  # Includes functions to import meteo data
 
@@ -79,10 +81,34 @@ for r in eachindex(rcpList)
     rcpDir = filter(x -> occursin(string(rcpList[r]), x), readdir(joinpath(translateDir)))
     files =  filter(x -> occursin(string(periodList[p]), x), readdir(joinpath(translateDir, rcpDir[1])))
 
-ncinfo(joinpath(translateDir, rcpDir[1], files[1]))
+    ncinfo(joinpath(translateDir, rcpDir[1], files[1]))
 
     # Interpolate TRANSLATE data onto 1km grid
+    if r==1 && p==1
+      lat = ncread(joinpath(translateDir, rcpDir[1], files[1]), "lat")
+      lon = ncread(joinpath(translateDir, rcpDir[1], files[1]), "lon")
+    end
 
+    # Tavg = Array{Union{Float32, Missing},3}(undef,length(longitude), length(latitude), 365)
+
+    Tavg = ncread(joinpath(translateDir, rcpDir[1], files[1]), "tmean")
+    lon_2D = [lon[i] for i in eachindex(lon), j in eachindex(lat)]
+    lat_2D = [lat[j] for i in eachindex(lon), j in eachindex(lat)]
+
+
+
+    ind = Tavg[:,:,1] .>0
+tmp = Tavg[:,:,1]
+
+    df = georef(lon = lon_2D[ind], 
+                lat = lat_2D[ind], 
+                tmp = tmp[ind], 
+                ("lon", "lat"))
+
+    interp_linear2 = linear_interpolation((, ), tmp);
+
+    Tavg_interp = interp_linear.(grid.longitude, grid.latitude)
+    Tavg_interp2 = interp_linear2.(grid.longitude, grid.latitude)
 
     # Save this to a JLD2 file
     outfile = joinpath([outDir, "TRANSLATE_Tavg_" * string(rcpList[r]) * "_" * tring(periodList[p]) * ".jld2"])
@@ -90,3 +116,14 @@ ncinfo(joinpath(translateDir, rcpDir[1], files[1]))
     jldsave(outfile; Tavg=Tavg_IE, DOY=DOY_IE, ID=ID_IE)   
     end
 end
+
+
+
+scatter(grid.longitude, grid.latitude, marker_z = Tavg_interp, markerstrokewidth=0, markersize=1)
+
+
+ind = ismissing.(Tavg_interp2)
+scatter(grid.longitude[.!ind], grid.latitude[.!ind], 
+marker_z = Tavg_interp2[.!ind], 
+markerstrokewidth=0,
+markersize=1)
