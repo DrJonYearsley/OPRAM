@@ -2,8 +2,10 @@
 #
 # function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame)
 # function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
+# function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
 # function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years::Vector{Int64})
 # function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years::Vector{Int64})
+# function read_grid(gridFilePath::String, thinFactor::Int)
 #
 # Jon Yearsley (jon.yearsley@ucd.ie)
 # 7th Aug 2024
@@ -177,6 +179,60 @@ end
 
 # ------------------------------------------------------------------------------------------
 
+function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+  # Import the TRANSLATE data for a given RCP and period from a jld2 file
+  #
+  # Arguments:
+  #   meteoDir    the directory containing the meteo data in JLD2 format 
+  #   rcp         the RCP (26, 45, 85)
+  #   period      the 30 yr period (2021-2040, 2041-2070)
+  #   IDgrid      ID of locations in grid_thin
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of average daily temperature (mean)
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:    Matrix of average daily temperature (standard deviation)
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Third entry:     A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Fourth entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
+  #
+  # *************************************************************
+
+
+  # Get the correct filename
+  meteoFile = filter(x -> occursin("TRANSLATE_Tavg_rcp" * rcp * "_" * period, x),
+    readdir(meteoDir))
+
+  if length(meteoFile) == 0
+    @error "No file found for RCP " * rcp * " and period " * period
+  end
+
+  # Import the TRANSLATE data
+  f = jldopen(joinpath(meteoDir, meteoFile[1]), "r")
+  Tavg_mean = read(f, "Tavg_mean")
+  Tavg_sd = read(f, "Tavg_sd")
+  DOY = read(f, "DOY")
+  ID = read(f, "ID")
+  close(f)
+
+
+  # Find ID's that are in grid_thin
+  ID = sort(intersect(IDgrid, ID))
+
+  # Put location ID's (columns of Tavg) in order of ID
+  idx = [findfirst(ID .== id) for id in IDgrid]
+
+  Tavg_mean = Tavg_mean[:,idx]
+  Tavg_sd = Tavg_sd[:,idx]
+
+  return Tavg_mean, Tavg_sd, DOY, ID
+end
+
+# ------------------------------------------------------------------------------------------
+
 
 
 function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years)
@@ -310,6 +366,36 @@ function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years)
   return Tavg, DOY, grid_thin.ID[IDidx[idx]]
 end
 
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
+function read_grid(gridFilePath::String, thinFactor::Int)
+# Import the grid of locations and thin it using a thinning factor
+# 
+# Arguments:
+#   dataDir     the directory containing the grid data
+#   gridFile    the name of the file containing the grid data
+#   grid_thin   the thinning factor to use
+#
+# Output:
+#   A DataFrame containing the grid of locations
+# *************************************************************
+
+# Read in the grid data from a file
+grid = CSV.read(gridFilePath, DataFrame);
+
+# Sort locations in order of IDs
+grid = grid[sortperm(grid.ID), :];
+
+# Thin the locations  using the thinFactor
+thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(grid.north, (thinFactor * 1e3)) .< 1e-8);
+
+
+  return grid[thinInd, :]
+end
 
 
 

@@ -14,13 +14,17 @@
 
 # Load packages that will be used
 using Distributed;
+using Distributions, Random;
 using CSV;
 using JLD2;
 
 
 
-nNodes = 3;        # Number of compute nodes to use (if in interactive)
-meteoYear = 2000:2005   # Years to run model
+nNodes = 3;                 # Number of compute nodes to use (if in interactive)
+meteoPeriod = "2021-2050"   # Years to run model
+meteoRCP = "85"             # RCP scenario to use
+nReps = 10;                 # Number of times to simulate future climate
+maxYears = 3;               # Maximum number of years to complete insect development
 saveToFile = true;   # If true save the result to a file
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 # (used for daylength calculations as well as importing and thining of meteo data)
@@ -60,24 +64,20 @@ dummy_species = (base_temperature=1.7f0,            # Degrees C
 # =========================================================
 
 # Specify directories for import and export of data
-
 if isdir("//home//jon//Desktop//OPRAM")
   outDir = "//home//jon//Desktop//OPRAM//results//"
   dataDir = "//home//jon//DATA//OPRAM//"
-  meteoDir_IE = "//home//jon//DATA//OPRAM//Irish_Climate_Data//"
-  meteoDir_NI = "//home//jon//DATA//OPRAM//Northern_Ireland_Climate_Data//"
+  meteoDir = "//home//jon//DATA//OPRAM//Irish_Climate_Data//"
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
   dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"
-  meteoDir_IE = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Irish Climate Data//"
-  meteoDir_NI = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Northern_Ireland_Climate_Data//"
+  meteoDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
 
 elseif isdir("//users//jon//Desktop//OPRAM//")
   outDir = "//users//jon//Desktop//OPRAM//results//"
   dataDir = "//users//jon//Desktop//OPRAM//"
-  meteoDir_IE = "//users//jon//Desktop//OPRAM//Irish_Climate_Data//"
-  meteoDir_NI = "//users//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//"
+  meteoDir = "//users//jon//Desktop//OPRAM//Irish_Climate_Data//"
 end
 
 
@@ -113,6 +113,7 @@ end
 
 # Include the functions to import the data and run the degree day model
 include("GDD_functions.jl")
+include("import_functions.jl")
 include("species_params.jl")
 
 
@@ -138,16 +139,13 @@ end
 # Import location data and thin it using thinFactor
 
 # Import grid location data
-grid = CSV.read(joinpath([dataDir, gridFile]), DataFrame);
+grid = read_grid(joinpath([dataDir, gridFile]), thinFactor);
 
-# Sort locations in order of IDs
-grid = grid[sortperm(grid.ID), :];
 
-# Thin the locations  using the thinFactor
-thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(grid.north, (thinFactor * 1e3)) .< 1e-8);
-
-grid_thin = grid[thinInd, :];
-
+# =========================================================
+# =========================================================
+# Import TRANSLATE climate data
+Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(meteoDir, meteoRCP, meteoPeriod, grid.ID)
 
 # =========================================================
 # =========================================================
@@ -166,11 +164,19 @@ end
 
 
 
-for year in meteoYear
+for r in 1:nReps
 
-  # Import meteo data and calculate degree days
-  @info "Importing meteo data and calculating degree days"
-  @time GDDsh, idx, IDvec, locInd1, locInd2 = calculate_GDD(meteoYear[1], params, grid_thin, [meteoDir_IE, meteoDir_NI])
+  # Generate daily temperature for maxYears
+  @info "Generating climate data"
+  TavgVec = Vector{Array{Float32,2}}(undef, maxYears);
+  for y in 1:maxYears
+  TavgVec[y] = Tavg_mean .+ Tavg_sd.* rand(Normal(0, 1), size(Tavg_sd))
+  end
+  Tavg = reduce(vcat, TavgVec);
+
+  # Calculate GDD
+  @info "Calculating GDD"
+  @time GDDsh, idx, IDvec, locInd1, locInd2 = calculate_GDD_version2(Tavg, params, grid)
 
   # Create a shared array to hold results for every day when GDD updates
   result = SharedArray{Int16,2}(length(GDDsh), 3)

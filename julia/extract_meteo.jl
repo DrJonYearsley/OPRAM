@@ -65,55 +65,55 @@ thinInd = findall(mod.(grid.east, (1 * 1e3)) .< 1e-8 .&& mod.(grid.north, (1 * 1
 
 grid_thin = grid[thinInd, :];
 
-# Find 10 ID's from each location in regions
-ID_sample = Array{Int64}(undef, 6,length(regions))
-for r in eachindex(regions)
-idx = abs.(regions[r][1] .- grid_thin.latitude).<0.02 .&& 
-      abs.(regions[r][2] .- grid_thin.longitude).<0.02
 
-
-ID_sample[:,r] = sample(grid.ID[idx], 6)
-end
-
+# Initiate a data frame for each region
 df = Vector{DataFrame}(undef, length(regions))
-
-
 for y in eachindex(years)
   @time "Imported meteo data" Tavg, DOY, ID  = read_meteo(years[y], [meteoDir_IE, meteoDir_NI], grid_thin)
 
   
   for r in eachindex(regions)
-    # Indices of locations in the meteo data
-    idx = findall([x in ID_sample[:,r] for x in ID])
+    # Indices of locations within 2km of region lat-long 
+    # (make sure they are in the meteo data)
+    idx_region = abs.(regions[r][1] .- grid_thin.latitude).<0.02 .&& 
+      abs.(regions[r][2] .- grid_thin.longitude).<0.02
+
+    # Pick 5 locations
+    idx = sample(findall([x in grid_thin.ID[idx_region] for x in ID]), 5)
 
     for i in eachindex(idx)  # Loop around each idx in the meteo data
-    grid_idx = findfirst(grid_thin.ID.==ID[idx[i]])
-  
-    if y==1 & i==1
-       df[r] = DataFrame(ID = ID[idx[i]], 
-                        east=grid_thin.east[grid_idx],
-                        north=grid_thin.north[grid_idx],                        
-                        county=grid_thin.county[grid_idx],
-                        year = years[y],
-                        DOY=DOY[1:365],
-                        Tavg = Tavg[1:365,idx[i]])
-    else
-        tmp = DataFrame(ID = ID[idx[i]], 
-                        east=grid_thin.east[grid_idx],
-                        north=grid_thin.north[grid_idx],
-                        county=grid_thin.county[grid_idx],
-                        year = years[y],
-                        DOY=DOY[1:365],
-                        Tavg = Tavg[1:365,idx[i]]) 
-        df[r] = vcat(df[r],tmp)
+      # Find the first row with the correct location ID
+      grid_idx = findfirst(grid_thin.ID .== ID[idx[i]])
+
+      if y == 1 && i == 1
+        df[r] = DataFrame(ID=ID[idx[i]],
+          east=grid_thin.east[grid_idx],
+          north=grid_thin.north[grid_idx],
+          longitude=grid_thin.longitude[grid_idx],
+          latitude=grid_thin.latitude[grid_idx],
+          county=grid_thin.county[grid_idx],
+          year=years[y],
+          DOY=DOY[1:365],
+          Tavg=Tavg[1:365, idx[i]])
+      else
+        tmp = DataFrame(ID=ID[idx[i]],
+          east=grid_thin.east[grid_idx],
+          north=grid_thin.north[grid_idx],
+          longitude=grid_thin.longitude[grid_idx],
+          latitude=grid_thin.latitude[grid_idx],
+          county=grid_thin.county[grid_idx],
+          year=years[y],
+          DOY=DOY[1:365],
+          Tavg=Tavg[1:365, idx[i]])
+          df[r] = vcat(df[r], tmp)
+      end
     end
-  end
   end
 end
 
 
-for i in eachindex(county)
-    CSV.write(joinpath([outDir, county[i] * "_" * outPrefix * ".csv"]), df[i])
+for r in eachindex(regions)
+    CSV.write(joinpath([outDir, "Kate" * df[r].county[1] * "_" * outPrefix * ".csv"]), df[r])
 end
 
 
@@ -125,7 +125,7 @@ end
 # Extract data for different counties
 
 # Find one location in each county
-ID_sample = [sample(grid.ID[grid.county.==x]) for x in county]
+ID_sample = [sample(grid.ID[grid.county.==x], 1) for x in county]
 df = Vector{DataFrame}(undef, length(county))
 
 for y in eachindex(years)

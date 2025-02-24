@@ -128,7 +128,7 @@ sd_estimator = (erfinv(2*0.9 - 1) - erfinv(2*0.1 - 1)) * sqrt(2)
 # =========================================================
 # For each RCP and time period import data, interpolate it and save in a JLD2 file
 for r in eachindex(rcpList)
-    for p in eachindex(periodList)
+    @time "Converted TRANSLATE data:" for p in eachindex(periodList)
         # +++++++++++++++++++++++++++++++++++++++++++++++++++
         # Import the TRANSLATE data
         @info "Importing data for RCP " * string(rcpList[r]) * " and period " * string(periodList[p])
@@ -153,8 +153,6 @@ for r in eachindex(rcpList)
 
         # Interpolate the median and standard deviations onto the 1km grid
         for doy in eachindex(DOY)
-            # @info "Interpolating day " * string(doy)
-
             # Create geotable of mean daily temperature data
             df_median = georef((lon=lon_2D,
                     lat=lat_2D,
@@ -175,7 +173,6 @@ for r in eachindex(rcpList)
 
             tmp = df_sd |> interpolation_model
             Tsd_interp[doy, :] = tmp.temp_sd
-
         end
 
 
