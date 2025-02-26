@@ -121,6 +121,11 @@ include("species_params.jl")
 
 # =========================================================
 # =========================================================
+# Set up model variables (grid, species parameters and temperature data
+
+
+grid, Tavg, params = setup_model
+
 
 # Find species data corresponding to outPrefix and set this as the variable params
 species_params = filter(x -> occursin(outPrefix, string(x)), names(Main))
@@ -225,6 +230,12 @@ for r in 1:nReps
   println(" ")
 end
 
+
+
+# =========================================================
+# =========================================================
+# Combine the reps into one Data Frame and save to a file
+
 adult_emerge_all = reduce(DataFrames.vcat, adult_emerge)
 
 if saveToFile
@@ -234,6 +245,33 @@ if saveToFile
   save_object(outFile, adult_emerge_all)
 end
 
+
+
+
+
+# =========================================================
+# =========================================================
+# Convert results into output for key dates
+
+
+
+
+
+
+
+
+# =========================================================
+# =========================================================
+# Summarise output at the 10km (hectad) scale
+
+
+
+
+
+
+# =========================================================
+# =========================================================
+# Stop parallel nodes
 if isinteractive()
   # Remove parallel nodes
   a = workers()
@@ -241,3 +279,5 @@ if isinteractive()
 end
 
 
+# ===========  And Breath =================================
+# =========================================================

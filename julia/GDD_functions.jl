@@ -397,6 +397,102 @@ function calculate_GDD_version2(Tavg::Matrix{Float32}, DOY::Vector{Int64},
 
 end
 
+
+
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
+
+function extract_results(doy::Int32, result::DataFrame)
+        # Function to calculate number of generations per year, and first
+        # day of adult emergence based on a starting development on doy
+        #
+        #   doy    day of year when larval development begins
+        #   result data frame containing the results from the model
+        #  
+        #  Output:
+        #   a data frame with the following columns:
+        #       ID            unique ID for each soatial location        
+        #       emergeDOY     adult emergence day of year 
+        #       nGen          the number of generations within the year
+        #       east          index for eastings of the unique spatial locations in result
+        #       north         index for northings of the unique spatial location in result
+        ########################################################################
+
+        # Find start and end indicies for each location
+        # @time idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
+        # @time idx2 = [searchsortedlast(result.ID, loc) for loc in unique(result.ID)]
+        @time idx1 = indexin(unique(result.ID), result.ID)
+        @time idx2 = vcat(idx1[2:end] .- 1, length(result.ID))
+
+
+        # Create data frame to hold number of generations
+        out_res = DataFrame(ID=result.ID[idx1], nGen=0.0, emergeDOY=0)
+        out_res.north = mod.(out_res.ID, 1000)
+        out_res.east = div.((out_res.ID .- out_res.north), 1000)
+
+        # Count number of generations per year
+        startDOY = zeros(Int32, length(idx1)) .+ doy
+        first_pass = true
+
+        # Set startDOY to zero for a location if no more generations can be completed in the year
+        while any(startDOY .> 0)
+                # Find index of result that corresponds to desired day of year (ie doy>=result.DOY)
+                idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY[i]) - 1 + idx1[i] for i = eachindex(idx1)]
+
+                println(maximum(idx3))
+
+                # Find out if end of current developmental generation is in the results (i.e. occurs before data on next location)
+                development_complete = startDOY .> 0 .&& idx2 .+ 1 .> idx3
+
+                # Find out if development happens within the first year
+                if (idx3[end] == nrow(result) + 1)
+                        # If final entry resulted in no developement (i.e. index is nrow+1) then set within year to false
+                        within_a_year = result.emergeDOY[idx3[1:end-1]] .<= 365   # Is the generation complete within the year?
+                        push!(within_a_year, false)
+                else
+                        within_a_year = result.emergeDOY[idx3] .<= 365   # Is the generation complete within the year?
+                end
+
+                # Increment generations
+                full_generation = development_complete .& within_a_year
+                partial_generation = development_complete .& .!within_a_year
+
+                # Add on one full generation
+                out_res.nGen[full_generation] .+= 1
+
+                # Calculate end of year fraction of time towards next generation
+                out_res.nGen[partial_generation] .+= (365 .- startDOY[partial_generation]) ./
+                                                     (result.emergeDOY[idx3[partial_generation]] - startDOY[partial_generation])
+
+                # If this is the first time through the loop, record the emergance day
+                if first_pass
+                        out_res.emergeDOY[full_generation] .= result.emergeDOY[idx3[full_generation]]
+                        first_pass = false
+                end
+
+                # Reset starting DOY to zero
+                startDOY = zeros(Int32, length(idx1))
+
+                # If a full gneration completed within the year, update starting doy
+                startDOY[full_generation] .= result.emergeDOY[idx3[full_generation]] .+ 1
+
+                # Remove startDOY >= 365
+                startDOY[startDOY.>=365] .= 0
+
+                # println([sum(startDOY .> 0), maximum(result.emergeDOY[idx3])])
+        end
+
+
+        return (out_res)
+end
+
+
 # ================ End of Function Definitions ======================
 # ===================================================================
 

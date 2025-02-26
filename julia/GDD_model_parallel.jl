@@ -96,7 +96,7 @@ outDir = joinpath(outDir, outPrefix)
 # =========================================================
 # =========================================================
 
-if isinteractive() & nprocs()==1
+if isinteractive() & nprocs() == 1
   # Enable multiple nodes 
   addprocs(nNodes)
 end
@@ -145,16 +145,16 @@ grid = CSV.read(joinpath([dataDir, gridFile]), DataFrame);
 
 # Remove locations not in the meteo data
 if isnothing(meteoDir_IE)
-  subset!(grid, :country => c->c.!="IE")
+  subset!(grid, :country => c -> c .!= "IE")
 elseif isnothing(meteoDir_NI)
-  subset!(grid, :country => c->c.!="NI")
+  subset!(grid, :country => c -> c .!= "NI")
 end
 
 # Sort locations in order of IDs
 grid = grid[sortperm(grid.ID), :];
 
 # Thin the locations using the thinFactor
-subset!(grid, :east=> x-> mod.(x, (thinFactor * 1e3)) .< 1e-8,  :north=> x-> mod.(x, (thinFactor * 1e3)) .< 1e-8 )
+subset!(grid, :east => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8, :north => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8)
 
 # =========================================================
 # =========================================================
@@ -200,7 +200,7 @@ end
 
     # Extract location index for every row in result (column coord in idx)
     loc_idx = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # ID[loc_idx] will give the location's ID 
-    
+
     # Remove rows where the final prediction at the same location doesn't change (they can be recalculated later)
     idxKeep2 = (loc_idx[1:end-1] .!= loc_idx[2:end]) .|| (loc_idx[1:end-1] .== loc_idx[2:end] .&& result[1:end-1, 2] .!= result[2:end, 2])
     push!(idxKeep2, true)    # Add a true value at the end
@@ -215,14 +215,16 @@ end
 
 
     # Create a data frame, using real location ID (second element of meteo)
-    adult_emerge = DataFrame(ID=grid.ID[loc_idx[idxKeep]], 
-                               DOY=result[idxKeep, 1], 
-                               emergeDOY=result[idxKeep, 2])
+    adult_emerge = DataFrame(ID=grid.ID[loc_idx[idxKeep]],
+      DOY=result[idxKeep, 1],
+      emergeDOY=result[idxKeep, 2])
   end
 
-  @info "Saving the results"
-  # Save using jld2 format
-  save_object(joinpath([outDir, "result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), adult_emerge)
+  if saveToFile
+    @info "Saving the results"
+    # Save using jld2 format
+    save_object(joinpath([outDir, "result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), adult_emerge)
+  end
   println(" ")
 end
 

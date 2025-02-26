@@ -1,4 +1,5 @@
 # Plot a map of Ireland using 10km circles and coloured by county or province
+# This is a pilot visualisation for the OPRAM web app
 
 using DataFrames
 using Statistics
@@ -6,6 +7,7 @@ using CSV
 using Dates
 using Plots
 using JLD2
+using PlotlyBase
 
 # =================================================================================
 # Set parameters for the visualisation
@@ -67,9 +69,11 @@ y = sort(unique(coast.idx_north))
 grid_hectads.county = [findfirst(x .== countyList) for x in grid_hectads.county_function]
 grid_hectads.province = [findfirst(x .== provinceList) for x in grid_hectads.province_function]
 
-plotly() 
-plot(grid_hectads.east_hectad_function,
-    grid_hectads.north_hectad_function,
+# Use plotly for figures
+# plotly() 
+gr()
+plot(grid_hectads.east_hectad_function.+5e3,
+    grid_hectads.north_hectad_function.+5e3,
         seriestype=:scatter,
         zcolor=grid_hectads.province,
         color=cgrad(:Dark2_4, categorical=true),
@@ -78,16 +82,50 @@ plot(grid_hectads.east_hectad_function,
         grid=false,
         cbar=false,
         label=false,
-        markersize=3,
+        markersize=4,
         markerstrokewidth=0.5,
         aspect_ratio=:equal,
         dpi=600)
 
-plot!(coast.idx_east,
-        coast.idx_north,
+plot!(coast.east,
+        coast.north,
         seriestype=:scatter,
         showaxis=false,
         grid=false,
-        markersize=size,
+        markersize=1,
         markercolor="black",
         dpi=600)
+
+if save_figs
+    savefig("ireland_province_map.png")
+end
+
+
+
+plot(grid_hectads.east_hectad_function.+5e3,
+    grid_hectads.north_hectad_function.+5e3,
+        seriestype=:scatter,
+        zcolor=grid_hectads.county,
+        color=cgrad(:seaborn_bright, categorical=true),
+        showaxis=false,
+        legend=false,
+        grid=false,
+        cbar=false,
+        label=false,
+        markersize=4,
+        markerstrokewidth=0.5,
+        aspect_ratio=:equal,
+        dpi=600)
+
+plot!(coast.east,
+        coast.north,
+        seriestype=:scatter,
+        showaxis=false,
+        grid=false,
+        markersize=1,
+        markercolor="black",
+        dpi=600)
+
+if save_figs
+    savefig("ireland_county_map.png")
+end
