@@ -181,6 +181,7 @@ end
 
 function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
   # Import the TRANSLATE data for a given RCP and period from a jld2 file
+  # and subset to the locations in IDgrid
   #
   # Arguments:
   #   meteoDir    the directory containing the meteo data in JLD2 format 

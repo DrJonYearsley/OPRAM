@@ -67,7 +67,7 @@ dummy_species = (base_temperature=1.7f0,            # Degrees C
 if isdir("//home//jon//Desktop//OPRAM")
   outDir = "//home//jon//Desktop//OPRAM//results//"
   dataDir = "//home//jon//DATA//OPRAM//"
-  meteoDir = "//home//jon//DATA//OPRAM//Irish_Climate_Data//"
+  meteoDir = "//home//jon//DATA//OPRAM//Climate_JLD2//"
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
@@ -149,12 +149,14 @@ Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(meteoDir, meteoRCP, meteoPerio
 
 # =========================================================
 # =========================================================
-# Calculate whether daylength allows diapause for each DOY and latitude
+# Calculate whether daylength criteria is sufficient for diapause (Temp criteria may also be needed)
 # Returns a matrix where rows are unique latitudes and columns are days of year
 if !ismissing(params.diapause_photoperiod)
   @info "Calculating DOY threshold for diapause"
   diapause_minDOY = 150
-  diapauseDOY_threshold = photoperiod(grid_thin.latitude, diapause_minDOY:366, params.diapause_photoperiod)
+  diapauseDOY_threshold = photoperiod(grid.latitude, diapause_minDOY, params.diapause_photoperiod)
+else
+  diapauseDOY_threshold = nothing
 end
 
 
@@ -162,21 +164,21 @@ end
 # =========================================================
 # Start the main loop of the program
 
-
+adult_emerge = Vector{DataFrame}(undef, nReps);
 
 for r in 1:nReps
-
   # Generate daily temperature for maxYears
   @info "Generating climate data"
-  TavgVec = Vector{Array{Float32,2}}(undef, maxYears);
+  TavgVec = Vector{Array{Float32,2}}(undef, maxYears)
   for y in 1:maxYears
-  TavgVec[y] = Tavg_mean .+ Tavg_sd.* rand(Normal(0, 1), size(Tavg_sd))
+    TavgVec[y] = Tavg_mean .+ Tavg_sd .* rand(Normal(0, 1), size(Tavg_sd))
   end
-  Tavg = reduce(vcat, TavgVec);
+  Tavg = reduce(vcat, TavgVec)
+  DOY = collect(1:size(Tavg, 1))
 
   # Calculate GDD
   @info "Calculating GDD"
-  @time GDDsh, idx, IDvec, locInd1, locInd2 = calculate_GDD_version2(Tavg, params, grid)
+  @time GDDsh, idx, locInd1, locInd2 = calculate_GDD_version2(Tavg, DOY, params, diapauseDOY_threshold)
 
   # Create a shared array to hold results for every day when GDD updates
   result = SharedArray{Int16,2}(length(GDDsh), 3)
@@ -194,18 +196,19 @@ for r in 1:nReps
     @everywhere thresh = convert(Float32, $params.threshold)
     location_loop!(locInd1, locInd2, result, GDDsh, thresh)
 
-
-
     # Remove rows that have emergeDOY<=0 
     idxKeep = result[:, 2] .> 0
 
-    # Remove rows where the final prediction doesn't change (they can be recalculated later)
-    idxKeep2 = (IDvec[1:end-1] .!= IDvec[2:end]) .|| (IDvec[1:end-1] .== IDvec[2:end] .&& result[1:end-1, 2] .!= result[2:end, 2])
+    # Extract location index for every row in result (column coord in idx)
+    loc_idx = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # ID[loc_idx] will give the location's ID 
+
+    # Remove rows where the final prediction at the same location doesn't change (they can be recalculated later)
+    idxKeep2 = (loc_idx[1:end-1] .!= loc_idx[2:end]) .|| (loc_idx[1:end-1] .== loc_idx[2:end] .&& result[1:end-1, 2] .!= result[2:end, 2])
     push!(idxKeep2, true)    # Add a true value at the end
 
     # Remove all but the first result with DOY >= 365 (results only for 1 year)
     # Keep data with DOY<=365 or when DOY>365 and the previous result was less than 365
-    idxKeep3 = result[2:end, 1] .<= 365 .|| (IDvec[1:end-1] .== IDvec[2:end] .&& (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
+    idxKeep3 = result[2:end, 1] .<= 365 .|| (loc_idx[1:end-1] .== loc_idx[2:end] .&& (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
     pushfirst!(idxKeep3, true)    # Add a true value at the start
 
     # Combine all 3 indices together
@@ -213,15 +216,22 @@ for r in 1:nReps
 
 
     # Create a data frame, using real location ID (second element of meteo)
-    tm = DataFrame(ID=grid_thin.ID[IDvec[idxKeep]], DOY=result[idxKeep, 1], emergeDOY=result[idxKeep, 2])
+    adult_emerge[r] = DataFrame(rep=r,
+                          ID=grid.ID[loc_idx[idxKeep]],
+                          DOY=result[idxKeep, 1],
+                          emergeDOY=result[idxKeep, 2])
+
   end
+  println(" ")
+end
 
+adult_emerge_all = reduce(DataFrames.vcat, adult_emerge)
+
+if saveToFile
   @info "Saving the results"
-  
   # Save using jld2 format
-  save_object(joinpath([outDir, "result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), tm)
-
-
+  outFile = joinpath([outDir, "result_" * outPrefix * "_rcp" * meteoRCP * "_" * meteoPeriod * "_par_thin" * string(thinFactor) * ".jld2"])
+  save_object(outFile, adult_emerge_all)
 end
 
 if isinteractive()

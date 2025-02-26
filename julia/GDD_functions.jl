@@ -67,7 +67,7 @@ function photoperiod(latitude::Vector{Float64}, minDOY::Int64, threshold::Float6
 
   # overwinterBool is true if daylength allows diapause to happen 
   # (other conditions may be needed to start diapause)
-  DOY = convert.(Float64,collect(minDOY:366))
+  DOY = convert.(Float64, collect(minDOY:366))
   overwinterBool = Array{Bool}(undef, (length(latitude), length(DOY)))  # True if overwintering 
 
   for i in eachindex(DOY)
@@ -75,7 +75,7 @@ function photoperiod(latitude::Vector{Float64}, minDOY::Int64, threshold::Float6
 
     a = (sind.(0.8333) .+ sind.(latitude) .* sin(P)) ./ (cosd.(latitude) .* cos(P))
     a = min.(max.(a, -1), 1)
-    
+
     # Overwintering if daylength less than threshold     
     overwinterBool[:, i] = 24.0 .- (24.0 / pi) .* acos.(a) .< threshold
   end
@@ -168,55 +168,55 @@ end
 
 
 function prepare_data(grid_path::String, thin_factor::Float64, params::NamedTuple)
-# Function to prepare the data for the degree day model
-#
-# Arguments:
-#   grid_path   path to the file containing the grid of locations
-#   thin_factor factor for thining spatial grid 
-#      (thin_factor = 10, every 10th grid point, i.e. 10km spacing)
-#   params      parameters of the degree day model
-#
-# Output:
-#   GDDsh       shared array of growing degree days (only giving days when 
-#               GDD are accumulated)
-#   idx         row, column indices of TRUE elements in gdd_update (where GDD accumulates)
-#   locInd1     Start index in GDDsh for each spatial location
-#   locInd2     End index in GDDsh for each spatial location
-# *************************************************************
+  # Function to prepare the data for the degree day model
+  #
+  # Arguments:
+  #   grid_path   path to the file containing the grid of locations
+  #   thin_factor factor for thining spatial grid 
+  #      (thin_factor = 10, every 10th grid point, i.e. 10km spacing)
+  #   params      parameters of the degree day model
+  #
+  # Output:
+  #   GDDsh       shared array of growing degree days (only giving days when 
+  #               GDD are accumulated)
+  #   idx         row, column indices of TRUE elements in gdd_update (where GDD accumulates)
+  #   locInd1     Start index in GDDsh for each spatial location
+  #   locInd2     End index in GDDsh for each spatial location
+  # *************************************************************
 
-# =========================================================
-# =========================================================
-# Import location data and thin it using thinFactor
+  # =========================================================
+  # =========================================================
+  # Import location data and thin it using thinFactor
 
-@info "Importing spatial grid"
-# Import grid location data
-grid = CSV.read(grid_path, DataFrame);
+  @info "Importing spatial grid"
+  # Import grid location data
+  grid = CSV.read(grid_path, DataFrame)
 
-# Remove locations not in the meteo data
-if isnothing(meteoDirs[1])
-  subset!(grid, :country => c->c.!="IE")
-elseif isnothing(meteoDirs[2])
-  subset!(grid, :country => c->c.!="NI")
-end
+  # Remove locations not in the meteo data
+  if isnothing(meteoDirs[1])
+    subset!(grid, :country => c -> c .!= "IE")
+  elseif isnothing(meteoDirs[2])
+    subset!(grid, :country => c -> c .!= "NI")
+  end
 
-# Sort locations in order of IDs
-grid = grid[sortperm(grid.ID), :];
+  # Sort locations in order of IDs
+  grid = grid[sortperm(grid.ID), :]
 
-# Thin the locations  using the thinFactor
-subset!(grid, :east=> x-> mod.(x, (thinFactor * 1e3)) .< 1e-8,  :north=> x-> mod.(x, (thinFactor * 1e3)) .< 1e-8 )
+  # Thin the locations  using the thinFactor
+  subset!(grid, :east => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8, :north => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8)
 
 
-# =========================================================
-# =========================================================
-# Calculate whether daylength allows diapause for each DOY and latitude
-# Returns a matrix where rows are unique latitudes and columns are days of year
-if !ismissing(params.diapause_photoperiod)
-  @info "Calculating DOY threshold for diapause"
-  diapause_minDOY = 150
-  diapauseDOY_threshold = photoperiod(grid.latitude, diapause_minDOY, params.diapause_photoperiod)
-else
-  diapauseDOY_threshold = nothing
-end
+  # =========================================================
+  # =========================================================
+  # Calculate whether daylength allows diapause for each DOY and latitude
+  # Returns a matrix where rows are unique latitudes and columns are days of year
+  if !ismissing(params.diapause_photoperiod)
+    @info "Calculating DOY threshold for diapause"
+    diapause_minDOY = 150
+    diapauseDOY_threshold = photoperiod(grid.latitude, diapause_minDOY, params.diapause_photoperiod)
+  else
+    diapauseDOY_threshold = nothing
+  end
 
 
 
@@ -227,8 +227,8 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame, 
-                        meteoDirs::Vector, diapauseDOY::Union{Vector{Int64}, Nothing}=nothing)
+function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
+  meteoDirs::Vector, diapauseDOY::Union{Vector{Int64},Nothing}=nothing)
   # Function to calculate growing degree days from meteo data for a range of years
   #
   # Arguments:
@@ -237,6 +237,8 @@ function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
   #   grid_thin   data frame giving spatial grid of locations
   #   meteoDirs   a 2-element array giving the paths to directories containing
   #               ROI and NI meteo data  (in this order)
+  #   diapauseDOY the day of year when diapause will start (nothing if no diapause)
+  #
   #
   # Output:
   #   GDDsh       shared array of growing degree days (only giving days when 
@@ -250,11 +252,11 @@ function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
   # Import weather data along with location and day of year
   @info "Calculating for starting year " * string(year)
 
-  @time "Imported meteo data" Tavg, DOY, ID  = read_meteo(year, meteoDirs, grid_thin)
+  @time "Imported meteo data" Tavg, DOY, ID = read_meteo(year, meteoDirs, grid_thin)
 
   # Make grid_thin consisent with ID's from meteo
-  idx=[id in ID for id in grid_thin.ID]
-  grid_thin = grid_thin[idx,:]
+  idx = [id in ID for id in grid_thin.ID]
+  grid_thin = grid_thin[idx, :]
 
   # Calculate days where development updates (Tavg>baseline)
   gdd_update = Tavg .> params.base_temperature
@@ -276,14 +278,14 @@ function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
       if ismissing(params.diapause_temperature)   # diapause determined only by photoperiod
         # Is DOY past the diapause threshold DOY?
         for i in eachindex(uniqueDiapause)
-          locidx = findall(x-> x==uniqueDiapause[i], diapauseDOY)
+          locidx = findall(x -> x == uniqueDiapause[i], diapauseDOY)
           DOYidx = findall(x -> x >= uniqueDiapause[i], DOY)
 
           overwinterBool[DOYidx, locidx] .= true
         end
       else # diapause determined by photoperiod AND temp
         for i in eachindex(uniqueDiapause)
-          locidx = findall(x-> x==uniqueDiapause[i], diapauseDOY)
+          locidx = findall(x -> x == uniqueDiapause[i], diapauseDOY)
           DOYidx = findall(x -> x >= uniqueDiapause[i], DOY)
 
           overwinterBool[DOYidx, locidx] = Tavg[DOYidx, locidx] .<= params.diapause_temperature
@@ -291,7 +293,7 @@ function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
       end
 
       # Remove overwintering from gdd_update
-      gdd_update[gdd_update .&& overwinterBool] .= false
+      gdd_update[gdd_update.&&overwinterBool] .= false
     end
   end
 
@@ -299,6 +301,89 @@ function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
   idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
   # IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # Location ID index (column coord in idx)
 
+  # Calculate GDD as a shared array
+  GDDsh = SharedArray{Float32,1}(Tavg[gdd_update] .- params.base_temperature)
+
+
+  # Find indices separatng different locations
+  ind = vec(sum(gdd_update, dims=1))
+  locInd2 = accumulate(+, ind)  # End locations
+  locInd1 = vcat(1, locInd2[1:end-1] .+ 1)
+
+  return GDDsh, idx, locInd1, locInd2
+
+end
+
+
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
+function calculate_GDD_version2(Tavg::Matrix{Float32}, DOY::Vector{Int64},
+  params::NamedTuple, diapauseDOY::Union{Vector{Int64},Nothing}=nothing)
+  # Function to calculate growing degree days from meteo data for a range of years
+  #
+  # Arguments:
+  #   Tavg        Temperature data
+  #   DOY         Day of year corresponding to rows in Tavg
+  #   params      parameters of the degree day model
+  #   diapauseDOY the day of year when diapause will start (nothing if no diapause)
+  #
+  # Output:
+  #   GDDsh       shared array of growing degree days (only giving days when 
+  #               GDD are accumulated)
+  #   idx         row, column indices of TRUE elements in gdd_update (where GDD accumulates)
+  #   locInd1     Start index in GDDsh for each spatial location
+  #   locInd2     End index in GDDsh for each spatial location
+  # *************************************************************
+
+
+  # Calculate days where development updates (Tavg>baseline)
+  gdd_update = Tavg .> params.base_temperature
+
+  # Add in diapause (if necessary)
+  if !ismissing(params.diapause_photoperiod)
+    @info "Removing days when insect is in diapause"
+    @time "Diapause" begin
+
+      # Find unique DOY in diapauseDOY
+      uniqueDiapause = unique(diapauseDOY) # Unique DOY when diapause starts
+
+      # Create overwinteringBool
+      overwinterBool = falses(size(Tavg))  # True if overwintering 
+
+      # Identify when diapuse will occur
+      if ismissing(params.diapause_temperature)   # diapause determined only by photoperiod
+        # Is DOY past the diapause threshold DOY?
+        for i in eachindex(uniqueDiapause)
+          locidx = findall(x -> x == uniqueDiapause[i], diapauseDOY)
+          DOYidx = findall(x -> x >= uniqueDiapause[i], DOY)
+
+          overwinterBool[DOYidx, locidx] .= true
+        end
+      else # diapause determined by photoperiod AND temp
+        for i in eachindex(uniqueDiapause)
+          # Is DOY past the diapause threshold DOY?
+          locidx = findall(x -> x == uniqueDiapause[i], diapauseDOY)
+          DOYidx = findall(x -> x >= uniqueDiapause[i], DOY)
+
+          # Is Tavg past the diapause threshold temperature?
+          overwinterBool[DOYidx, locidx] = Tavg[DOYidx, locidx] .<= params.diapause_temperature
+        end
+      end
+
+      # Remove overwintering from gdd_update
+      gdd_update[gdd_update.&&overwinterBool] .= false
+    end
+  end
+
+  # List ID's for all GDDs above the base temp
+  idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
+  
   # Calculate GDD as a shared array
   GDDsh = SharedArray{Float32,1}(Tavg[gdd_update] .- params.base_temperature)
 
