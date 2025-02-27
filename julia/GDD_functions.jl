@@ -7,7 +7,7 @@
 # function emergence(cumGDD::Vector{Float32}, cumGDD_doy::Vector{Int16}, threshold::Float32)
 # function location_loop(locInd1::Vector{Int64}, locInd2::Vector{Int64}, result::SharedMatrix{Int16}, 
 #                        GDD::SharedVector{Float32}, threshold::Float32)
-# function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame, meteoDirs::Vector)
+# function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame, meteoDirs::Vector, maxYears::Int)
 #
 # Jon Yearsley (jon.yearsley@ucd.ie)
 # 7th Aug 2024
@@ -167,7 +167,7 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function prepare_data(grid_path::String, thin_factor::Float64, params::NamedTuple)
+function prepare_data(grid_path::String, thin_factor::Int64, params::NamedTuple)
   # Function to prepare the data for the degree day model
   #
   # Arguments:
@@ -192,17 +192,10 @@ function prepare_data(grid_path::String, thin_factor::Float64, params::NamedTupl
   # Import grid location data
   grid = CSV.read(grid_path, DataFrame)
 
-  # Remove locations not in the meteo data
-  if isnothing(meteoDirs[1])
-    subset!(grid, :country => c -> c .!= "IE")
-  elseif isnothing(meteoDirs[2])
-    subset!(grid, :country => c -> c .!= "NI")
-  end
-
   # Sort locations in order of IDs
   grid = grid[sortperm(grid.ID), :]
 
-  # Thin the locations  using the thinFactor
+  # Thin the locations using the thinFactor
   subset!(grid, :east => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8, :north => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8)
 
 
@@ -218,9 +211,6 @@ function prepare_data(grid_path::String, thin_factor::Float64, params::NamedTupl
     diapauseDOY_threshold = nothing
   end
 
-
-
-
   return grid, diapauseDOY_threshold
 end
 
@@ -228,7 +218,7 @@ end
 
 
 function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
-  meteoDirs::Vector, diapauseDOY::Union{Vector{Int64},Nothing}=nothing)
+  meteoDirs::Vector, maxYears::Int, diapauseDOY::Union{Vector{Int64},Nothing}=nothing)
   # Function to calculate growing degree days from meteo data for a range of years
   #
   # Arguments:
@@ -238,7 +228,7 @@ function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
   #   meteoDirs   a 2-element array giving the paths to directories containing
   #               ROI and NI meteo data  (in this order)
   #   diapauseDOY the day of year when diapause will start (nothing if no diapause)
-  #
+  #   maxYears    Maximum number of years to complete insect development
   #
   # Output:
   #   GDDsh       shared array of growing degree days (only giving days when 
@@ -252,7 +242,7 @@ function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
   # Import weather data along with location and day of year
   @info "Calculating for starting year " * string(year)
 
-  @time "Imported meteo data" Tavg, DOY, ID = read_meteo(year, meteoDirs, grid_thin)
+  @time "Imported meteo data" Tavg, DOY, ID = read_meteo(year, meteoDirs, grid_thin, maxYears)
 
   # Make grid_thin consisent with ID's from meteo
   idx = [id in ID for id in grid_thin.ID]
@@ -383,7 +373,7 @@ function calculate_GDD_version2(Tavg::Matrix{Float32}, DOY::Vector{Int64},
 
   # List ID's for all GDDs above the base temp
   idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
-  
+
   # Calculate GDD as a shared array
   GDDsh = SharedArray{Float32,1}(Tavg[gdd_update] .- params.base_temperature)
 
@@ -409,87 +399,174 @@ end
 
 
 function extract_results(doy::Int32, result::DataFrame)
-        # Function to calculate number of generations per year, and first
-        # day of adult emergence based on a starting development on doy
-        #
-        #   doy    day of year when larval development begins
-        #   result data frame containing the results from the model
-        #  
-        #  Output:
-        #   a data frame with the following columns:
-        #       ID            unique ID for each soatial location        
-        #       emergeDOY     adult emergence day of year 
-        #       nGen          the number of generations within the year
-        #       east          index for eastings of the unique spatial locations in result
-        #       north         index for northings of the unique spatial location in result
-        ########################################################################
+  # Function to calculate number of generations per year, and first
+  # day of adult emergence based on a starting development on doy
+  #
+  #   doy    day of year when larval development begins
+  #   result data frame containing the results from the model
+  #  
+  #  Output:
+  #   a data frame with the following columns:
+  #       ID            unique ID for each spatial location   
+  #       startDOY      day of year to start development     
+  #       nGenerations  the number of generations within the year
+  #       emergeDOY     adult emergence day of year 
+  #       east_idx      index for eastings of the unique spatial locations in result
+  #       north_idx     index for northings of the unique spatial location in result
+  ########################################################################
 
-        # Find start and end indicies for each location
-        # @time idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
-        # @time idx2 = [searchsortedlast(result.ID, loc) for loc in unique(result.ID)]
-        @time idx1 = indexin(unique(result.ID), result.ID)
-        @time idx2 = vcat(idx1[2:end] .- 1, length(result.ID))
-
-
-        # Create data frame to hold number of generations
-        out_res = DataFrame(ID=result.ID[idx1], nGen=0.0, emergeDOY=0)
-        out_res.north = mod.(out_res.ID, 1000)
-        out_res.east = div.((out_res.ID .- out_res.north), 1000)
-
-        # Count number of generations per year
-        startDOY = zeros(Int32, length(idx1)) .+ doy
-        first_pass = true
-
-        # Set startDOY to zero for a location if no more generations can be completed in the year
-        while any(startDOY .> 0)
-                # Find index of result that corresponds to desired day of year (ie doy>=result.DOY)
-                idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY[i]) - 1 + idx1[i] for i = eachindex(idx1)]
-
-                println(maximum(idx3))
-
-                # Find out if end of current developmental generation is in the results (i.e. occurs before data on next location)
-                development_complete = startDOY .> 0 .&& idx2 .+ 1 .> idx3
-
-                # Find out if development happens within the first year
-                if (idx3[end] == nrow(result) + 1)
-                        # If final entry resulted in no developement (i.e. index is nrow+1) then set within year to false
-                        within_a_year = result.emergeDOY[idx3[1:end-1]] .<= 365   # Is the generation complete within the year?
-                        push!(within_a_year, false)
-                else
-                        within_a_year = result.emergeDOY[idx3] .<= 365   # Is the generation complete within the year?
-                end
-
-                # Increment generations
-                full_generation = development_complete .& within_a_year
-                partial_generation = development_complete .& .!within_a_year
-
-                # Add on one full generation
-                out_res.nGen[full_generation] .+= 1
-
-                # Calculate end of year fraction of time towards next generation
-                out_res.nGen[partial_generation] .+= (365 .- startDOY[partial_generation]) ./
-                                                     (result.emergeDOY[idx3[partial_generation]] - startDOY[partial_generation])
-
-                # If this is the first time through the loop, record the emergance day
-                if first_pass
-                        out_res.emergeDOY[full_generation] .= result.emergeDOY[idx3[full_generation]]
-                        first_pass = false
-                end
-
-                # Reset starting DOY to zero
-                startDOY = zeros(Int32, length(idx1))
-
-                # If a full gneration completed within the year, update starting doy
-                startDOY[full_generation] .= result.emergeDOY[idx3[full_generation]] .+ 1
-
-                # Remove startDOY >= 365
-                startDOY[startDOY.>=365] .= 0
-
-                # println([sum(startDOY .> 0), maximum(result.emergeDOY[idx3])])
-        end
+  # Find start and end indicies for each location
+  # @time idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
+  # @time idx2 = [searchsortedlast(result.ID, loc) for loc in unique(result.ID)]
+  idx1 = indexin(unique(result.ID), result.ID)
+  idx2 = vcat(idx1[2:end] .- 1, length(result.ID))
 
 
-        return (out_res)
+  # Create data frame to hold results
+  out_res = DataFrame(ID=result.ID[idx1], startDOY=doy, nGenerations=0.0, emergeDOY=0)
+  out_res.north_idx = mod.(out_res.ID, 1000)
+  out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
+
+  # Count number of generations per year
+  startDOY = zeros(Int32, length(idx1)) .+ doy
+  first_pass = true
+
+  # Set startDOY to zero for a location if no more generations can be completed in the year
+  while any(startDOY .> 0)
+    # Find index of result that corresponds to desired day of year (ie doy>=result.DOY)
+    idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY[i]) - 1 + idx1[i] for i = eachindex(idx1)]
+
+    # Find out if end of current developmental generation is in the results (i.e. occurs before data on next location)
+    development_complete = startDOY .> 0 .&& idx2 .+ 1 .> idx3
+
+    # Find out if development happens within the first year
+    if (idx3[end] == nrow(result) + 1)
+      # If final entry resulted in no developement (i.e. index is nrow+1) then set within year to false
+      within_a_year = result.emergeDOY[idx3[1:end-1]] .<= 365   # Is the generation complete within the year?
+      push!(within_a_year, false)
+    else
+      within_a_year = result.emergeDOY[idx3] .<= 365   # Is the generation complete within the year?
+    end
+
+    # Increment generations
+    full_generation = development_complete .& within_a_year
+    partial_generation = development_complete .& .!within_a_year
+
+    # Add on one full generation
+    out_res.nGenerations[full_generation] .+= 1
+
+    # Calculate end of year fraction of time towards next generation
+    out_res.nGenerations[partial_generation] .+= (365 .- startDOY[partial_generation]) ./
+                                                 (result.emergeDOY[idx3[partial_generation]] - startDOY[partial_generation])
+
+    # If this is the first time through the loop, record the emergance day
+    if first_pass
+      out_res.emergeDOY[full_generation] .= result.emergeDOY[idx3[full_generation]]
+      first_pass = false
+    end
+
+    # Reset starting DOY to zero
+    startDOY = zeros(Int32, length(idx1))
+
+    # If a full gneration completed within the year, update starting doy
+    startDOY[full_generation] .= result.emergeDOY[idx3[full_generation]] .+ 1
+
+    # Remove startDOY >= 365
+    startDOY[startDOY.>=365] .= 0
+  end
+
+
+  return (out_res)
+end
+
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
+function create_doy_results(adult_emerge::DataFrame, DOY::Vector{Int32})
+  # Function to calculate number of generations per year, and first
+  # day of adult emergence for specific starting days of year
+  #
+  #   DOY           a vector of days of year when larval development begins
+  #   adult_emerge  data frame containing the results from the model
+  #  
+  #  Output:
+  #   a data frame with the following columns:
+  #       ID            unique ID for each soatial location  
+  #       startDOY      starting DOY for larval development  
+  #       nGenerations  number of generations in a year    
+  #       emergence     adult emergence day of year 
+  #       east_idx      index for eastings of the unique spatial locations in result
+  #       north_idx     index for northings of the unique spatial location in result
+  ########################################################################
+
+  out = DataFrame()    # Initialise dataframe for outputs
+  for d in eachindex(DOY)
+    # Produce results for a specific DOY
+    result = extract_results(DOY[d], adult_emerge)
+
+    # Add these results to the other outputs
+    append!(out, result)
+  end
+
+  return out
+end
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
+function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
+  # Function to take results on a 1km grid an aggregate them to a 10km grid
+  #
+  #   grid              information about the spatial grid
+  #   result_1km        results from the model on 1km grid
+  #  
+  #  Output:
+  #   a data frame with the following columns:
+  #       hectad        unique hectad grid reference
+  #       east          easting of bottom left of hectad
+  #       north         northing of bottom left of hectad
+  #       startDOY      starting DOY for larval development  
+  #       nGenerations  maximum number of generations in a year in hectad
+  #       emergence     minimum adult emergence day of year in a hectad
+  ########################################################################
+
+  # Add hectad info into the df_tmp data frame
+  eastList = sort(unique(grid.east))
+  northList = sort(unique(grid.north))
+  result_1km.east_hectad = convert.(Int32, floor.(eastList[result_1km.east_idx] ./ 1e4))
+  result_1km.north_hectad = convert.(Int32, floor.(northList[result_1km.north_idx] ./ 1e4))
+
+  # Calculate worst case results within each hectad for nGenerations and emergeDOY
+  # for each starting DOY
+  df_group = groupby(result_1km, [:east_hectad, :north_hectad, :startDOY])
+  df_nGen = combine(df_group,
+    :nGenerations => (x -> quantile(x, 1.0)) => :nGenerations_max)   # Max generations per hectad
+
+  df_emergeDOY = combine(df_group,
+    :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min)
+
+  # Create a code that corresponds to hectad in the grid data frame
+  h_idx = [findfirst(grid.hectad .== h) for h in unique(grid.hectad)]
+  h_nGen_idx = [findfirst(df_nGen.east_hectad[i] .== floor.(grid.east[h_idx] ./ 1e4) .&& df_nGen.north_hectad[i] .== floor.(grid.north[h_idx] ./ 1e4)) for i in 1:nrow(df_nGen)]
+  h_emergeDOY_idx = [findfirst(df_emergeDOY.east_hectad[i] .== floor.(grid.east[h_idx] ./ 1e4) .&& df_emergeDOY.north_hectad[i] .== floor.(grid.north[h_idx] ./ 1e4)) for i in 1:nrow(df_emergeDOY)]
+
+  insertcols!(df_nGen, 1, :hectad => grid.hectad[h_idx[h_nGen_idx]], after=false)
+  insertcols!(df_emergeDOY, 1, :hectad => grid.hectad[h_idx[h_emergeDOY_idx]], after=false)
+
+  # Remove unwanted columns
+  select!(df_nGen, Not([:east_hectad, :north_hectad]))
+  select!(df_emergeDOY, Not([:east_hectad, :north_hectad]))
+
+
+  # Combine these results into one data frame and include grid info
+  return innerjoin(df_nGen, df_emergeDOY, on=[:hectad, :startDOY])
 end
 
 

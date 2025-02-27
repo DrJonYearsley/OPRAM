@@ -17,15 +17,17 @@ using Distributed;
 using Distributions, Random;
 using CSV;
 using JLD2;
+using Dates;
 
 
 
 nNodes = 3;                 # Number of compute nodes to use (if in interactive)
-meteoPeriod = "2021-2050"   # Years to run model
+meteoPeriod = "2041-2070"   # Years to run model
 meteoRCP = "85"             # RCP scenario to use
-nReps = 10;                 # Number of times to simulate future climate
+nReps = 30;                 # Number of times to simulate future climate
 maxYears = 3;               # Maximum number of years to complete insect development
-saveToFile = true;   # If true save the result to a file
+saveRepsToFile = false;     # If true save every replicate result to a file
+saveRepSummaryToFile = true;# If true save the summary over replicates to a file
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 # (used for daylength calculations as well as importing and thining of meteo data)
 
@@ -33,7 +35,7 @@ gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and lon
 thinFactor = 1;
 
 # Define species parameters
-outPrefix = "oulema";   # Prefix to use for results files
+outPrefix = "oulema_melanopus";   # Prefix to use for results files
 # Important:
 # outPrefix must correspond to part of the variable name 
 # for the species parameters. For example, "dummy" if the 
@@ -124,7 +126,7 @@ include("species_params.jl")
 # Set up model variables (grid, species parameters and temperature data
 
 
-grid, Tavg, params = setup_model
+# grid, Tavg, params = setup_model
 
 
 # Find species data corresponding to outPrefix and set this as the variable params
@@ -172,6 +174,8 @@ end
 adult_emerge = Vector{DataFrame}(undef, nReps);
 
 for r in 1:nReps
+  @info "====== Replicate " * string(r) * " ==========="
+
   # Generate daily temperature for maxYears
   @info "Generating climate data"
   TavgVec = Vector{Array{Float32,2}}(undef, maxYears)
@@ -227,7 +231,7 @@ for r in 1:nReps
                           emergeDOY=result[idxKeep, 2])
 
   end
-  println(" ")
+  println(" ================================== \n")
 end
 
 
@@ -238,7 +242,7 @@ end
 
 adult_emerge_all = reduce(DataFrames.vcat, adult_emerge)
 
-if saveToFile
+if saveRepsToFile
   @info "Saving the results"
   # Save using jld2 format
   outFile = joinpath([outDir, "result_" * outPrefix * "_rcp" * meteoRCP * "_" * meteoPeriod * "_par_thin" * string(thinFactor) * ".jld2"])
@@ -251,11 +255,59 @@ end
 
 # =========================================================
 # =========================================================
-# Convert results into output for key dates
+# Convert results into output for key dates (e.g. first day of each month)
+
+# Obtain outputs for starting dates on the first of every month
+dates = [Date(0000,m,01) for m in 1:12];
+
+# Work out corresponding day of year
+DOY = convert.(Int32,dayofyear.(dates));
+
+# Extract results for each starting date and each location
+df_tmp = DataFrame();
+for doy in eachindex(DOY)
+  @info "Extracting results for DOY " * string(DOY[doy])
+    for r in 1:nReps
+    # Extract result for the day of year
+    tmp = extract_results(DOY[doy], adult_emerge_all[adult_emerge_all.rep.==r, :]);
+
+    # Add in replicate number
+    insertcols!(tmp, 1, :rep=> r, after=false)
+
+    # Add these results to the other replicates
+    append!(df_tmp, tmp)
+  end
+end
+
+# Group the df_tmp by ID and startDOY and calculate the percentiles
+df_group1 = groupby(df_tmp, [:ID, :startDOY])
 
 
+# =========================================================
+# Calculate 10, 50 and 90 percentiles of results for nGen and emergeDOY
+# for each location and starting DOY
 
 
+# Calculate quantiles across the reps
+out_nGen = combine(df_group1,
+  :nGen => (x -> [quantile(x, [0.1, 0.5, 0.9])]) =>
+    [:nGen_10, :nGen_50, :nGen_90])
+
+out_emergeDOY = combine(df_group1,
+  :emergeDOY => (x -> [quantile(x, [0.1, 0.5, 0.9])]) =>
+    [:emergeDOY_10, :emergeDOY_50, :emergeDOY_90])
+
+# Combine these results into one data frame and include grid info
+a = innerjoin(out_nGen, out_emergeDOY, on=[:ID, :startDOY])
+output_1km = rightjoin(grid[:,[:ID,:east,:north]], a, on=:ID)
+
+
+if saveRepSummaryToFile
+  @info "Saving the extracted results"
+  # Save using csv format
+  outFile = joinpath([outDir, "result_startdates_" * outPrefix * "_rcp" * meteoRCP * "_" * meteoPeriod * "_par_thin" * string(thinFactor) * "_nRep" * string(nReps) * ".csv"])
+  CSV.write(outFile, output_1km)
+end
 
 
 
@@ -265,6 +317,51 @@ end
 # Summarise output at the 10km (hectad) scale
 
 
+# Add hectad info into the df_tmp data frame
+eastList = sort(unique(grid.east))
+northList = sort(unique(grid.north))
+df_tmp.east_hectad = convert.(Int32,floor.(eastList[df_tmp.east_idx]./1e4))
+df_tmp.north_hectad = convert.(Int32, floor.(northList[df_tmp.north_idx]./1e4))
+
+
+# Calculate worst case results within each hectad for nGen and emergeDOY
+# for each starting DOY and replicate
+df_group2 = groupby(df_tmp, [:east_hectad, :north_hectad, :startDOY, :rep])
+df_nGen = combine(df_group2,
+  :nGen => (x -> quantile(x, 1.0)) => :nGen_max)    # Maximum num generations per hectad
+
+df_emergeDOY = combine(df_group2,
+  :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min)
+
+# Average over the replicates
+out_nGen2 = combine(groupby(df_nGen, [:east_hectad, :north_hectad, :startDOY]),
+  :nGen_max => (x -> [quantile(x, [0.1, 0.5, 0.9])]) =>
+    [:nGen_max10, :nGen_max50, :nGen_max90])
+
+out_emergeDOY2 = combine(groupby(df_emergeDOY, [:east_hectad, :north_hectad, :startDOY]),
+  :emergeDOY_min => (x -> [quantile(x, [0.1, 0.5, 0.9])]) =>
+    [:emergeDOY_min10, :emergeDOY_min50, :emergeDOY_min90])
+
+
+# Create a code that corresponds to hectad in the grid data frame
+h_idx = [findfirst(grid.hectad .==h) for h in unique(grid.hectad)]
+h_nGen_idx = [findfirst(out_nGen2.east_hectad[i] .== floor.(grid.east[h_idx]./1e4) .&& out_nGen2.north_hectad[i] .== floor.(grid.north[h_idx]./1e4)) for i in 1:nrow(out_nGen2)]
+h_emergeDOY_idx = [findfirst(out_emergeDOY2.east_hectad[i] .== floor.(grid.east[h_idx]./1e4) .&& out_emergeDOY2.north_hectad[i] .== floor.(grid.north[h_idx]./1e4)) for i in 1:nrow(out_emergeDOY2)]
+
+out_nGen2.hectad = grid.hectad[h_idx[h_nGen_idx]]
+out_emergeDOY2.hectad = grid.hectad[h_idx[h_emergeDOY_idx]]
+
+# Combine these results into one data frame and include grid info
+output_10km = innerjoin(grid[h_idx,[:hectad,:country,:province,:county]],
+          innerjoin(out_nGen2, out_emergeDOY2, on=[:east_hectad, :north_hectad, :hectad, :startDOY]),
+           on=:hectad)
+
+if saveRepSummaryToFile
+  @info "Saving the extracted results"
+  # Save using csv format
+  outFile = joinpath([outDir, "result_startdates_" * outPrefix * "_rcp" * meteoRCP * "_" * meteoPeriod * "_hectads" * "_nRep" * string(nReps) * ".csv"])
+  CSV.write(outFile, output_10km)
+end
 
 
 

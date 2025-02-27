@@ -1,6 +1,6 @@
 # Functions to import meteo data in various formats
 #
-# function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame)
+# function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame, maxYears::Int)
 # function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
 # function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
 # function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years::Vector{Int64})
@@ -16,7 +16,7 @@
 # ============= Defne functions ===========================
 
 
-function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame)
+function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, maxYears::Int)
   # Import multiple years of daily min and max temperature for Republic of Ireland and 
   # Northern Ireland
   # Then creates the daily average temp for each eastings and northings of spatial locations
@@ -43,11 +43,9 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame)
   #
   # *************************************************************
 
-  # Number of years of meteo data to import   
-  nYears = 3
 
   # An array containing the years to be imported
-  years = collect(meteoYear:meteoYear+nYears-1)
+  years = collect(meteoYear:meteoYear+maxYears-1)
 
 
 

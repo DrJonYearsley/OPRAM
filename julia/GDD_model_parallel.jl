@@ -16,12 +16,18 @@
 using Distributed;
 using CSV;
 using JLD2;
+using Dates;
+using Statistics;
 
 
 
 nNodes = 3;                         # Number of compute nodes to use (if in interactive)
-meteoYear = 1991:2021               # Years to run model
-saveToFile = true;                  # If true save the result to a file
+meteoYear = 1991                    # Years to run model
+maxYears = 3;                       # Maximum number of years to complete insect development
+
+saveToFile = true;                  # If true save the full result to a JLD2 file
+saveSummaryCSV = true;              # If true save the specific results to a CSV file
+
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 # (used for daylength calculations as well as importing and thining of meteo data)
 
@@ -141,7 +147,7 @@ end
 # Import location data and thin it using thinFactor
 
 # Import grid location data
-grid = CSV.read(joinpath([dataDir, gridFile]), DataFrame);
+grid, diapauseDOY_threshold = prepare_data(joinpath([dataDir, gridFile]), thinFactor, params);
 
 # Remove locations not in the meteo data
 if isnothing(meteoDir_IE)
@@ -150,34 +156,17 @@ elseif isnothing(meteoDir_NI)
   subset!(grid, :country => c -> c .!= "NI")
 end
 
-# Sort locations in order of IDs
-grid = grid[sortperm(grid.ID), :];
-
-# Thin the locations using the thinFactor
-subset!(grid, :east => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8, :north => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8)
-
-# =========================================================
-# =========================================================
-# Calculate whether daylength allows diapause for each DOY and latitude
-# Returns a matrix where rows are unique latitudes and columns are days of year
-if !ismissing(params.diapause_photoperiod)
-  @info "Calculating DOY threshold for diapause"
-  diapause_minDOY = 150
-  diapauseDOY_threshold = photoperiod(grid.latitude, diapause_minDOY, params.diapause_photoperiod)
-else
-  diapauseDOY_threshold = nothing
-end
 
 
 # =========================================================
 # =========================================================
 # Start the main loop of the program
 
-@time "Total Calculation time: " for year in meteoYear
+@time "Total Calculation time: " for y in eachindex(meteoYear)
 
   # Import meteo data and calculate degree days
-  @info "Running model for year " * string(year)
-  @time "Total GDD calculation" GDDsh, idx, locInd1, locInd2 = calculate_GDD(year, params, grid, [meteoDir_IE, meteoDir_NI], diapauseDOY_threshold)
+  @info "Running model for year " * string(meteoYear[y])
+  @time "Total GDD calculation" GDDsh, idx, locInd1, locInd2 = calculate_GDD(meteoYear[y], params, grid, [meteoDir_IE, meteoDir_NI], maxYears, diapauseDOY_threshold)
 
   # Create a shared array to hold results for every day when GDD updates
   result = SharedArray{Int16,2}(length(GDDsh), 3)
@@ -223,8 +212,43 @@ end
   if saveToFile
     @info "Saving the results"
     # Save using jld2 format
-    save_object(joinpath([outDir, "result_" * outPrefix * string(year) * "_par_thin" * string(thinFactor) * ".jld2"]), adult_emerge)
+    outFile = joinpath([outDir, "result_" * outPrefix * string(meteoYear[y]) * "_" * string(thinFactor) * "km.jld2"])
+    save_object(outFile, adult_emerge)
   end
+
+
+  # =========================================================
+  # =========================================================
+  @info "Creating output for specific days of year"
+
+  # Obtain outputs for starting dates on the first of every month
+  dates = [Date(meteoYear[y], m, 01) for m in 1:12]
+
+  # Work out corresponding day of year
+  DOY = convert.(Int32, dayofyear.(dates))
+
+  # Create output for specific days of year
+  output_1km = create_doy_results(adult_emerge, DOY)
+
+  # Create 10km summary
+  output_10km = aggregate_to_hectad(output_1km, grid)
+
+  # Remove unwanted columns
+  select!(output_1km, Not([:east_idx, :north_idx, :east_hectad, :north_hectad]))
+
+  # Add eastings and northings
+  output_1km = rightjoin(grid[:,[:ID, :east, :north]], output_1km, on=:ID)
+
+  if saveSummaryCSV
+    @info "Saving the extracted results"
+    # Save using csv format
+    outFile1km = joinpath([outDir, "result_startdates_" * outPrefix * string(year) * "_" * string(thinFactor) * "km.csv"])
+    CSV.write(outFile1km, output_1km)
+
+    outFile10km = joinpath([outDir, "result_startdates_" * outPrefix * string(year) * "_10km.csv"])
+    CSV.write(outFile10km, output_10km)
+  end
+
   println(" ")
 end
 
