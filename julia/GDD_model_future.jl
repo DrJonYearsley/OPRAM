@@ -56,7 +56,7 @@ outPrefix = "oulema_melanopus";   # Prefix to use for results files
 
 # Pre-defined parameters for some species are in species_params.jl
 # or you can define your own parameters below in dummy_species
-dummy_species = (base_temperature=1.7f0,            # Degrees C
+dummy_species = (base_temperature=1.7f0,     # Degrees C
   threshold=1004.0f0,                        # Degrees C
   diapause_photoperiod=missing,              # Hours
   diapause_temperature=missing);             # Degrees C

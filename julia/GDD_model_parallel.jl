@@ -3,7 +3,8 @@
 #!/opt/homebrew/bin/julia -p 3
 #
 # Julia script to run the degree day development model from Met Eireann's
-# gridded data (read gridded data directly from Met Eireann's csv files)
+# gridded data (read gridded data directly from Met Eireann's csv files or
+# from JLD2 files)
 #
 # Jon Yearsley (jon.yearsley@ucd.ie)
 # 4th July 2024
@@ -18,6 +19,7 @@ using CSV;
 using JLD2;
 using Dates;
 using Statistics;
+using Parameters;
 
 
 
@@ -107,13 +109,13 @@ if isinteractive() & nprocs() == 1
   addprocs(nNodes)
 end
 
-
 @info "Workers : $(workers())"
 @info "Interactive Session: $(isinteractive())"
 
-
 @everywhere using SharedArrays
 @everywhere using DataFrames;
+
+
 
 
 
@@ -124,6 +126,8 @@ end
 include("GDD_functions.jl")
 include("species_params.jl")
 include("import_functions.jl")
+
+
 
 
 
@@ -162,55 +166,26 @@ end
 # =========================================================
 # Start the main loop of the program
 
-@time "Total Calculation time: " for y in eachindex(meteoYear)
-
+for y in eachindex(meteoYear)
   # Import meteo data and calculate degree days
   @info "Running model for year " * string(meteoYear[y])
-  @time "Total GDD calculation" GDDsh, idx, locInd1, locInd2 = calculate_GDD(meteoYear[y], params, grid, [meteoDir_IE, meteoDir_NI], maxYears, diapauseDOY_threshold)
 
-  # Create a shared array to hold results for every day when GDD updates
-  result = SharedArray{Int16,2}(length(GDDsh), 3)
+  @info "Importing meteo data" 
+  Tavg, DOY, ID = read_meteo(meteoYear[y], [meteoDir_IE, meteoDir_NI], grid, maxYears)
 
-  # Fill the first column of results
-  result[:, 1] = [idx[i][1] for i in eachindex(idx)]  # Calculate day of year
-  result[:, 2] .= Int16(-1)
-  result[:, 3] .= Int16(-1)
-
+  @info "Calculate GDD" 
+  GDDsh, idx, locInd1, locInd2 = calculate_GDD_version2(Tavg, DOY, params, diapauseDOY_threshold)
 
   # Loop over all locations and run the model
-  @info "Running the model"
-  @time "Model calculations:" begin
+  @info "Calculating adult emergence dates"
+  @everywhere thresh = convert(Float32, $params.threshold)
+  result = location_loop2(locInd1, locInd2, idx, GDDsh, thresh)
 
-    @everywhere thresh = convert(Float32, $params.threshold)
-    location_loop!(locInd1, locInd2, result, GDDsh, thresh)
-
-    # Remove rows that have emergeDOY<=0 
-    idxKeep = result[:, 2] .> 0
-
-    # Extract location index for every row in result (column coord in idx)
-    loc_idx = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # ID[loc_idx] will give the location's ID 
-
-    # Remove rows where the final prediction at the same location doesn't change (they can be recalculated later)
-    idxKeep2 = (loc_idx[1:end-1] .!= loc_idx[2:end]) .|| (loc_idx[1:end-1] .== loc_idx[2:end] .&& result[1:end-1, 2] .!= result[2:end, 2])
-    push!(idxKeep2, true)    # Add a true value at the end
-
-    # Remove all but the first result with DOY >= 365 (results only for 1 year)
-    # Keep data with DOY<=365 or when DOY>365 and the previous result was less than 365
-    idxKeep3 = result[2:end, 1] .<= 365 .|| (loc_idx[1:end-1] .== loc_idx[2:end] .&& (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
-    pushfirst!(idxKeep3, true)    # Add a true value at the start
-
-    # Combine all 3 indices together
-    idxKeep = idxKeep .&& idxKeep2 .&& idxKeep3
-
-
-    # Create a data frame, using real location ID (second element of meteo)
-    adult_emerge = DataFrame(ID=grid.ID[loc_idx[idxKeep]],
-      DOY=result[idxKeep, 1],
-      emergeDOY=result[idxKeep, 2])
-  end
+  # Simplify the results and put them in a DataFrame
+  adult_emerge = cleanup_results(result, idx, grid.ID)
 
   if saveToFile
-    @info "Saving the results"
+    @info "Saving the results to JLD2 file"
     # Save using jld2 format
     outFile = joinpath([outDir, "result_" * outPrefix * string(meteoYear[y]) * "_" * string(thinFactor) * "km.jld2"])
     save_object(outFile, adult_emerge)
@@ -236,7 +211,7 @@ end
   # Remove unwanted columns
   select!(output_1km, Not([:east_idx, :north_idx, :east_hectad, :north_hectad]))
 
-  # Add eastings and northings
+  # Add eastings and northings to 1km output
   output_1km = rightjoin(grid[:,[:ID, :east, :north]], output_1km, on=:ID)
 
   if saveSummaryCSV

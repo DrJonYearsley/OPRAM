@@ -1,5 +1,6 @@
 # Functions to import meteo data in various formats
 #
+# function import_species(speciesFile::String, speciesName::String)
 # function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame, maxYears::Int)
 # function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
 # function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
@@ -12,8 +13,34 @@
 #
 # ====================================================================
 
+
+
 # =========================================================
 # ============= Defne functions ===========================
+
+function import_species(speciesFile::String, speciesName::String)
+  # Import species parameters from a CSV file and find e species 
+  # that corresponds to the speciesName
+
+  # Import set species parameters
+  params = CSV.read(speciesFile, DataFrame, missingstring="NA")
+
+  # Create a list of species names in lowercase
+  spList = lowercase.(params.species)
+
+  # Split the species name into bits
+  spNameBits = split(speciesName, ('_',' '))
+
+  # Find the index of the species in the list matching the speciesName
+  species_idx = [any(occursin.(spNameBits,s)) for s in spList]
+
+  return params[species_idx,:]
+end
+
+
+# ------------------------------------------------------------------------------------------
+
+
 
 
 function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, maxYears::Int)
