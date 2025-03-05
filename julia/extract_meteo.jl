@@ -8,10 +8,11 @@ using StatsBase;
 
 # ===========================================================================
 # Set parameters ============================================================
-meteoYear = 2016:2020                              # Specify the 10 years
-county = ["Waterford"]   # Specify the 4 counties
+meteoYear = [collect(1971:1975);collect(2016:2020)]                              # Specify the 10 years
+county = ["Waterford"]       # Specify the 4 counties
 gridFile = "IE_grid_locations.csv"                # File containing a 1km grid
 outPrefix = "BIOL20060"                           # Output file prefix
+nLocations = 1
 # ===========================================================================
 # =============================================
 
@@ -22,18 +23,25 @@ outPrefix = "BIOL20060"                           # Output file prefix
 # Location 4: Shannon Foynes Port, Co. Limerick, coastal, port, quite high temperatures, very low altitude. (52.611098, -9.070196)
 
 # The lat and long for each region
-regions = [(53.189607, -6.275902),
+regions_kate = [(53.189607, -6.275902),
     (52.24747, -6.349449),
     (53.465285, -8.094387),
     (52.611098, -9.070196)]
 
+
+regions_saoirse = [(52.242722, -6.493963) ] # Crosstown, Wexford
+
+regions_jack = [(53.292223, -8.879707) ] # Frenchfort, Galway
+
+regions = regions_saoirse
+
 # Specify directories for import and export of data
 
 if isdir("//home//jon//Desktop//OPRAM")
-  outDir = "//home//jon//Desktop//OPRAM//results//"
+  outDir = "//home//jon//Desktop"
   dataDir = "//home//jon//DATA//OPRAM//"
-  meteoDir_IE = "//home//jon//DATA//OPRAM//Irish_Climate_Data//"
-  meteoDir_NI = "//home//jon//DATA//OPRAM//Northern_Ireland_Climate_Data//"
+  meteoDir_IE = "//home//jon//DATA//OPRAM//Climate_JLD2"
+  meteoDir_NI = "//home//jon//DATA//OPRAM//Climate_JLD2"
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Teaching//BIOL20060//Data/Climate/"
@@ -42,7 +50,7 @@ elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   meteoDir_NI = nothing
 
 elseif isdir("//users//jon//Desktop//OPRAM//")
-  outDir = "//users//jon//Desktop//OPRAM//results//"
+  outDir = "//users//jon//Desktop"
   dataDir = "//users//jon//Desktop//OPRAM//"
   meteoDir_IE = "//users//jon//Desktop//OPRAM//Irish_Climate_Data//"
   meteoDir_NI = "//users//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//"
@@ -69,20 +77,21 @@ grid_thin = grid[thinInd, :];
 
 
 # Pick locations
-idx_ID = zeros(Int, length(regions), 5)
+idx_ID = zeros(Int, length(regions), nLocations)
 for r in eachindex(regions)
 idx_region = abs.(regions[r][1] .- grid_thin.latitude).<0.02 .&& 
         abs.(regions[r][2] .- grid_thin.longitude).<0.02;
 
-# Pick 5 locations
-idx_ID[r,:] = sample(grid_thin.ID[idx_region], 5);       
+# Pick n locations
+idx_ID[r,:] = sample(grid_thin.ID[idx_region], nLocations);       
 end
 
 # Initiate a data frame for each region
 df = Vector{DataFrame}(undef, length(regions))
 for y in eachindex(meteoYear)
-  # @time "Imported meteo data" Tavg, DOY, ID  = read_meteo(years, [meteoDir_IE, meteoDir_NI], grid_thin,2)
-  Tavg, DOY, ID = read_meteo(meteoYear[y], [meteoDir_IE, meteoDir_NI], grid, maxYears)
+@info "Importing data for year " * string(meteoYear[y])
+
+  Tavg, DOY, ID = read_meteo(meteoYear[y], [meteoDir_IE, meteoDir_NI], grid, 1)
   
   for r in eachindex(regions)
     # Indices of locations within 2km of region lat-long 

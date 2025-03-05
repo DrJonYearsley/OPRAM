@@ -185,8 +185,10 @@ function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{
   end
 
   # Check all ID's are equivalent
-  if any(IDVec[1].!=IDVec[2]) || any(IDVec[2].!=IDVec[3])
+  if length(IDVec)>1 
+    if any(IDVec[1].!=IDVec[2]) || any(IDVec[2].!=IDVec[3])
     @error "Locations in different meteo files are not the same"
+    end
   end
 
   # Find ID's that are in grid_thin
