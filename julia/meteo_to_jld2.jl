@@ -10,7 +10,7 @@ using SharedArrays;
 include("GDD_functions.jl")  # Includes functions to import meteo data
 
 
-years = collect(1991:2023)    # The years to import
+years = collect(1971:1990)    # The years to import
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 
 
