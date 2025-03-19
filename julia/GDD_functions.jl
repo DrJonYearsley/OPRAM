@@ -536,29 +536,33 @@ function extract_results(doy::Int32, result::DataFrame)
   out_res.north_idx = mod.(out_res.ID, 1000)
   out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
 
-  # Count number of generations per year
-  startDOY = zeros(Union{Missing,Int32}, length(idx1)) .+ doy
-  # startDOY = Vector{Union{Missing,Int32}}(repeat([doy], length(idx1)))
-  first_pass = true
+  # Set up starting DOY for each location
+  startDOY = zeros(Union{Missing,Int32}, length(idx1)) .+ doy  # Start DOY for each location
+  first_pass = true                                            # True for the first generation
 
   # Set startDOY to zero for a location if no more generations can be completed in the year
+  # when all startDOY are zero then stop
   while any(startDOY .> 0)
-    # Find index of result that corresponds to desired day of year (ie doy>=result.DOY)
+    # Find index of result output that corresponds to desired day of year (ie doy>=result.DOY)
+    # this assumes results are ordered by DOY for each location
     idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY[i]) - 1 + idx1[i] for i = eachindex(idx1)]
 
     # Find out if end of current developmental generation is in the results (i.e. occurs before data on next location)
+    # idx2[i] is the last index for the present location
+    # idx2[i]+1 is the first index of the next location   = idx1[i+1]
     development_complete = startDOY .> 0 .&& idx2 .+ 1 .> idx3
 
     # Find out if development happens within the first year
-    if (idx3[end] == nrow(result) + 1)
-      # If final entry resulted in no developement (i.e. index is nrow+1) then set within year to false
+    if (idx3[end] == nrow(result) + 1)    
+      # If final idx3 gives no developement (i.e. idx3[end] is nrow+1) then set its within_a_year to false
       within_a_year = result.emergeDOY[idx3[1:end-1]] .<= 365   # Is the generation complete within the year?
       push!(within_a_year, false)
     else
+      # Work out all values of within_a_year
       within_a_year = result.emergeDOY[idx3] .<= 365   # Is the generation complete within the year?
     end
 
-    # Increment generations
+    # Create booleans that will increment generation count
     full_generation = development_complete .& within_a_year
     partial_generation = development_complete .& .!within_a_year
 
@@ -570,21 +574,21 @@ function extract_results(doy::Int32, result::DataFrame)
                                                  (result.emergeDOY[idx3[partial_generation]] - startDOY[partial_generation])
 
     # If this is the first time through the loop, record the emergance day
-    if first_pass
-      out_res.emergeDOY[full_generation] .= result.emergeDOY[idx3[full_generation]]
+    if first_pass  
+      # Only update adult emergence DOY if emergence is complete (but could take multiple years)   
+      # out_res.emergeDOY[full_generation] .= result.emergeDOY[idx3[full_generation]]
+      out_res.emergeDOY[development_complete] .= result.emergeDOY[idx3[development_complete]]
       first_pass = false
     end
 
     # Reset starting DOY to zero
     startDOY = zeros(Int32, length(idx1))
-    # startDOY = Vector{Union{Missing,Int32}}(missing, length(idx1))
 
     # If a full gneration completed within the year, update starting doy
     startDOY[full_generation] .= result.emergeDOY[idx3[full_generation]] .+ 1
 
     # Remove startDOY >= 365
     startDOY[startDOY.>=365] .= 0
-    # startDOY[startDOY.>=365] .= missing
   end
 
 
@@ -597,10 +601,11 @@ end
 
 # ------------------------------------------------------------------------------------------
 
-function create_doy_results(adult_emerge::DataFrame, DOY::Vector{Int32})
+function create_doy_results(adult_emerge::DataFrame, dates::Vector{Date})
   # Function to calculate number of generations per year, and first
   # day of adult emergence for specific starting days of year
   #
+  #   dates           a vector of dates when larval development begins
   #   DOY           a vector of days of year when larval development begins
   #   adult_emerge  data frame containing the results from the model
   #  
@@ -615,9 +620,20 @@ function create_doy_results(adult_emerge::DataFrame, DOY::Vector{Int32})
   ########################################################################
 
   out = DataFrame()    # Initialise dataframe for outputs
+  
+  # Work out corresponding day of year for each date
+  DOY = convert.(Int32, dayofyear.(dates))
+  
   for d in eachindex(DOY)
     # Produce results for a specific DOY
     result = extract_results(DOY[d], adult_emerge)
+
+    # Add in a column with starting dates and emergence dates rather than DOY
+    result.startDate .= dates[d] 
+
+    result.emergeDate = Vector{Union{Missing,Date}}(missing, nrow(result))
+    idx = result.emergeDOY .> 0
+    result.emergeDate[idx] = Date(year(dates[d])) .+ Day.(result.emergeDOY[idx].-1) 
 
     # Add these results to the other outputs
     append!(out, result)
@@ -658,12 +674,18 @@ function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
 
   # Calculate worst case results within each hectad for nGenerations and emergeDOY
   # for each starting DOY
-  df_group = groupby(result_1km, [:east_hectad, :north_hectad, :startDOY])
+  df_group = groupby(result_1km, [:east_hectad, :north_hectad, :startDOY, :startDate])
   df_nGen = combine(df_group,
     :nGenerations => (x -> quantile(x, 1.0)) => :nGenerations_max)   # Max generations per hectad
 
   df_emergeDOY = combine(df_group,
     :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min)
+
+  # Add in columns with start and emergence dates
+  df_emergeDOY.emergeDate_min = Vector{Union{Missing,Date}}(missing, nrow(df_emergeDOY))
+  idx = df_emergeDOY.emergeDOY_min .> 0
+  df_emergeDOY.emergeDate_min[idx] .= Date.(year.(df_emergeDOY.startDate[idx])) .+ Day.(floor.(df_emergeDOY.emergeDOY_min[idx]))
+
 
   # Create a code that corresponds to hectad in the grid data frame
   h_idx = [findfirst(grid.hectad .== h) for h in unique(grid.hectad)]
@@ -673,13 +695,14 @@ function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
   insertcols!(df_nGen, 1, :hectad => grid.hectad[h_idx[h_nGen_idx]], after=false)
   insertcols!(df_emergeDOY, 1, :hectad => grid.hectad[h_idx[h_emergeDOY_idx]], after=false)
 
+
   # Remove unwanted columns
   select!(df_nGen, Not([:east_hectad, :north_hectad]))
   select!(df_emergeDOY, Not([:east_hectad, :north_hectad]))
 
 
   # Combine these results into one data frame and include grid info
-  return innerjoin(df_nGen, df_emergeDOY, on=[:hectad, :startDOY])
+  return innerjoin(df_nGen, df_emergeDOY, on=[:hectad, :startDOY, :startDate])
 end
 
 

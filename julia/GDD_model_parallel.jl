@@ -30,7 +30,7 @@ gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and lon
 thinFactor = 1;
 
 # Define species 
-speciesFile = "/Users/jon/git_repos/OPRAM/data/species_parameter.csv";  # File containing species parameters
+speciesFile = "/home/jon/git_repos/OPRAM/data/species_parameter.csv";  # File containing species parameters
 speciesStr = "typo"  # A string to uniquely identify a species name in the speciesFile
 # If speciesStr has no match then user_species is used
 user_species = (name="to be defined",
@@ -64,8 +64,8 @@ user_species = (name="to be defined",
 if isdir("//home//jon//Desktop//OPRAM")
   outDir = "//home//jon//Desktop//OPRAM//results//"
   dataDir = "//home//jon//DATA//OPRAM//"
-  meteoDir_IE = "//home//jon//DATA//OPRAM//Irish_Climate_Data//"
-  meteoDir_NI = "//home//jon//DATA//OPRAM//Northern_Ireland_Climate_Data//"
+  meteoDir_IE = "//home//jon//DATA//OPRAM//Climate_JLD2"
+  meteoDir_NI = "//home//jon//DATA//OPRAM//Climate_JLD2"
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
   outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//"
@@ -99,6 +99,7 @@ if isinteractive() & nprocs() == 1
   # Enable multiple nodes 
   addprocs(nNodes)
 end
+
 
 @info "Workers : $(workers())"
 @info "Interactive Session: $(isinteractive())"
@@ -210,20 +211,23 @@ for y in eachindex(meteoYear)
   # Obtain outputs for starting dates on the first of every month
   dates = [Date(meteoYear[y], m, 01) for m in 1:12]
 
-  # Work out corresponding day of year
-  DOY = convert.(Int32, dayofyear.(dates))
+  # # Work out corresponding day of year
+  # DOY = convert.(Int32, dayofyear.(dates))
 
   # Create output for specific days of year
-  output_1km = create_doy_results(adult_emerge, DOY)
+  output_1km = create_doy_results(adult_emerge, dates)
 
   # Create 10km summary
   output_10km = aggregate_to_hectad(output_1km, grid)
 
   # Remove unwanted columns
-  select!(output_1km, Not([:east_idx, :north_idx, :east_hectad, :north_hectad]))
+  select!(output_1km, Not([:east_idx, :north_idx, :east_hectad, :north_hectad, :startDOY, :emergeDOY ]))
+  select!(output_10km, Not([:startDOY, :emergeDOY_min ]))
 
   # Add eastings and northings to 1km output
   output_1km = rightjoin(grid[:,[:ID, :east, :north]], output_1km, on=:ID)
+
+  # Add bottom left eastings and northings to 10km output
 
   if saveSummaryCSV
     @info "Saving the extracted results"
