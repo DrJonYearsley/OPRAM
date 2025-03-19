@@ -13,28 +13,56 @@
 #
 # ====================================================================
 
+# Define a structure (with default values) to hold model parameters
+@everywhere @kwdef struct parameters
+  species_name::Union{String,Missing} = missing
+  base_temperature::Float32 = 0.0
+  threshold::Float32 = 0.0
+  diapause_daylength::Union{Float32,Missing} = missing
+  diapause_temperature::Union{Float32,Missing} = missing
+end
 
 
 # =========================================================
 # ============= Defne functions ===========================
 
-function import_species(speciesFile::String, speciesName::String)
-  # Import species parameters from a CSV file and find e species 
-  # that corresponds to the speciesName
+function import_species(speciesFile::String, speciesStr::String)
+  # Import species parameters from a CSV file and find species 
+  # that correspond to the speciesStr
 
   # Import set species parameters
-  params = CSV.read(speciesFile, DataFrame, missingstring="NA")
+  params = CSV.read(speciesFile, DataFrame, 
+                    missingstring="NA")
 
   # Create a list of species names in lowercase
   spList = lowercase.(params.species)
 
-  # Split the species name into bits
-  spNameBits = split(speciesName, ('_',' '))
+  # Split the species name into bits based on separators '_', ',',',';',':' and ' '
+  spNameBits = split(lowercase(speciesStr), ('_',' ',',',';',':'))
 
   # Find the index of the species in the list matching the speciesName
-  species_idx = [any(occursin.(spNameBits,s)) for s in spList]
+  species_idx = [all(occursin.(spNameBits,s)) for s in spList]
 
-  return params[species_idx,:]
+
+  if sum(species_idx) == 0
+    # Can't find specie name in the parameter file
+    @warn "Species " * speciesStr * " not found in species file" * speciesFile
+    @info "Using default parameters"
+    return parameters(species_name="dummy",)
+   
+  elseif sum(species_idx) > 1
+    @error "Multiple species found for " * speciesStr * " in file " * speciesFile *
+    ". Provide a species string that is more specific."
+
+  else
+    # Use the values from the species parameter file
+    return parameters(species_name=params.species[findfirst(species_idx)], 
+    base_temperature=params.baseline_temperature[findfirst(species_idx)], 
+    threshold=params.threshold[findfirst(species_idx)], 
+    diapause_daylength=params.diapause_daylength[findfirst(species_idx)], 
+    diapause_temperature=params.diapause_temperature[findfirst(species_idx)])
+  end
+
 end
 
 

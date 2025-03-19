@@ -12,22 +12,15 @@
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
-
-# Load packages that will be used
-using Distributed;
-using CSV;
-using JLD2;
-using Dates;
-using Statistics;
-
-
-
+# ============================================================================================
+# =============== Set parameter values =======================================================
 
 nNodes = 3;                         # Number of compute nodes to use (if in interactive)
-meteoYear = 1991                    # Years to run model
+meteoYear = 1991:1992               # Years to run model
 maxYears = 3;                       # Maximum number of years to complete insect development
+country = "IE";                     # Can be "IE", "NI" or "AllIreland"
 
-saveToFile = true;                  # If true save the full result to a JLD2 file
+saveToFile = false;                  # If true save the full result to a JLD2 file
 saveSummaryCSV = true;              # If true save the specific results to a CSV file
 
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
@@ -36,13 +29,15 @@ gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and lon
 # Factor to think the spatial grid (2 means sample every 2 km, 5 = sample every 5km)
 thinFactor = 1;
 
-# Define species parameters
-outPrefix = "agrilus_anxius";   # Prefix to use for results files
-# Important:
-# outPrefix must correspond to part of the variable name 
-# for the species parameters. For example, "dummy" if the 
-# variable dummy_species is to be used in the model, or "agrius" 
-# if the pre-defined parameters for agrilus_anxius are to be used.
+# Define species 
+speciesFile = "/Users/jon/git_repos/OPRAM/data/species_parameter.csv";  # File containing species parameters
+speciesStr = "typo"  # A string to uniquely identify a species name in the speciesFile
+# If speciesStr has no match then user_species is used
+user_species = (name="to be defined",
+  base_temperature=1.7f0,            # Degrees C
+  threshold=1004.0f0,                        # Degrees C
+  diapause_daylength=missing,                # Hours
+  diapause_temperature=missing);             # Degrees C
 
 # Predefined species are:
 #  :agrilus_anxius
@@ -56,13 +51,7 @@ outPrefix = "agrilus_anxius";   # Prefix to use for results files
 #  :pseudips_mexicanus
 #  :spodoptera_frugiperda
 
-# Pre-defined parameters for some species are in species_params.jl
-# or you can define your own parameters below in dummy_species
-dummy_species = (name="to be defined",
-  base_temperature=1.7f0,            # Degrees C
-  threshold=1004.0f0,                        # Degrees C
-  diapause_photoperiod=missing,              # Hours
-  diapause_temperature=missing);             # Degrees C
+
 
 
 # =========================================================
@@ -91,15 +80,17 @@ elseif isdir("//users//jon//Desktop//OPRAM//")
   meteoDir_NI = "//users//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//"
 end
 
-
-# Make directory for the output prefix if one doesn't exist
-if !isdir(joinpath(outDir, outPrefix))
-  @info "Making directory " * outPrefix
-  mkpath(joinpath(outDir, outPrefix))
-end
-outDir = joinpath(outDir, outPrefix)
+# =============== End of parameter setup =====================================================
+# ============================================================================================
 
 
+
+# Load packages that will be used
+using Distributed;
+using CSV;
+using JLD2;
+using Dates;
+using Statistics;
 
 # =========================================================
 # =========================================================
@@ -116,33 +107,48 @@ end
 @everywhere using DataFrames;
 
 
-
-
-
 # =========================================================
 # =========================================================
 
 # Include the functions to import the data and run the degree day model
-include("GDD_functions.jl")
-include("species_params.jl")
 include("import_functions.jl")
-
-
-
+include("GDD_functions.jl")
+# include("species_params.jl")
 
 
 # =========================================================
 # =========================================================
 
-# Find species data corresponding to outPrefix and set this as the variable params
-species_params = filter(x -> occursin(outPrefix, string(x)), names(Main))
-if length(species_params) > 0
-  @info "Using parameters for species " * string(species_params[1])
-  params = eval(species_params[1])    # Define parameters to use
-else
-  @error "Species parameters not found"
+# Set species parameters from the parameter file
+params = import_species(speciesFile, speciesStr)
+if ismissing(params.species_name)
+  @info "Using '" * user_species.name * "' in user_species as parameters"
+  params = dummy_species
 end
 
+# Specify the output directory using the species name
+outPrefix = replace(lowercase(params.species_name), " " => "_")
+
+
+# Make directory for the output prefix if one doesn't exist
+if !isdir(joinpath(outDir, outPrefix))
+  @info "Making directory " * outPrefix
+  mkpath(joinpath(outDir, outPrefix))
+end
+outDir = joinpath(outDir, outPrefix)
+
+
+# =========================================================
+# =========================================================
+
+# # Find species data corresponding to outPrefix and set this as the variable params
+# species_params = filter(x -> occursin(outPrefix, string(x)), names(Main))
+# if length(species_params) > 0
+#   @info "Using parameters for species " * string(species_params[1])
+#   params = eval(species_params[1])    # Define parameters to use
+# else
+#   @error "Species parameters not found"
+# end
 
 
 
@@ -151,14 +157,14 @@ end
 # Import location data and thin it using thinFactor
 
 # Import grid location data
-grid, diapauseDOY_threshold = prepare_data(joinpath([dataDir, gridFile]), thinFactor, params);
+grid, diapauseDOY = prepare_data(joinpath([dataDir, gridFile]), thinFactor, params, country);
 
-# Remove locations not in the meteo data
-if isnothing(meteoDir_IE)
-  subset!(grid, :country => c -> c .!= "IE")
-elseif isnothing(meteoDir_NI)
-  subset!(grid, :country => c -> c .!= "NI")
-end
+# # Remove locations not in the meteo data
+# if isnothing(meteoDir_IE)
+#   subset!(grid, :country => c -> c .!= "IE")
+# elseif isnothing(meteoDir_NI)
+#   subset!(grid, :country => c -> c .!= "NI")
+# end
 
 
 
@@ -173,13 +179,18 @@ for y in eachindex(meteoYear)
   @info "Importing meteo data" 
   Tavg, DOY, ID = read_meteo(meteoYear[y], [meteoDir_IE, meteoDir_NI], grid, maxYears)
 
+# Remove grid points not in the meteo data
+  keep_ID = [in(grid.ID[i],ID) for i in eachindex(grid.ID)]
+  grid = grid[keep_ID,:]
+  diapauseDOY = diapauseDOY[keep_ID]
+
   @info "Calculate GDD" 
-  GDDsh, idx, locInd1, locInd2 = calculate_GDD_version2(Tavg, DOY, params, diapauseDOY_threshold)
+  GDDsh, idx, locInd1, locInd2 = calculate_GDD_version2(Tavg, DOY, params, diapauseDOY)
 
   # Loop over all locations and run the model
   @info "Calculating adult emergence dates"
-  @everywhere thresh = convert(Float32, $params.threshold)
-  result = location_loop2(locInd1, locInd2, idx, GDDsh, thresh)
+  # @everywhere thresh = convert(Float32, $params.threshold)
+  result = location_loop2(locInd1, locInd2, idx, GDDsh, params.threshold)
 
   # Simplify the results and put them in a DataFrame
   adult_emerge = cleanup_results(result, idx, grid.ID)

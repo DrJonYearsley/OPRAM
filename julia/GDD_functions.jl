@@ -57,7 +57,7 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function photoperiod(latitude::Vector{Float64}, minDOY::Int64, threshold::Float64)
+function photoperiod(latitude::Vector{Float64}, minDOY::Int64, threshold::Float32)
   # Calculate daylength in hours using the algorithm from the R package geosphere
   # This package uses the algorithm in 
   # Forsythe, William C., Edward J. Rykiel Jr., Randal S. Stahl, Hsin-i Wu and 
@@ -221,7 +221,7 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function prepare_data(grid_path::String, thin_factor::Int64, params::NamedTuple)
+function prepare_data(grid_path::String, thin_factor::Int64, params::parameters, country::String)
   # Function to prepare the data for the degree day model
   #
   # Arguments:
@@ -249,18 +249,26 @@ function prepare_data(grid_path::String, thin_factor::Int64, params::NamedTuple)
   # Sort locations in order of IDs
   grid = grid[sortperm(grid.ID), :]
 
+  # Keep only locations for the required country
+  if country == "IE"
+    subset!(grid, :country => c -> c .== "IE")
+  elseif country == "NI"
+    subset!(grid, :country => c -> c .== "NI")
+  end
+
   # Thin the locations using the thinFactor
   subset!(grid, :east => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8, :north => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8)
+
 
 
   # =========================================================
   # =========================================================
   # Calculate whether daylength allows diapause for each DOY and latitude
   # Returns a matrix where rows are unique latitudes and columns are days of year
-  if !ismissing(params.diapause_photoperiod)
+  if !ismissing(params.diapause_daylength)
     @info "Calculating DOY threshold for diapause"
     diapause_minDOY = 150
-    diapauseDOY_threshold = photoperiod(grid.latitude, diapause_minDOY, params.diapause_photoperiod)
+    diapauseDOY_threshold = photoperiod(grid.latitude, diapause_minDOY, params.diapause_daylength)
   else
     diapauseDOY_threshold = nothing
   end
@@ -271,7 +279,7 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame,
+function calculate_GDD(year::Int64, params::parameters, grid_thin::DataFrame,
   meteoDirs::Vector, maxYears::Int, diapauseDOY::Union{Vector{Int64},Nothing}=nothing)
   # Function to calculate growing degree days from meteo data for a range of years
   #
@@ -368,7 +376,7 @@ end
 
 
 function calculate_GDD_version2(Tavg::Matrix{Float32}, DOY::Vector{Int16},
-  params::NamedTuple, diapauseDOY::Union{Vector{Int64},Nothing}=nothing)
+  params::parameters, diapauseDOY::Union{Vector{Int64},Nothing}=nothing)
   # Function to calculate growing degree days from meteo data for a range of years
   #
   # Arguments:
@@ -390,7 +398,7 @@ function calculate_GDD_version2(Tavg::Matrix{Float32}, DOY::Vector{Int16},
   gdd_update = Tavg .> params.base_temperature
 
   # Add in diapause (if necessary)
-  if !ismissing(params.diapause_photoperiod)
+  if !ismissing(params.diapause_daylength)
     @info "Removing days when insect is in diapause"
     @time "Diapause" begin
 
@@ -524,11 +532,13 @@ function extract_results(doy::Int32, result::DataFrame)
 
   # Create data frame to hold results
   out_res = DataFrame(ID=result.ID[idx1], startDOY=doy, nGenerations=0.0, emergeDOY=0)
+  # out_res = DataFrame(ID=result.ID[idx1], startDOY=doy, nGenerations=0.0, emergeDOY=convert(Union{Missing,Int32},missing))
   out_res.north_idx = mod.(out_res.ID, 1000)
   out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
 
   # Count number of generations per year
-  startDOY = zeros(Int32, length(idx1)) .+ doy
+  startDOY = zeros(Union{Missing,Int32}, length(idx1)) .+ doy
+  # startDOY = Vector{Union{Missing,Int32}}(repeat([doy], length(idx1)))
   first_pass = true
 
   # Set startDOY to zero for a location if no more generations can be completed in the year
@@ -567,12 +577,14 @@ function extract_results(doy::Int32, result::DataFrame)
 
     # Reset starting DOY to zero
     startDOY = zeros(Int32, length(idx1))
+    # startDOY = Vector{Union{Missing,Int32}}(missing, length(idx1))
 
     # If a full gneration completed within the year, update starting doy
     startDOY[full_generation] .= result.emergeDOY[idx3[full_generation]] .+ 1
 
     # Remove startDOY >= 365
     startDOY[startDOY.>=365] .= 0
+    # startDOY[startDOY.>=365] .= missing
   end
 
 
