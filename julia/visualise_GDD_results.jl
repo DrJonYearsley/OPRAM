@@ -16,8 +16,8 @@ using JLD2
 # =================================================================================
 # Set parameters for the visualisation
 # If more than one year then take average across years
-speciesName = "pseudips_mexicanus"
-years = collect(1991)  # Either a single year or collect(year1:year2)
+speciesName = "ips_sexdentatus"
+years = collect(2018:2021)  # Either a single year or collect(year1:year2)
 thin = 1         # Spatial thining (thin=1 is 1km scale, thin=10 is 10km scale)
 doy::Int32 = 1   # Day of year development started
 save_figs = true  # If true save figures
@@ -194,7 +194,7 @@ function year_average(years::Union{Vector{Int64},Int64},
         for y in eachindex(years)
                 @info "Processing data for " * string(years[y])
 
-                fileName = "result_" * speciesName * string(years[y]) * "_par_thin" * string(thin) * ".jld2"
+                fileName = "result_" * speciesName * string(years[y]) * "_" * string(thin) * "km.jld2"
                 resultFile = joinpath([outDir, speciesName, fileName])
                 result = load(resultFile, "single_stored_object")
 
@@ -297,7 +297,7 @@ end
 @time d = year_average(years, outDir, thin, speciesName, doy, hectad)
 
 # Combine grid and results
-d2 = leftjoin(d, grid[:,[1,4,5,6]], on=:ID)
+d2 = leftjoin(d, grid[:,[1,4,5,6,8]], on=:ID)
 
 # Aggregate by hectad
 d3a = combine(groupby(d2, :hectad), [:nGen] .=> x -> quantile(x,0.95))
@@ -360,8 +360,8 @@ end
 
 # =================================================
 # Try plotting just hectads
-plot(d3.east_hectad+5000,
-     d3.north_hectad+5000,
+plot(d3.east_hectad.+5000.0,
+     d3.north_hectad.+5000.0,
         seriestype=:scatter,
         zcolor=d3.nGen_function,
         color=cgrad(:PiYG, categorical=false),

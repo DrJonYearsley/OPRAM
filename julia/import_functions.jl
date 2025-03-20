@@ -48,7 +48,7 @@ function import_species(speciesFile::String, speciesStr::String)
     # Can't find specie name in the parameter file
     @warn "Species " * speciesStr * " not found in species file" * speciesFile
     @info "Using default parameters"
-    return parameters(species_name="dummy",)
+    return parameters(species_name=missing,)
    
   elseif sum(species_idx) > 1
     @error "Multiple species found for " * speciesStr * " in file " * speciesFile *
@@ -57,10 +57,10 @@ function import_species(speciesFile::String, speciesStr::String)
   else
     # Use the values from the species parameter file
     return parameters(species_name=params.species[findfirst(species_idx)], 
-    base_temperature=params.baseline_temperature[findfirst(species_idx)], 
-    threshold=params.threshold[findfirst(species_idx)], 
-    diapause_daylength=params.diapause_daylength[findfirst(species_idx)], 
-    diapause_temperature=params.diapause_temperature[findfirst(species_idx)])
+                      base_temperature=params.baseline_temperature[findfirst(species_idx)], 
+                      threshold=params.threshold[findfirst(species_idx)], 
+                      diapause_daylength=params.diapause_daylength[findfirst(species_idx)], 
+                      diapause_temperature=params.diapause_temperature[findfirst(species_idx)])
   end
 
 end
