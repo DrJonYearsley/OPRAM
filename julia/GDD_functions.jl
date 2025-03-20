@@ -138,6 +138,142 @@ end
 
 # ------------------------------------------------------------------------------------------
 
+function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple, grid::DataFrame)
+  # Function to run the degree day model for a range of years and for a range of species
+  #
+  # Arguments:
+  #   run_params      a named tuple containing the parameters for the model
+  #   species_params  a named tuple containing the parameters for the species
+  #   paths           a named tuple containing the paths to the data
+  #   grid            the spatial grid to use for the model
+  #
+  # Output:
+  #   adult_emerge    a data frame containing the adult emergence dates
+  #                   Columns are: 
+  #                     ID         unique ID of spatial location, 
+  #                     DOY        starting day of year for development
+  #                     emergeDOY  day of year for adult emergence
+  #
+  # ====================================================================
+  # ====================================================================
+
+
+  # Specify the output directory using the species name
+  outPrefix = replace(lowercase(params.species_name), " " => "_")
+
+
+  # Make directory for the output prefix if one doesn't exist
+  if !isdir(joinpath(paths.outDir, outPrefix))
+    @info "Making directory " * outPrefix
+    mkpath(joinpath(paths.outDir, outPrefix))
+  end
+  paths.outDir = joinpath(paths.outDir, outPrefix)
+
+
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Start the main loop of the program
+  for y in eachindex(run_params.years)
+
+    # Import meteo data and calculate degree days
+    @info "Running model for year " * string(run_params.years[y])
+
+    @info "Importing meteo data"
+    Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params.maxYears)
+
+    # Remove grid points not in the meteo data
+    keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
+    grid_final = grid[keep_ID, :]
+
+    @info "Calculate GDD"
+    GDDsh, idx, locInd1, locInd2 = calculate_GDD_version2(Tavg, DOY, species_params)
+
+    # Calculate model at each location
+    @info "Calculating adult emergence dates"
+    # @everywhere thresh = convert(Float32, $params.threshold)
+    result = location_loop2(locInd1, locInd2, idx, GDDsh, species_params.threshold)
+
+    # Simplify the results and put them in a DataFrame
+    adult_emerge = cleanup_results(result, idx, grid_final.ID)
+
+
+    if run_params.saveJLDFile
+      @info "Saving the results to JLD2 file"
+      # Save using jld2 format
+      outFile = joinpath([paths.outDir, "result_" * outPrefix * string(run_params.years[y]) * "_" * string(run_params.thinFactor) * "km.jld2"])
+      save_object(outFile, adult_emerge)
+    end
+
+
+    # =========================================================
+    # =========================================================
+    # Create summary outputs
+    if run_params.saveSummaryCSV
+      @info "Creating 1km and 10km summary for specific starting dates"
+      # Obtain outputs for starting dates on the first of every month
+      dates = [Date(run_params.years[y], m, 01) for m in 1:12]
+
+      save_results_as_csv(dates, adult_emerge, grid_final, outPrefix, paths)
+    end
+
+  end
+end
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
+function save_results_as_csv(dates::Vector{Date}, adult_emerge::DataFrame, grid::DataFrame,
+  outPrefix::String, paths::NamedTuple)
+  # Function to take raw results and save them to a csv file for specific starting dates
+  #
+  # Arguments:
+  #   dates         a vector of starting dates to extract results for
+  #   adult_emerge  a data frame containing the adult emergence dates
+  #   grid          a data frame containing the spatial grid
+  #   outPrefix     a string to add to the start of the output file
+  #   paths         a named tuple containing the paths to the data
+  #
+  # Output:
+  #   Two csv files containing the adult emergence dates at 
+  #      the native spatial resolution
+  #      the 10km resolution
+  #
+  # ====================================================================
+  # ====================================================================
+
+  # Create output for specific days of year
+  output_1km = create_doy_results(adult_emerge, dates)
+
+  # Create 10km summary
+  output_10km = aggregate_to_hectad(output_1km, grid)
+
+  # Remove unwanted columns
+  select!(output_1km, Not([:east_idx, :north_idx, :east_hectad, :north_hectad, :startDOY, :emergeDOY]))
+  select!(output_10km, Not([:startDOY, :emergeDOY_min]))
+
+  # Add eastings and northings to 1km output
+  output_1km = rightjoin(grid[:, [:ID, :east, :north]], output_1km, on=:ID)
+
+  # Add bottom left eastings and northings to 10km output
+
+
+  @info "Saving the extracted results"
+  year = year(dates[1])
+
+  # Save using csv format
+  outFile1km = joinpath([paths.outDir, "result_startdates_" * outPrefix * string(year) * "_" * string(run_params.thinFactor) * "km.csv"])
+  CSV.write(outFile1km, output_1km)
+
+  outFile10km = joinpath([paths.outDir, "result_startdates_" * outPrefix * string(year) * "_10km.csv"])
+  CSV.write(outFile10km, output_10km)
+
+end
+
+
+# ------------------------------------------------------------------------------------------
+
 
 
 function location_loop!(locInd1::Vector{Int64}, locInd2::Vector{Int64}, result::SharedMatrix{Int16},
@@ -174,7 +310,7 @@ end
 
 
 
-function location_loop2(locInd1::Vector{Int64}, locInd2::Vector{Int64}, 
+function location_loop2(locInd1::Vector{Int64}, locInd2::Vector{Int64},
   idx::Vector{CartesianIndex{2}},
   GDD::SharedVector{Float32}, threshold::Float32)
   # Function to loop around locations and run development model emergence()
@@ -221,21 +357,17 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function prepare_data(grid_path::String, thin_factor::Int64, params::parameters, country::String)
+function prepare_data(grid_path::String, thin_factor::Int64, country::String)
   # Function to prepare the data for the degree day model
   #
   # Arguments:
   #   grid_path   path to the file containing the grid of locations
   #   thin_factor factor for thining spatial grid 
   #      (thin_factor = 10, every 10th grid point, i.e. 10km spacing)
-  #   params      parameters of the degree day model
+  #   country      the countrys to use (IE or NI)
   #
   # Output:
-  #   GDDsh       shared array of growing degree days (only giving days when 
-  #               GDD are accumulated)
-  #   idx         row, column indices of TRUE elements in gdd_update (where GDD accumulates)
-  #   locInd1     Start index in GDDsh for each spatial location
-  #   locInd2     End index in GDDsh for each spatial location
+  #   grid       dataframe of the locations of every grid square
   # *************************************************************
 
   # =========================================================
@@ -257,23 +389,10 @@ function prepare_data(grid_path::String, thin_factor::Int64, params::parameters,
   end
 
   # Thin the locations using the thinFactor
-  subset!(grid, :east => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8, :north => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8)
+  subset!(grid, :east => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8,
+    :north => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8)
 
-
-
-  # =========================================================
-  # =========================================================
-  # Calculate whether daylength allows diapause for each DOY and latitude
-  # Returns a matrix where rows are unique latitudes and columns are days of year
-  if !ismissing(params.diapause_daylength)
-    @info "Calculating DOY threshold for diapause"
-    diapause_minDOY = 150
-    diapauseDOY_threshold = photoperiod(grid.latitude, diapause_minDOY, params.diapause_daylength)
-  else
-    diapauseDOY_threshold = nothing
-  end
-
-  return grid, diapauseDOY_threshold
+  return grid
 end
 
 # ------------------------------------------------------------------------------------------
@@ -375,15 +494,13 @@ end
 
 
 
-function calculate_GDD_version2(Tavg::Matrix{Float32}, DOY::Vector{Int16},
-  params::parameters, diapauseDOY::Union{Vector{Int64},Nothing}=nothing)
+function calculate_GDD_version2(Tavg::Matrix{Float32}, DOY::Vector{Int16}, params::parameters)
   # Function to calculate growing degree days from meteo data for a range of years
   #
   # Arguments:
   #   Tavg        Temperature data
   #   DOY         Day of year corresponding to rows in Tavg
   #   params      parameters of the degree day model
-  #   diapauseDOY the day of year when diapause will start (nothing if no diapause)
   #
   # Output:
   #   GDDsh       shared array of growing degree days (only giving days when 
@@ -397,16 +514,24 @@ function calculate_GDD_version2(Tavg::Matrix{Float32}, DOY::Vector{Int16},
   # Calculate days where development updates (Tavg>baseline)
   gdd_update = Tavg .> params.base_temperature
 
+
+  # =========================================================
+  # =========================================================
   # Add in diapause (if necessary)
   if !ismissing(params.diapause_daylength)
     @info "Removing days when insect is in diapause"
     @time "Diapause" begin
+      # Create overwinteringBool
+      overwinterBool = falses(size(Tavg))  # True if overwintering 
+
+      # Calculate whether daylength allows diapause for each DOY and latitude
+      # Returns a matrix where rows are unique latitudes and columns are days of year
+      @info "Calculating DOY threshold for diapause"
+      diapause_minDOY = 150
+      diapauseDOY = photoperiod(grid.latitude, diapause_minDOY, params.diapause_daylength)
 
       # Find unique DOY in diapauseDOY
       uniqueDiapause = unique(diapauseDOY) # Unique DOY when diapause starts
-
-      # Create overwinteringBool
-      overwinterBool = falses(size(Tavg))  # True if overwintering 
 
       # Identify when diapuse will occur
       if ismissing(params.diapause_temperature)   # diapause determined only by photoperiod
@@ -432,6 +557,9 @@ function calculate_GDD_version2(Tavg::Matrix{Float32}, DOY::Vector{Int16},
       gdd_update[gdd_update.&&overwinterBool] .= false
     end
   end
+  # ================= End of diapause code ==================
+  # =========================================================
+
 
   # List ID's for all GDDs above the base temp
   idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
@@ -446,7 +574,6 @@ function calculate_GDD_version2(Tavg::Matrix{Float32}, DOY::Vector{Int16},
   locInd1 = vcat(1, locInd2[1:end-1] .+ 1)
 
   return GDDsh, idx, locInd1, locInd2
-
 end
 
 
@@ -466,24 +593,24 @@ function cleanup_results(result::SharedMatrix{Int16}, idx::Vector{CartesianIndex
   ###################################################################################
 
   # Index to remove rows that have emergeDOY<=0 
-  idxKeep1 = result[:,2] .> 0
+  idxKeep1 = result[:, 2] .> 0
 
   # Extract location index for every row in result (column coord in idx)
-  loc_idx = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  
+  loc_idx = [convert(Int32, idx[i][2]) for i in eachindex(idx)]
   # ID[loc_idx] will give the location's ID 
 
   # Index to remove rows where the final prediction at the same location 
   # doesn't change (they can be recalculated later)
-  idxKeep2 = (loc_idx[1:end-1] .!= loc_idx[2:end]) .|| 
-              (loc_idx[1:end-1] .== loc_idx[2:end] .&& 
-              result[1:end-1,2] .!= result[2:end,2])
+  idxKeep2 = (loc_idx[1:end-1] .!= loc_idx[2:end]) .||
+             (loc_idx[1:end-1] .== loc_idx[2:end] .&&
+              result[1:end-1, 2] .!= result[2:end, 2])
   push!(idxKeep2, true)    # Add a true value at the end
 
   # Remove all but the first result with DOY >= 365 (results only for 1 year)
   # Keep data with DOY<=365 or when DOY>365 and the previous result was less than 365
-  idxKeep3 = result[2:end, 1] .<= 365 .|| 
-            (loc_idx[1:end-1] .== loc_idx[2:end] .&& 
-            (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365) )
+  idxKeep3 = result[2:end, 1] .<= 365 .||
+             (loc_idx[1:end-1] .== loc_idx[2:end] .&&
+              (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
   pushfirst!(idxKeep3, true)    # Add a true value at the start
 
   # Combine all 3 indices together
@@ -492,8 +619,8 @@ function cleanup_results(result::SharedMatrix{Int16}, idx::Vector{CartesianIndex
 
   # Create a data frame, using real location ID (second element of meteo)
   return DataFrame(ID=ID[loc_idx[idxKeep]],
-                   DOY=result[idxKeep, 1],
-                   emergeDOY=result[idxKeep, 2])
+    DOY=result[idxKeep, 1],
+    emergeDOY=result[idxKeep, 2])
 
 end
 
@@ -553,7 +680,7 @@ function extract_results(doy::Int32, result::DataFrame)
     development_complete = startDOY .> 0 .&& idx2 .+ 1 .> idx3
 
     # Find out if development happens within the first year
-    if (idx3[end] == nrow(result) + 1)    
+    if (idx3[end] == nrow(result) + 1)
       # If final idx3 gives no developement (i.e. idx3[end] is nrow+1) then set its within_a_year to false
       within_a_year = result.emergeDOY[idx3[1:end-1]] .<= 365   # Is the generation complete within the year?
       push!(within_a_year, false)
@@ -574,7 +701,7 @@ function extract_results(doy::Int32, result::DataFrame)
                                                  (result.emergeDOY[idx3[partial_generation]] - startDOY[partial_generation])
 
     # If this is the first time through the loop, record the emergance day
-    if first_pass  
+    if first_pass
       # Only update adult emergence DOY if emergence is complete (but could take multiple years)   
       # out_res.emergeDOY[full_generation] .= result.emergeDOY[idx3[full_generation]]
       out_res.emergeDOY[development_complete] .= result.emergeDOY[idx3[development_complete]]
@@ -620,20 +747,20 @@ function create_doy_results(adult_emerge::DataFrame, dates::Vector{Date})
   ########################################################################
 
   out = DataFrame()    # Initialise dataframe for outputs
-  
+
   # Work out corresponding day of year for each date
   DOY = convert.(Int32, dayofyear.(dates))
-  
+
   for d in eachindex(DOY)
     # Produce results for a specific DOY
     result = extract_results(DOY[d], adult_emerge)
 
     # Add in a column with starting dates and emergence dates rather than DOY
-    result.startDate .= dates[d] 
+    result.startDate .= dates[d]
 
     result.emergeDate = Vector{Union{Missing,Date}}(missing, nrow(result))
     idx = result.emergeDOY .> 0
-    result.emergeDate[idx] = Date(year(dates[d])) .+ Day.(result.emergeDOY[idx].-1) 
+    result.emergeDate[idx] = Date(year(dates[d])) .+ Day.(result.emergeDOY[idx] .- 1)
 
     # Add these results to the other outputs
     append!(out, result)
