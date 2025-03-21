@@ -12,6 +12,9 @@ using CSV
 using Dates
 using Plots
 using JLD2
+using Distributed
+using SharedArrays
+
 
 # =================================================================================
 # Set parameters for the visualisation
@@ -47,8 +50,8 @@ elseif isdir("//users//jon//Desktop//OPRAM//")
         meteoDir_NI = "//users//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//"
 end
 
-
-
+include("import_functions.jl")
+include("GDD_functions.jl")
 
 
 # =================================================================================
@@ -59,102 +62,15 @@ coast = CSV.read(joinpath([dataDir, "coastline.csv"]), DataFrame,
 
 # =================================================================================
 # Import grid location data
-grid = CSV.read(joinpath([dataDir, "IE_grid_locations.csv"]), DataFrame,
+grid_df = CSV.read(joinpath([dataDir, "IE_grid_locations.csv"]), DataFrame,
         types=[Int, Int, Int, String,  Float64, Float64,String, String,String])
 
 # Calculate east and north of hectad bottom left corner
-grid.east_hectad = 10000.0 .* floor.(grid.east/10000)
-grid.north_hectad = 10000.0 .* floor.(grid.north/10000)
+grid_df.east_hectad = 10000.0 .* floor.(grid_df.east/10000)
+grid_df.north_hectad = 10000.0 .* floor.(grid_df.north/10000)
 
 # =================================================================================
 # Start of function definitions
-function extract_results(doy::Int32, result::DataFrame)
-        # Function to calculate number of generations per year, and first
-        # day of adult emergence based on a starting development on doy
-        #
-        #   doy    day of year when larval development begins
-        #   result data frame containing the results from the model
-        #  
-        #  Output:
-        #   a data frame with the following columns:
-        #       ID            unique ID for each soatial location        
-        #       emergeDOY     adult emergence day of year 
-        #       nGen          the number of generations within the year
-        #       east          index for eastings of the unique spatial locations in result
-        #       north         index for northings of the unique spatial location in result
-        ########################################################################
-
-        # Find start and end indicies for each location
-        # @time idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
-        # @time idx2 = [searchsortedlast(result.ID, loc) for loc in unique(result.ID)]
-        @time idx1 = indexin(unique(result.ID), result.ID)
-        @time idx2 = vcat(idx1[2:end] .- 1, length(result.ID))
-
-
-        # Create data frame to hold number of generations
-        out_res = DataFrame(ID=result.ID[idx1], nGen=0.0, emergeDOY=0)
-        out_res.north = mod.(out_res.ID, 1000)
-        out_res.east = div.((out_res.ID .- out_res.north), 1000)
-
-        # Count number of generations per year
-        startDOY = zeros(Int32, length(idx1)) .+ doy
-        first_pass = true
-
-        # Set startDOY to zero for a location if no more generations can be completed in the year
-        while any(startDOY .> 0)
-                # Find index of result that corresponds to desired day of year (ie doy>=result.DOY)
-                idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY[i]) - 1 + idx1[i] for i = eachindex(idx1)]
-
-                println(maximum(idx3))
-
-                # Find out if end of current developmental generation is in the results (i.e. occurs before data on next location)
-                development_complete = startDOY .> 0 .&& idx2 .+ 1 .> idx3
-
-                # Find out if development happens within the first year
-                if (idx3[end] == nrow(result) + 1)
-                        # If final entry resulted in no developement (i.e. index is nrow+1) then set within year to false
-                        within_a_year = result.emergeDOY[idx3[1:end-1]] .<= 365   # Is the generation complete within the year?
-                        push!(within_a_year, false)
-                else
-                        within_a_year = result.emergeDOY[idx3] .<= 365   # Is the generation complete within the year?
-                end
-
-                # Increment generations
-                full_generation = development_complete .& within_a_year
-                partial_generation = development_complete .& .!within_a_year
-
-                # Add on one full generation
-                out_res.nGen[full_generation] .+= 1
-
-                # Calculate end of year fraction of time towards next generation
-                out_res.nGen[partial_generation] .+= (365 .- startDOY[partial_generation]) ./
-                                                     (result.emergeDOY[idx3[partial_generation]] - startDOY[partial_generation])
-
-                # If this is the first time through the loop, record the emergance day
-                if first_pass
-                        out_res.emergeDOY[full_generation] .= result.emergeDOY[idx3[full_generation]]
-                        first_pass = false
-                end
-
-                # Reset starting DOY to zero
-                startDOY = zeros(Int32, length(idx1))
-
-                # If a full gneration completed within the year, update starting doy
-                startDOY[full_generation] .= result.emergeDOY[idx3[full_generation]] .+ 1
-
-                # Remove startDOY >= 365
-                startDOY[startDOY.>=365] .= 0
-
-                # println([sum(startDOY .> 0), maximum(result.emergeDOY[idx3])])
-        end
-
-
-        return (out_res)
-end
-
-
-
-# ============================================================
 
 
 
@@ -202,16 +118,16 @@ function year_average(years::Union{Vector{Int64},Int64},
                 d = extract_results(doy, result)
                 if y == 1
                         out = d
-                        out.nGenInt = floor.(d.nGen)
-                        out.N = ones(size(out.nGen))
-                        out.nGenSD = d.nGen .^ 2
+                        out.nGenInt = floor.(d.nGenerations)
+                        out.N = ones(size(out.nGenerations))
+                        out.nGenSD = d.nGenerations .^ 2
                         out.emergeSD = d.emergeDOY .^ 2
                 else
                         idx = indexin(d.ID, out.ID)    # Equate spatial IDs in d to spatial IDs in out
                         use = idx .!= nothing .&& d.emergeDOY .!= 0  # Ignore locations with emerge DOY of zero
-                        out.nGen[idx[use]] .+= d.nGen[use]
-                        out.nGenInt[idx[use]] += floor.(d.nGen[use])
-                        out.nGenSD[idx[use]] .+= d.nGen[use] .^ 2
+                        out.nGenerations[idx[use]] .+= d.nGenerations[use]
+                        out.nGenInt[idx[use]] += floor.(d.nGenerations[use])
+                        out.nGenSD[idx[use]] .+= d.nGenerations[use] .^ 2
                         out.emergeDOY[idx[use]] .+= d.emergeDOY[use]
                         out.emergeSD[idx[use]] .+= d.emergeDOY[use] .^ 2
                         out.N[idx[use]] .+= 1
@@ -219,13 +135,13 @@ function year_average(years::Union{Vector{Int64},Int64},
         end
 
         # Calculate average across the years
-        out.nGen = out.nGen ./ out.N
+        out.nGenerations = out.nGenerations ./ out.N
         out.nGenInt = out.nGenInt ./ out.N
         tmp = Float64.(out.emergeDOY)
         out.emergeDOY = tmp ./ out.N
 
         # Calculate standard deviation across years
-        out.nGenSD = (out.nGenSD ./ out.N - out.nGen .^ 2) .^ 0.5
+        out.nGenSD = (out.nGenSD ./ out.N - out.nGenerations .^ 2) .^ 0.5
         tmp = Float64.(out.emergeSD)
         out.emergeSD = (tmp ./ out.N - out.emergeDOY .^ 2) .^ 0.5
 
@@ -246,7 +162,7 @@ function plot_map(varStr::String,
         discrete=false,
         size=0.5)
 
-if coast==nothing
+if isnothing(coast)
         x=sort(unique(data.east))
         y=sort(unique(data.north))
 else
@@ -297,14 +213,14 @@ end
 @time d = year_average(years, outDir, thin, speciesName, doy, hectad)
 
 # Combine grid and results
-d2 = leftjoin(d, grid[:,[1,4,5,6,8]], on=:ID)
+d2 = leftjoin(d, grid_df[:,[1,2,3,4,5,6,8]], on=:ID)
 
 # Aggregate by hectad
-d3a = combine(groupby(d2, :hectad), [:nGen] .=> x -> quantile(x,0.95))
+d3a = combine(groupby(d2, :hectad), [:nGenerations] .=> x -> quantile(x,0.95))
 d3b = combine(groupby(d2, :hectad), [:emergeDOY] .=> x -> quantile(x,0.05))
 d3c = leftjoin(d3a, d3b, on=:hectad)
 
-d3 = leftjoin(d3c, grid, on=:hectad)
+d3 = leftjoin(d3c, grid_df, on=:hectad)
 
 
 
@@ -322,8 +238,8 @@ else
 end
 
 titleStr = "Emergence DOY (Start DOY = " * string(doy) * ",  " * year_label * ")"
-d_subset = d[d.emergeDOY.!=0,:]
-plot_map("emergeDOY", d_subset, coast, titleStr, :matter)
+d_subset = d2[d2.emergeDOY.!=0,:]
+plot_map("emergeDOY", d_subset, nothing, titleStr, :matter)
 # Save output from the last plot
 if save_figs
         savefig(speciesName * "_emergence_" * year_label * ".png")

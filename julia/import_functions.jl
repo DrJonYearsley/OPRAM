@@ -47,7 +47,7 @@ function import_species(speciesFile::String, speciesStr::String)
   if sum(species_idx) == 0
     # Can't find specie name in the parameter file
     @warn "Species " * speciesStr * " not found in species file" * speciesFile
-    @info "Using default parameters"
+    @info "!!!!!!! No parameters set for species " * speciesStr
     return parameters(species_name=missing,)
    
   elseif sum(species_idx) > 1
