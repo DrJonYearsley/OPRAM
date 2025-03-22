@@ -109,8 +109,8 @@ end
 # =========================================================
 
 # Include the functions to import the data and run the degree day model
-include("import_functions.jl")
-include("OPRAM_functions.jl")
+include("OPRAM_io_functions.jl")
+include("OPRAM_ddmodel_functions.jl")
 
 
 # =========================================================

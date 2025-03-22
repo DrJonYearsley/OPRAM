@@ -7,7 +7,7 @@ using JLD2;
 using DataFrames;
 using SharedArrays;
 
-include("GDD_functions.jl")  # Includes functions to import meteo data
+include("OPRAM_ddmodel_functions.jl")  # Includes functions to import meteo data
 
 
 years = collect(1971:1990)    # The years to import

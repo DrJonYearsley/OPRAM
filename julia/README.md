@@ -7,9 +7,10 @@ Other files:
 
 Filename  | Description
 ----------| --------------------------------
-GDD_model_parrallel.jl | The main file to start running the model
-GDD_functions.jl | The underlying functions for importing data and running the model
-species_params.jl | File containng predefined model parameters for species
+OPRAM_main_program.jl | The main file to start running the model
+OPRAM_ddmodel_functions.jl | The underlying functions for running the degree daymodel
+OPRAM_io_functions.jl | Functions to import/export data (meteo, grid and species data)
+species_params.jl | File containng predefined model parameters for species (deprecated)
 
 
 

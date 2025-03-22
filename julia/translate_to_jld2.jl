@@ -24,7 +24,7 @@ using GeoStats;
 using NetCDF;
 using SpecialFunctions;
 
-include("import_functions.jl")  # Includes functions to import meteo data
+include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 
 
 rcpList = ["26", "45", "85"];              # The RCP scenario (26 = RCP2.6, 45=RCP4.5, 85=RCP8.5)

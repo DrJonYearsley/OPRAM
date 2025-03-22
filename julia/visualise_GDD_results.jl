@@ -50,8 +50,8 @@ elseif isdir("//users//jon//Desktop//OPRAM//")
         meteoDir_NI = "//users//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//"
 end
 
-include("import_functions.jl")
-include("GDD_functions.jl")
+include("OPRAM_io_functions.jl")
+include("OPRAM_ddmodel_functions.jl")
 
 
 # =================================================================================
