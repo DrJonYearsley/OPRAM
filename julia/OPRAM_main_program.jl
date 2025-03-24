@@ -21,19 +21,18 @@
 # =============== Set parameter values =======================================================
 
 nNodes = 3;                         # Number of compute nodes to use (if in interactive)
-run_params = (years = 1991:2021,                   # Years to run model
+run_params = (years = 2020:2021,                   # Years to run model
               maxYears = 3,                        # Maximum number of years to complete insect development
               country = "IE",                      # Can be "IE", "NI" or "AllIreland"
               saveJLDFile = true,                  # If true save the full result to a JLD2 file
               saveSummaryCSV = true,               # If true save the specific results to a CSV file
-              thinFactor = 1)                      # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-
-              gridFile = "IE_grid_locations.csv";  # File containing a 1km grid of lats and longs over Ireland 
+              thinFactor = 1,                      # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+              gridFile = "IE_grid_locations.csv");  # File containing a 1km grid of lats and longs over Ireland 
               # (used for daylength calculations as well as importing and thining of meteo data)
               
 # Define species 
-species_setup = (speciesFile = "/users/jon/git_repos/OPRAM/data/species_parameter.csv",  # File containing species parameters
-                  speciesStr = ["sex", "typo"])  # A vector of strings to uniquely identify a species name in the speciesFile
+species_setup = (speciesFile = "/Users/jon/git_repos/OPRAM/data/species_parameters.csv",  # File containing species parameters
+                  speciesStr = ["sex"])  # A vector of strings to uniquely identify a species name in the speciesFile
 
 # Predefined species are:
 #  :agrilus_anxius
@@ -44,7 +43,6 @@ species_setup = (speciesFile = "/users/jon/git_repos/OPRAM/data/species_paramete
 #  :ips_typographus
 #  :leptinotarsa_decemlineata
 #  :oulema_melanopus
-#  :pseudips_mexicanus
 #  :spodoptera_frugiperda
 
 
@@ -115,20 +113,8 @@ include("OPRAM_ddmodel_functions.jl")
 
 # =========================================================
 # =========================================================
-
-# Set species parameters from the parameter file (can be more than one species)
-species_params = [import_species(species_setup.speciesFile, species_setup.speciesStr[s]) for s in eachindex(species_setup.speciesStr)]
-
-# =========================================================
-# =========================================================
-# Import location data and thin it using thinFactor
-grid = prepare_data(joinpath([paths.dataDir, gridFile]), run_params.thinFactor, run_params.country);
-
-
-# =========================================================
-# =========================================================
 # Start the main loop of the program
-@time "OPRAM model run complete:" run_model(run_params, species_params, paths, grid)
+@time "OPRAM model run complete:" run_model(run_params, species_setup, paths)
 
 
 # =========================================================

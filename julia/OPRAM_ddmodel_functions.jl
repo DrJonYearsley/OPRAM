@@ -1,8 +1,9 @@
-# GDD_finctions.jl
+# OPRAM_ddmodel_functions.jl
 # A file containing the functions to run the degree day development models
 # on Met Eireann daily temperature data
 #
 # This file contains the following functions
+# function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::NamedTuple)
 # function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32})
 # function emergence(cumGDD::Vector{Float32}, cumGDD_doy::Vector{Int16}, threshold::Float32)
 # function location_loop(locInd1::Vector{Int64}, locInd2::Vector{Int64}, result::SharedMatrix{Int16}, 
@@ -20,6 +21,114 @@
 
 # =========================================================
 # ============= Defne functions ===========================
+
+
+function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::NamedTuple)
+  # Function to run the degree day model for a range of years and for a range of species
+  #
+  # Arguments:
+  #   run_params      a named tuple containing the parameters for the model
+  #   species_setup   a named tuple containing the parameters for the species
+  #   paths           a named tuple containing the paths to the data
+  #
+  # Output:
+  #   a data frame containing the adult emergence dates that is saved in JLD2 format
+  #                   Columns are: 
+  #                     ID         unique ID of spatial location, 
+  #                     DOY        starting day of year for development
+  #                     emergeDOY  day of year for adult emergence
+  #
+  #   two CSV files containing the adult emergence dates at specific starting dates
+  #
+  # ====================================================================
+  # ====================================================================
+
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Set species parameters from the parameter file (can be more than one species)
+  species_params = [import_species(species_setup.speciesFile, species_setup.speciesStr[s]) for s in eachindex(species_setup.speciesStr)]
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Import location data and thin it using thinFactor
+  grid = prepare_data(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
+
+
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Start the main loop of the program
+  for y in eachindex(run_params.years)
+
+    # Import meteo data and calculate degree days
+    @info "======Running model for year " * string(run_params.years[y]) * "============="
+
+    @info "Importing " * string(run_params.maxYears) * " years of meteo data, starting at year " * string(run_params.years[y])
+    Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params.maxYears)
+
+    # Remove grid points not in the meteo data
+    keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
+    grid_final = grid[keep_ID, :]
+
+    # Loop through all the species
+    for s in eachindex(species_params)
+      if ismissing(species_params[s].species_name)
+        @warn "Skipping an undefined species"
+      else
+        @info "\n#######  Running model for species " * species_params[s].species_name * " #######"
+
+
+        @info "        Calculate GDD"
+        GDDsh, idx, locInd1, locInd2 = calculate_GDD_version2(Tavg, grid_final, DOY, species_params[s])
+
+        # Calculate model at each location
+        @info "        Calculating adult emergence dates"
+        # @everywhere thresh = convert(Float32, $params.threshold)
+        result = location_loop2(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
+
+        # Simplify the results and put them in a DataFrame
+        adult_emerge = cleanup_results(result, idx, grid_final.ID)
+
+        # Specify the output directory using the species name
+        outPrefix = replace(lowercase(species_params[s].species_name), " " => "_")
+
+        # Make directory for the output prefix if one doesn't exist
+        if !isdir(joinpath(paths.outDir, outPrefix))
+          @info "        Making directory " * outPrefix
+          mkpath(joinpath(paths.outDir, outPrefix))
+        end
+
+        if run_params.saveJLDFile
+          @info "        Saving the results to JLD2 file"
+          # Save using jld2 format
+          outFile = joinpath([paths.outDir, outPrefix,
+            "result_"  * run_params.country * "_" * outPrefix * "_" * string(run_params.years[y]) * "_" * string(run_params.thinFactor) * "km.jld2"])
+          save_object(outFile, adult_emerge)
+        end
+
+
+        # =========================================================
+        # =========================================================
+        # Create summary outputs
+        if run_params.saveSummaryCSV
+          @info "        Creating 1km and 10km summary for specific starting dates"
+          # Starting dates for output in CSV files
+          # The first of every month
+          dates = [Date(run_params.years[y], m, 01) for m in 1:12]
+
+
+          save_to_csv(dates, adult_emerge, grid_final, outPrefix, paths, run_params)
+        end
+      end
+    end
+    println(" ")    # Print a blank line
+  end
+end
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
 
 function photoperiod2(latitude::Vector{Float64}, DOY::Vector{Int16}, threshold)
   # Calculate daylength in hours using the algorithm from the R package geosphere
@@ -137,104 +246,6 @@ end
 
 
 # ------------------------------------------------------------------------------------------
-
-function run_model(run_params::NamedTuple, species_params::Vector{parameters}, paths::NamedTuple, grid::DataFrame)
-  # Function to run the degree day model for a range of years and for a range of species
-  #
-  # Arguments:
-  #   run_params      a named tuple containing the parameters for the model
-  #   species_params  a named tuple containing the parameters for the species
-  #   paths           a named tuple containing the paths to the data
-  #   grid            the spatial grid to use for the model
-  #
-  # Output:
-  #   adult_emerge    a data frame containing the adult emergence dates
-  #                   Columns are: 
-  #                     ID         unique ID of spatial location, 
-  #                     DOY        starting day of year for development
-  #                     emergeDOY  day of year for adult emergence
-  #
-  # ====================================================================
-  # ====================================================================
-
-
-
-
-
-  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  # Start the main loop of the program
-  for y in eachindex(run_params.years)
-
-    # Import meteo data and calculate degree days
-    @info "======Running model for year " * string(run_params.years[y]) * "============="
-
-    @info "Importing " * string(run_params.maxYears) * " years of meteo data, starting at year " * string(run_params.years[y])
-    Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params.maxYears)
-
-    # Remove grid points not in the meteo data
-    keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
-    grid_final = grid[keep_ID, :]
-
-    # Loop through all the species
-    for s in eachindex(species_params)
-      if ismissing(species_params[s].species_name)
-        @warn "Skipping an undefined species"
-      else
-        @info "\n#######  Running model for species " * species_params[s].species_name * " #######"
-
-
-        @info "        Calculate GDD"
-        GDDsh, idx, locInd1, locInd2 = calculate_GDD_version2(Tavg, grid_final, DOY, species_params[s])
-
-        # Calculate model at each location
-        @info "        Calculating adult emergence dates"
-        # @everywhere thresh = convert(Float32, $params.threshold)
-        result = location_loop2(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
-
-        # Simplify the results and put them in a DataFrame
-        adult_emerge = cleanup_results(result, idx, grid_final.ID)
-
-        # Specify the output directory using the species name
-        outPrefix = replace(lowercase(species_params[s].species_name), " " => "_")
-
-        # Make directory for the output prefix if one doesn't exist
-        if !isdir(joinpath(paths.outDir, outPrefix))
-          @info "        Making directory " * outPrefix
-          mkpath(joinpath(paths.outDir, outPrefix))
-        end
-
-        if run_params.saveJLDFile
-          @info "        Saving the results to JLD2 file"
-          # Save using jld2 format
-          outFile = joinpath([paths.outDir, outPrefix,
-            "result_" * outPrefix * "_" * string(run_params.years[y]) * "_" * string(run_params.thinFactor) * "km.jld2"])
-          save_object(outFile, adult_emerge)
-        end
-
-
-        # =========================================================
-        # =========================================================
-        # Create summary outputs
-        if run_params.saveSummaryCSV
-          @info "        Creating 1km and 10km summary for specific starting dates"
-          # Starting dates for output in CSV files
-          # The first of every month
-          dates = [Date(run_params.years[y], m, 01) for m in 1:12]
-
-
-          save_to_csv(dates, adult_emerge, grid_final, outPrefix, paths, run_params)
-        end
-      end
-    end
-    println(" ")    # Print a blank line
-  end
-end
-
-
-
-
-# ------------------------------------------------------------------------------------------
-
 function save_to_csv(dates::Vector{Date}, adult_emerge::DataFrame, grid::DataFrame,
   outPrefix::String, paths::NamedTuple, run_params::NamedTuple)
   # Function to take raw results and save them to a csv file for specific starting dates
@@ -281,11 +292,11 @@ function save_to_csv(dates::Vector{Date}, adult_emerge::DataFrame, grid::DataFra
 
   # Save using csv format
   outFile1km = joinpath([paths.outDir, outPrefix,
-    "result_startdates_" * outPrefix * "_" * yearStr * "_" * string(run_params.thinFactor) * "km.csv"])
+    "result_" * run_params.country * "_" * outPrefix * "_" * yearStr * "_" * string(run_params.thinFactor) * "km.csv"])
   CSV.write(outFile1km, output_1km, missingstring="NA")
 
   outFile10km = joinpath([paths.outDir, outPrefix,
-    "result_startdates_" * outPrefix * "_" * yearStr * "_10km.csv"])
+    "result_" * run_params.country * "_" * outPrefix * "_" * yearStr * "_10km.csv"])
   CSV.write(outFile10km, output_10km, missingstring="NA")
 
 end
