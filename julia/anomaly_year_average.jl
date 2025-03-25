@@ -70,7 +70,7 @@ d = DataFrame()
 
 for y in eachindex(run_params.years)
     # Get the correct filename
-    inFile = filter(x -> occursin(r"result_[a-z]*_" * run_params.speciesName * "_" * string(run_params.years[y]) * "_1km.csv", x),
+    inFile = filter(x -> occursin(r"result_[A-Z]{2}_" * run_params.speciesName * "_" * string(run_params.years[y]) * "_1km.csv", x),
         readdir(joinpath(paths.outDir, run_params.speciesName)))
 
     @info "Importing data for year $(run_params.years[y])"

@@ -21,7 +21,7 @@
 # =============== Set parameter values =======================================================
 
 nNodes = 3;                         # Number of compute nodes to use (if in interactive)
-run_params = (years = 2020:2021,                   # Years to run model
+run_params = (years = 1991:2021,                   # Years to run model
               maxYears = 3,                        # Maximum number of years to complete insect development
               country = "IE",                      # Can be "IE", "NI" or "AllIreland"
               saveJLDFile = true,                  # If true save the full result to a JLD2 file
@@ -31,7 +31,7 @@ run_params = (years = 2020:2021,                   # Years to run model
               # (used for daylength calculations as well as importing and thining of meteo data)
               
 # Define species 
-species_setup = (speciesFile = "/Users/jon/git_repos/OPRAM/data/species_parameters.csv",  # File containing species parameters
+species_setup = (speciesFile = joinpath(homedir(),"git_repos/OPRAM/data/species_parameters.csv"),  # File containing species parameters
                   speciesStr = ["sex"])  # A vector of strings to uniquely identify a species name in the speciesFile
 
 # Predefined species are:
@@ -55,23 +55,23 @@ species_setup = (speciesFile = "/Users/jon/git_repos/OPRAM/data/species_paramete
 # Set meteoDir to nothing to stop importing these data
 #    e.g. meteoDir_NI = nothing
 
-if isdir("//home//jon//Desktop//OPRAM")       # Linux workstation
-  paths = (outDir="//home//jon//Desktop//OPRAM//results//",
-    dataDir="//home//jon//DATA//OPRAM//",
-    meteoDir_IE="//home//jon//DATA//OPRAM//Climate_JLD2",
-    meteoDir_NI="//home//jon//DATA//OPRAM//Climate_JLD2")
+if isdir(joinpath(homedir(),"Desktop//OPRAM"))       # Linux workstation
+  paths = (outDir=joinpath(homedir(),"Desktop//OPRAM//results//"),
+    dataDir=joinpath(homedir(),"DATA//OPRAM//"),
+    meteoDir_IE=joinpath(homedir(),"DATA//OPRAM//Climate_JLD2"),
+    meteoDir_NI=nothing)
 
-elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")   # Mac
-  paths = (outDir="//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//results//",
-    dataDir="//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//",
-    meteoDir_IE="//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2",
+elseif isdir(joinpath(homedir(),"/Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
+  paths = (outDir=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//results//"),
+    dataDir=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"),
+    meteoDir_IE=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"),
     meteoDir_NI=nothing)
 
 elseif isdir("//users//jon//Desktop//OPRAM//")
   paths = (outDir="//users//jon//Desktop//OPRAM//results//",
     dataDir="//users//jon//Desktop//OPRAM//",
     meteoDir_IE="//users//jon//Desktop//OPRAM//Irish_Climate_Data//",
-    meteoDir_NI="//users//jon//Desktop//OPRAM//Northern_Ireland_Climate_Data//")
+    meteoDir_NI=nothing)
 end
 
 # =============== End of parameter setup =====================================================
