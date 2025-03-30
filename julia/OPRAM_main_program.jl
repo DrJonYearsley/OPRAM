@@ -25,14 +25,22 @@ run_params = (years = 1991:2021,                   # Years to run model
               maxYears = 3,                        # Maximum number of years to complete insect development
               country = "IE",                      # Can be "IE", "NI" or "AllIreland"
               saveJLDFile = true,                  # If true save the full result to a JLD2 file
-              saveSummaryCSV = true,               # If true save the specific results to a CSV file
+              saveSummaryCSV = false,               # If true save the specific results to a CSV file
               thinFactor = 1,                      # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
               gridFile = "IE_grid_locations.csv");  # File containing a 1km grid of lats and longs over Ireland 
               # (used for daylength calculations as well as importing and thining of meteo data)
               
-# Define species 
+# Define species (predefined)
 species_setup = (speciesFile = joinpath(homedir(),"git_repos/OPRAM/data/species_parameters.csv"),  # File containing species parameters
-                  speciesStr = ["sex"])  # A vector of strings to uniquely identify a species name in the speciesFile
+                  speciesStr = ["frugiperda", "duplicatus", "cembrae", "decemlineata", " halys", "typo"])  # A vector of strings to uniquely identify a species name in the speciesFile
+
+# User defined options
+species_setup = (speciesFile = joinpath(homedir(),"git_repos/OPRAM/data/userdefined_parameters.csv"),  # File containing species parameters
+                  speciesStr = ["base0_thresh200", "base5_thresh200", "base10_thresh200", "base15_thresh200",
+                  "base0_thresh400", "base5_thresh400", "base10_thresh400", "base15_thresh400",
+                  "base0_thresh600", "base5_thresh600", "base10_thresh600", "base15_thresh600",
+                  "base0_thresh800", "base5_thresh800", "base10_thresh800", "base15_thresh800",
+                  "base0_thresh1000", "base5_thresh1000", "base10_thresh1000", "base15_thresh1000"])  # A vector of strings to uniquely identify a species name in the speciesFile
 
 # Predefined species are:
 #  :agrilus_anxius
@@ -55,22 +63,22 @@ species_setup = (speciesFile = joinpath(homedir(),"git_repos/OPRAM/data/species_
 # Set meteoDir to nothing to stop importing these data
 #    e.g. meteoDir_NI = nothing
 
-if isdir(joinpath(homedir(),"Desktop//OPRAM"))       # Linux workstation
+if isdir(joinpath(homedir(),"DATA//OPRAM"))       # Linux workstation
   paths = (outDir=joinpath(homedir(),"Desktop//OPRAM//results//"),
     dataDir=joinpath(homedir(),"DATA//OPRAM//"),
     meteoDir_IE=joinpath(homedir(),"DATA//OPRAM//Climate_JLD2"),
     meteoDir_NI=nothing)
 
-elseif isdir(joinpath(homedir(),"/Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
+elseif isdir(joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
   paths = (outDir=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//results//"),
     dataDir=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"),
     meteoDir_IE=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"),
     meteoDir_NI=nothing)
 
-elseif isdir("//users//jon//Desktop//OPRAM//")
-  paths = (outDir="//users//jon//Desktop//OPRAM//results//",
-    dataDir="//users//jon//Desktop//OPRAM//",
-    meteoDir_IE="//users//jon//Desktop//OPRAM//Irish_Climate_Data//",
+elseif isdir(joinpath(homedir(),"Desktop//OPRAM//"))
+  paths = (outDir=joinpath(homedir(),"Desktop//OPRAM//results//"),
+    dataDir=joinpath(homedir(),"Desktop//OPRAM//"),
+    meteoDir_IE=joinpath(homedir(),"Desktop//OPRAM//Irish_Climate_Data//"),
     meteoDir_NI=nothing)
 end
 
