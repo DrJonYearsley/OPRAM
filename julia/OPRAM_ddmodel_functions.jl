@@ -116,6 +116,13 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
 
           save_to_csv(dates, adult_emerge, grid_final, outPrefix, paths, run_params)
         end
+
+        # Clear memory of model results before starting next species
+        # NOTE: Don't clear the CLimate data because it will be reused
+        adult_emerge = nothing
+        result = nothing
+        @everywhere GDDsh = nothing   # Make sure the shared array is cleared everywhere
+        @everywhere GC.gc()           # Clean up memory (this call may not be needed)
       end
     end
     println(" ")    # Print a blank line

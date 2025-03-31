@@ -21,7 +21,7 @@
 # =============== Set parameter values =======================================================
 
 nNodes = 3;                         # Number of compute nodes to use (if in interactive)
-run_params = (years = 1991:2021,                   # Years to run model
+run_params = (years = 2000:2021,                   # Years to run model
               maxYears = 3,                        # Maximum number of years to complete insect development
               country = "IE",                      # Can be "IE", "NI" or "AllIreland"
               saveJLDFile = true,                  # If true save the full result to a JLD2 file
@@ -41,6 +41,9 @@ species_setup = (speciesFile = joinpath(homedir(),"git_repos/OPRAM/data/userdefi
                   "base0_thresh600", "base5_thresh600", "base10_thresh600", "base15_thresh600",
                   "base0_thresh800", "base5_thresh800", "base10_thresh800", "base15_thresh800",
                   "base0_thresh1000", "base5_thresh1000", "base10_thresh1000", "base15_thresh1000"])  # A vector of strings to uniquely identify a species name in the speciesFile
+
+species_setup = (speciesFile = joinpath(homedir(),"git_repos/OPRAM/data/userdefined_parameters.csv"),  # File containing species parameters
+                  speciesStr = ["base0_thresh200"])
 
 # Predefined species are:
 #  :agrilus_anxius
