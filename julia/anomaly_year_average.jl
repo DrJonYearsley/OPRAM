@@ -29,7 +29,9 @@ using SharedArrays
 # =================================================================================
 # Set parameters for the visualisation
 # If more than one year then take average across years
-run_params = (speciesName="sex",      # Name of the species
+# "frugiperda", "duplicatus", "cembrae", "sexdentatus"
+
+run_params = (speciesName="base10_thresh200",      # Name of the species
     years=1991:2020,                    # Either a single year or collect(year1:year2)
     maxYears = 3,                       # Maximum number of years to complete insect development (must correspond to simulation value)
     country="IE",                       # Country code (IE or NI)
@@ -90,6 +92,8 @@ include("OPRAM_ddmodel_functions.jl");
 speciesName = filter(x -> occursin(r""*run_params.speciesName, x), readdir(paths.outDir))
 if length(speciesName)>1
     @error "More than one species name found"
+elseif length(speciesName)==0
+    @error "Species not found"
 end
 
 dVec = Vector{DataFrame}(undef, length(run_params.years))
@@ -327,7 +331,7 @@ using CSV
 using Plots
 using DataFrames
 
-d_agg = CSV.read(joinpath(paths.outDir,"ips_sexdentatus","average_ips_sexdentatus_1991_2020_1km.csv"), 
+d_agg = CSV.read(joinpath(paths.outDir,speciesName[1],"average_" * speciesName[1] * "_" * string(minimum(run_params.years)) * "_" * string(maximum(run_params.years)) * "_1km.csv"), 
         DataFrame, missingstring="NA")
 
 # Pick a starting month
@@ -372,7 +376,7 @@ plot(d_agg.east[idx2],
     d_agg.north[idx2],
     zcolor=d_agg.emergeDOY_median[idx2],
     seriestype=:scatter,
-    colormap=cgrad(:managua,[0,(366-colorRange[1])/(colorRange[2]-colorRange[1]),1], rev=true),
+    colormap=cgrad(:managua,[0,(366-colorRange[1])/(colorRange[2]-colorRange[1]),1], rev=false),
     clims=colorRange,
     markersize=0.5,
     markerstrokewidth=0,
