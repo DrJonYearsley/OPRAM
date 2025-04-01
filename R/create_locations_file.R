@@ -209,3 +209,17 @@ write.csv(df_final,
 
 
 table(locations$county)
+
+
+# =============================================================================
+# Write a hectad file --------------------
+# This file contains all unique hectads and the coordinates for the bottom left corner
+d_hectads = aggregate(cbind(east,north)~hectad, 
+                      data=d_final, 
+                      FUN=function(x){floor(min(x,na.rm=TRUE)/1e4)*1e4})
+
+
+
+# Add in lat long
+hectad_lonlat = convert_to_lonlat(d_hectads)
+
