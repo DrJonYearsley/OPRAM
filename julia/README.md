@@ -1,8 +1,7 @@
 This directory contains the Julia version of the degree day models
 
-The primary file to run the model is GDD_model_parrallel.jl
+The primary file to run the model is OPRAM_main_program.jl
 
-Other files:
 
 
 Filename  | Description
@@ -10,7 +9,6 @@ Filename  | Description
 OPRAM_main_program.jl | The main file to start running the model
 OPRAM_ddmodel_functions.jl | The underlying functions for running the degree daymodel
 OPRAM_io_functions.jl | Functions to import/export data (meteo, grid and species data)
-species_params.jl | File containng predefined model parameters for species (deprecated)
 
 
 
