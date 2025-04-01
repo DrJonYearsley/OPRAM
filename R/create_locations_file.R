@@ -27,7 +27,8 @@ NI_Dir = "Northern_Ireland_Climate_Data/NI_TX_daily_grid/"
 IE_Dir = "Irish Climate Data/maxtemp_grids/"
 
 # Output filename
-fileout = "IE_grid_locations_test.csv"
+fileout_1km = "IE_grid_locations_test.csv"
+fileout_10km = "IE_hectad_locations.csv"
 
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -203,7 +204,7 @@ ggplot(data=df_final,
 
 
 write.csv(df_final, 
-          file = file.path(dataDir, fileout),
+          file = file.path(dataDir, fileout_1km),
           quote=FALSE,
           row.names = FALSE)
 
@@ -214,12 +215,26 @@ table(locations$county)
 # =============================================================================
 # Write a hectad file --------------------
 # This file contains all unique hectads and the coordinates for the bottom left corner
-d_hectads = aggregate(cbind(east,north)~hectad, 
-                      data=d_final, 
+df_hectads = aggregate(cbind(east,north)~hectad, 
+                      data=df_final, 
                       FUN=function(x){floor(min(x,na.rm=TRUE)/1e4)*1e4})
 
 
 
 # Add in lat long
-hectad_lonlat = convert_to_lonlat(d_hectads)
+hectad_lonlat = convert_to_lonlat(df_hectads)
 
+df_hectads$longitude = hectad_lonlat[,"longitude"]
+df_hectads$latitude = hectad_lonlat[,"latitude"]
+
+ggplot(data=df_hectads,
+       aes(x=east,
+           y=north)) + 
+  geom_point() + 
+  coord_equal()
+
+
+write.csv(df_hectads, 
+          file = file.path(dataDir, fileout_10km),
+          quote=FALSE,
+          row.names = FALSE)
