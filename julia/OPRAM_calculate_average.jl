@@ -29,7 +29,7 @@ using SharedArrays
 # If more than one year then take average across years
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
-run_params = (speciesName="spodoptera_frugiperda",      # Name of the species
+run_params = (speciesName="agrilus_anxius",      # Name of the species
     years=1991:2020,                    # the years collect(year1:year2)
     maxYears = 3,                       # Maximum number of years to complete insect development (must correspond to simulation value)
     country="IE",                       # Country code (IE or NI)

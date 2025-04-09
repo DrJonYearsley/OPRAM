@@ -32,9 +32,9 @@ using SharedArrays
 # If more than one year then take average across years
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
-run_params = (speciesName="spodoptera_frugiperda",      # Name of the species
-    years=1991,                    # Either a single year or collect(year1:year2)
-    maxYears=3,                       # Maximum number of years to complete insect development (must correspond to simulation value)
+run_params = (speciesName="agrilus_anxius",      # Name of the species
+    years=collect(1991:2023),                         # Either a single year or collect(year1:year2)
+    maxYears=1,                         # Maximum number of years to complete insect development (must correspond to simulation value)
     country="IE",                       # Country code (IE or NI)
     thinFactor=1,                       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
     gridFile="IE_grid_locations.csv",   # File containing a 1km grid of lats and longs over Ireland 
@@ -156,7 +156,7 @@ d_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
 @info "Calculating anomalies"
 
 # Combine origninal data frame with 30 year average
-leftjoin!(df_1km, d_agg, on=[:ID, :startMonth])
+tmp = leftjoin(df_1km, d_agg, on=[:ID, :startMonth])
 
 # Calculate anomalies
 transform!(df_1km, [:nGenerations, :nGenerations_median] => ((a, b) -> a .- b) => :nGenerations_anomaly)
@@ -171,7 +171,7 @@ transform!(df_1km, [:emergeDOY, :emergeDOY_median] => ((a, b) -> a .- b) => :eme
 
 
 # Remove unwanted variables
-out_10km = select(df_1km, Not([:startMonth, :emergeDOY, :emergeDOY_median]))
+out_1km = select(df_1km, Not([:startMonth, :emergeDOY, :emergeDOY_median]))
 
 
 # Round number of generations
@@ -186,7 +186,7 @@ fileout1 = joinpath(paths.outDir, speciesName[1], "combined_" * speciesName[1] *
                                                   string(minimum(run_params.years)) * "_" * string(maximum(run_params.years)) * "_" * string(run_params.thinFactor) * "km.csv")
 CSV.write(fileout1, out_1km, missingstring="NA")
 
-out_10km = nothing
+out_1km = nothing  # Erase out_1km
 
 # =========================================================
 # =========================================================
