@@ -104,6 +104,7 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
 
 
 
+  # ====================================================================
   # Import the weather data
 
   # ROI data
@@ -128,6 +129,10 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
     Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDirs[2], grid_thin, years);
     end
   end
+
+
+  # =========================================================================================
+  # Sort and clean the data
 
   if isnothing(meteoDirs[2])
     # Order meteo data by location ID in grid_thin
@@ -256,6 +261,18 @@ function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgr
   #                      (length equals number of columns temp matrix)
   #
   # *************************************************************
+
+
+  # Check RCP and period Arguments
+  if isnothing(indexin(rcp,["2.6","4.5","8.5"]))
+    @error "RCP must be one of: '2.6', '4.5' or '8.5'"
+  end
+
+  if isnothing(indexin(period,["2021-2055", "2041-2070"]))
+    @error "Period must be one of: '2021-2055', '2041-2070'"
+  end
+
+
 
 
   # Get the correct filename
@@ -428,13 +445,14 @@ end
 
 
 
-function read_grid(gridFilePath::String, thinFactor::Int)
-# Import the grid of locations and thin it using a thinning factor
+function read_grid(gridFilePath::String, thinFactor::Int, countryStr::String="IE")
+# Import the grid of locations and thin it using a thinning factor and the country of interest
 # 
 # Arguments:
 #   dataDir     the directory containing the grid data
 #   gridFile    the name of the file containing the grid data
-#   grid_thin   the thinning factor to use
+#   grid_thin   the thinning factor to use (default=1_)
+#   countryStr  one of "IE", "NI", "AllIreland" (default="IE")
 #
 # Output:
 #   A DataFrame containing the grid of locations
@@ -447,7 +465,7 @@ grid = CSV.read(gridFilePath, DataFrame);
 grid = grid[sortperm(grid.ID), :];
 
 # Thin the locations  using the thinFactor
-thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(grid.north, (thinFactor * 1e3)) .< 1e-8);
+thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(grid.north, (thinFactor * 1e3)) .< 1e-8 .&& country.==countryStr);
 
 
   return grid[thinInd, :]
