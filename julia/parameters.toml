@@ -17,7 +17,7 @@ species_defs = "git_repos/OPRAM/data/species_parameters.csv"
 gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 
 [model]
-simYears = 1991:2021 # Years to run model
+#simYears = 1991:2021 # Years to run model
 maxYears = 3         # Maximum number of years to complete insect development
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
