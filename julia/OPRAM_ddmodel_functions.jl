@@ -4,11 +4,12 @@
 #
 # This file contains the following functions
 # function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::NamedTuple)
-# function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32})
-# function emergence(cumGDD::Vector{Float32}, cumGDD_doy::Vector{Int16}, threshold::Float32)
-# function location_loop(locInd1::Vector{Int64}, locInd2::Vector{Int64}, result::SharedMatrix{Int16}, 
+# function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, paths::NamedTuple)
+# function location_loop(locInd1::Vector{Int64}, locInd2::Vector{Int64},idx::Vector{CartesianIndex{2}}, 
 #                        GDD::SharedVector{Float32}, threshold::Float32)
-# function calculate_GDD(year::Int64, params::NamedTuple, grid_thin::DataFrame, meteoDirs::Vector, maxYears::Int)
+# function emergence(cumGDD::Vector{Float32}, cumGDD_doy::Vector{Int16}, threshold::Float32)
+# function calculate_GDD(Tavg::Matrix{Float32}, grid::DataFrame, DOY::Vector{Int16}, params::parameters)
+# function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32})
 # function extract_results(doy::Int32, result::DataFrame)
 # function create_doy_results(adult_emerge::DataFrame, DOY::Vector{Int32})
 # function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
@@ -77,11 +78,11 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
 
 
         @info "        Calculate GDD"
-        GDDsh, idx, locInd1, locInd2 = calculate_GDD_version2(Tavg, grid_final, DOY, species_params[s])
+        GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
 
         # Calculate model at each location
         @info "        Calculating adult emergence dates"
-        result = location_loop2(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
+        result = location_loop(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
 
         # Simplify the results and put them in a DataFrame
         adult_emerge = cleanup_results(result, idx, grid_final.ID)
@@ -104,18 +105,18 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
         end
 
 
-        # =========================================================
-        # =========================================================
-        # Create summary outputs
-        if run_params.saveSummaryCSV
-          @info "        Creating 1km CSV summary for specific starting dates"
-          # Starting dates for output in CSV files
-          # The first of every month
-          dates = [Date(run_params.years[y], m, 01) for m in 1:12]
+        # # =========================================================
+        # # =========================================================
+        # # Create summary outputs
+        # if run_params.saveSummaryCSV
+        #   @info "        Creating 1km CSV summary for specific starting dates"
+        #   # Starting dates for output in CSV files
+        #   # The first of every month
+        #   dates = [Date(run_params.years[y], m, 01) for m in 1:12]
 
 
-          save_to_csv(dates, adult_emerge, grid_final, outPrefix, paths, run_params)
-        end
+        #   save_to_csv(dates, adult_emerge, grid_final, outPrefix, paths, run_params)
+        # end
 
         # Clear memory of model results before starting next species
         # NOTE: Don't clear the CLimate data because it will be reused
@@ -137,7 +138,137 @@ end
 
 
 
-function location_loop2(locInd1::Vector{Int64}, locInd2::Vector{Int64},
+function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, paths::NamedTuple)
+  # Function to run the degree day model for a range of future climate predictions and for a range of species
+  #
+  # The differences to run_model are:
+  #      + imports data from the TRANSLATE project which gives mean and standard deviation of daily temps
+  #      + generates many yearly weather scenario replicates (e.g. 50) based upon TRANSLATE data
+  #      
+  #
+  # Arguments:
+  #   run_params      a named tuple containing the parameters for the model
+  #   species_setup   a named tuple containing the parameters for the species
+  #   paths           a named tuple containing the paths to the data
+  #
+  # Output:
+  #   a data frame containing the adult emergence dates that is saved in JLD2 format
+  #                   Columns are: 
+  #                     ID         unique ID of spatial location, 
+  #                     DOY        starting day of year for development
+  #                     emergeDOY  day of year for adult emergence
+  #
+  #   two CSV files containing the adult emergence dates at specific starting dates
+  #
+  # ====================================================================
+  # ====================================================================
+
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Set species parameters from the parameter file (can be more than one species)
+  species_params = [import_species(species_setup.speciesFile, species_setup.speciesStr[s]) for s in eachindex(species_setup.speciesStr)]
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Import location data and thin it using thinFactor
+  grid = prepare_data(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
+
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Import TRANSLATE climate data
+  Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(meteoDir, run_params.meteoRCP, run_params.meteoPeriod, grid.ID)
+
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Start the main loop of the program
+
+  # Loop through all the species
+  for s in eachindex(species_params)
+    if ismissing(species_params[s].species_name)
+      @warn "Skipping an undefined species"
+    else
+      @info "\n#######  Running model for species " * species_params[s].species_name * " #######"
+
+      # Initialise data frame
+      adult_emerge = Vector{DataFrame}(undef, nReps)
+
+      for r in 1:nReps
+        @info "====== Replicate " * string(r) * " ==========="
+
+        # Remove grid points not in the meteo data
+        keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
+        grid_final = grid[keep_ID, :]
+
+
+        # Generate daily temperature for maxYears
+        @info "Generating climate data"
+        TavgVec = Vector{Array{Float32,2}}(undef, maxYears)
+        for y in 1:maxYears
+          TavgVec[y] = Tavg_mean .+ Tavg_sd .* rand(Normal(0, 1), size(Tavg_sd))
+        end
+        Tavg = reduce(vcat, TavgVec)
+        DOY = collect(1:size(Tavg, 1))
+
+        @info "        Calculate GDD"
+        GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
+
+        # Calculate model at each location
+        @info "        Calculating adult emergence dates"
+        result = location_loop(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
+
+        # Simplify the results and put them in a DataFrame
+        adult_emerge[r] = cleanup_results(result, idx, grid_final.ID)
+
+
+        # Add in a column for the replicate number
+        insertcols!(adult_emerge[r], 1, :rep => r)
+
+
+        result = nothing
+        @everywhere GDDsh = nothing   # Make sure the shared array is cleared everywhere
+        @everywhere GC.gc()           # Clean up memory (this call may not be needed)
+      end
+
+
+      # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  
+      # ========== Save output to a JLD2 file ====================================
+      # Specify the output directory using the species name
+      outPrefix = replace(lowercase(species_params[s].species_name), " " => "_")
+
+      # Make directory for the output prefix if one doesn't exist
+      if !isdir(joinpath(paths.outDir, outPrefix))
+        @info "        Making directory " * outPrefix
+        mkpath(joinpath(paths.outDir, outPrefix))
+      end
+
+      if run_params.saveJLDFile
+        @info "        Saving the results to JLD2 file"
+        # Save using jld2 format
+        outFile = joinpath([paths.outDir, outPrefix,
+          outPrefix * "_" * run_params.country * "_rcp" * meteoRCP * "_" * meteoPeriod * "_" * string(run_params.thinFactor) * "km.jld2"])
+        save_object(outFile, adult_emerge)
+      end
+
+
+      # # Clear memory of model results before starting next species
+      # # NOTE: Don't clear the CLimate data because it will be reused
+      # adult_emerge = nothing
+    end
+    println(" ")    # Print a blank line
+  end
+end
+
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
+
+
+function location_loop(locInd1::Vector{Int64}, locInd2::Vector{Int64},
   idx::Vector{CartesianIndex{2}},
   GDD::SharedVector{Float32}, threshold::Float32)
   # Function to loop around locations and run development model emergence()
@@ -227,7 +358,7 @@ end
 
 
 
-function calculate_GDD_version2(Tavg::Matrix{Float32}, grid::DataFrame, DOY::Vector{Int16}, params::parameters)
+function calculate_GDD(Tavg::Matrix{Float32}, grid::DataFrame, DOY::Vector{Int16}, params::parameters)
   # Function to calculate growing degree days from meteo data for a range of years
   #
   # Arguments:
@@ -404,14 +535,14 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function prepare_data(grid_path::String, thinFactor::Int64, country::String)
+function prepare_data(grid_path::String, thinFactor::Int64, country::String="IE")
   # Function to prepare the data for the degree day model
   #
   # Arguments:
   #   grid_path   path to the file containing the grid of locations
   #   thinFactor  factor for thining spatial grid 
   #                (thin_factor = 10, every 10th grid point, i.e. 10km spacing)
-  #   country     the countrys to use (IE or NI)
+  #   country     the countrys to use (IE or NI or "AllIreland")
   #
   # Output:
   #   grid       dataframe of the locations of every grid square
