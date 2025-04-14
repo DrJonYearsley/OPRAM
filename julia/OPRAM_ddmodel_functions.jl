@@ -51,7 +51,7 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Import location data and thin it using thinFactor
-  grid = prepare_data(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
+  grid = read_grid(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
 
 
 
@@ -170,7 +170,7 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Import location data and thin it using thinFactor
-  grid = prepare_data(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
+  grid = read_grid(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
 
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -531,47 +531,6 @@ function save_to_csv(dates::Vector{Date}, adult_emerge::DataFrame, grid::DataFra
   CSV.write(outFile1km, output_1km, missingstring="NA")
 end
 
-
-# ------------------------------------------------------------------------------------------
-
-
-function prepare_data(grid_path::String, thinFactor::Int64, country::String="IE")
-  # Function to prepare the data for the degree day model
-  #
-  # Arguments:
-  #   grid_path   path to the file containing the grid of locations
-  #   thinFactor  factor for thining spatial grid 
-  #                (thin_factor = 10, every 10th grid point, i.e. 10km spacing)
-  #   country     the countrys to use (IE or NI or "AllIreland")
-  #
-  # Output:
-  #   grid       dataframe of the locations of every grid square
-  # *************************************************************
-
-  # =========================================================
-  # =========================================================
-  # Import location data and thin it using thinFactor
-
-  @info "Importing spatial grid"
-  # Import grid location data
-  grid = CSV.read(grid_path, DataFrame, missingstring="NA")
-
-  # Sort locations in order of IDs
-  grid = grid[sortperm(grid.ID), :]
-
-  # Keep only locations for the required country
-  if country == "IE"
-    subset!(grid, :country => c -> c .== "IE")
-  elseif country == "NI"
-    subset!(grid, :country => c -> c .== "NI")
-  end
-
-  # Thin the locations using the thinFactor
-  subset!(grid, :east => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8,
-    :north => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8)
-
-  return grid
-end
 
 # ------------------------------------------------------------------------------------------
 
@@ -1023,6 +982,49 @@ function photoperiod2_old(latitude::Vector{Float64}, DOY::Vector{Int16}, thresho
   # Return true if daylength allows development to happen 
   # (daylength not relevant before day 150 of year)
   return .!overwinterBool
+end
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+function prepare_data_old(grid_path::String, thinFactor::Int64, country::String="IE")
+  # Function to prepare the data for the degree day model
+  #
+  # Arguments:
+  #   grid_path   path to the file containing the grid of locations
+  #   thinFactor  factor for thining spatial grid 
+  #                (thin_factor = 10, every 10th grid point, i.e. 10km spacing)
+  #   country     the countrys to use (IE or NI or "AllIreland")
+  #
+  # Output:
+  #   grid       dataframe of the locations of every grid square
+  # *************************************************************
+
+  # =========================================================
+  # =========================================================
+  # Import location data and thin it using thinFactor
+
+  @info "Importing spatial grid"
+  # Import grid location data
+  grid = CSV.read(grid_path, DataFrame, missingstring="NA")
+
+  # Sort locations in order of IDs
+  grid = grid[sortperm(grid.ID), :]
+
+  # Keep only locations for the required country
+  if country == "IE"
+    subset!(grid, :country => c -> c .== "IE")
+  elseif country == "NI"
+    subset!(grid, :country => c -> c .== "NI")
+  end
+
+  # Thin the locations using the thinFactor
+  subset!(grid, :east => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8,
+    :north => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8)
+
+  return grid
 end
 
 

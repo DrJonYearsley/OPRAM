@@ -459,13 +459,22 @@ function read_grid(gridFilePath::String, thinFactor::Int, countryStr::String="IE
 # *************************************************************
 
 # Read in the grid data from a file
-grid = CSV.read(gridFilePath, DataFrame);
+grid = CSV.read(gridFilePath, DataFrame, missingstring="NA");
 
 # Sort locations in order of IDs
 grid = grid[sortperm(grid.ID), :];
 
+
+# Keep only locations for the required country
+if countryStr == "IE"
+  subset!(grid, :country => c -> c .== "IE")
+elseif countryStr == "NI"
+  subset!(grid, :country => c -> c .== "NI")
+end
+
 # Thin the locations  using the thinFactor
-thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& mod.(grid.north, (thinFactor * 1e3)) .< 1e-8 .&& country.==countryStr);
+thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& 
+                  mod.(grid.north, (thinFactor * 1e3)) .< 1e-8 );
 
 
   return grid[thinInd, :]
