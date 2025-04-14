@@ -163,6 +163,7 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
   # ====================================================================
   # ====================================================================
 
+  nReps = 50; # Number of replicates to run
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Set species parameters from the parameter file (can be more than one species)
@@ -175,7 +176,11 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Import TRANSLATE climate data
-  Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(meteoDir, run_params.meteoRCP, run_params.meteoPeriod, grid.ID)
+  Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.meteoRCP, run_params.meteoPeriod, grid.ID)
+
+  # Remove grid points not in the meteo data
+  keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
+  grid_final = grid[keep_ID, :]
 
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -194,19 +199,14 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
       for r in 1:nReps
         @info "====== Replicate " * string(r) * " ==========="
 
-        # Remove grid points not in the meteo data
-        keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
-        grid_final = grid[keep_ID, :]
-
-
         # Generate daily temperature for maxYears
-        @info "Generating climate data"
-        TavgVec = Vector{Array{Float32,2}}(undef, maxYears)
-        for y in 1:maxYears
+        @info "        Generating climate data"
+        TavgVec = Vector{Array{Float32,2}}(undef, run_params.maxYears)
+        for y in 1:run_params.maxYears
           TavgVec[y] = Tavg_mean .+ Tavg_sd .* rand(Normal(0, 1), size(Tavg_sd))
         end
         Tavg = reduce(vcat, TavgVec)
-        DOY = collect(1:size(Tavg, 1))
+        DOY = convert.(Int16,collect(1:size(Tavg, 1)))
 
         @info "        Calculate GDD"
         GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
@@ -245,7 +245,7 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
         @info "        Saving the results to JLD2 file"
         # Save using jld2 format
         outFile = joinpath([paths.outDir, outPrefix,
-          outPrefix * "_" * run_params.country * "_rcp" * meteoRCP * "_" * meteoPeriod * "_" * string(run_params.thinFactor) * "km.jld2"])
+          outPrefix * "_" * run_params.country * "_rcp" * run_params.meteoRCP * "_" * run_params.meteoPeriod * "_" * string(run_params.thinFactor) * "km.jld2"])
         save_object(outFile, adult_emerge)
       end
 

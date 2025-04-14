@@ -29,6 +29,8 @@ params = TOML.parsefile(paramFile)
 
 nNodes = params["runtime"]["nNodes"];           # Number of compute nodes to use (if in interactive)
 run_params = (years = 1991:2023,                   # Years to run model
+              meteoRCP = "26",                     # Climate scenario to use (2.6, 4.5, 8.5)
+              meteoPeriod = "2021-2050",           # Climate period to use (2021-2050, 2041-2070)
               maxYears = 1,                        # Maximum number of years to complete insect development
               country = "IE",                      # Can be "IE", "NI" or "AllIreland"
               saveJLDFile = true,                  # If true save the full result to a JLD2 file
@@ -136,8 +138,14 @@ include("OPRAM_ddmodel_functions.jl")
 # =========================================================
 # =========================================================
 # Start the main loop of the program
-@time "OPRAM model run complete:" run_model(run_params, species_setup, paths)
-
+if isnothing(run_params.meteoRCP) || isnothing(run_params.meteoPeriod)
+  # If no climate scenario is specified, run the model for past climates
+  @time "OPRAM model run complete:" run_model(run_params, species_setup, paths)
+else
+  using Distributed;
+  using Distributions, Random;
+   @time "OPRAM future model run complete:" run_model_futures(run_params, species_setup, paths)
+end
 
 # =========================================================
 # =========================================================
