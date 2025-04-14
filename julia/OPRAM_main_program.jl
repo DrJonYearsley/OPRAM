@@ -29,7 +29,7 @@ params = TOML.parsefile(paramFile)
 
 nNodes = params["runtime"]["nNodes"];           # Number of compute nodes to use (if in interactive)
 run_params = (years = 1991:2023,                   # Years to run model
-              meteoRCP = "26",                     # Climate scenario to use (2.6, 4.5, 8.5)
+              meteoRCP = nothing,                     # Climate scenario to use (2.6, 4.5, 8.5)
               meteoPeriod = "2021-2050",           # Climate period to use (2021-2050, 2041-2070)
               maxYears = 1,                        # Maximum number of years to complete insect development
               country = "IE",                      # Can be "IE", "NI" or "AllIreland"

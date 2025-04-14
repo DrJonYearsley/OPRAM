@@ -32,8 +32,8 @@ using SharedArrays
 # If more than one year then take average across years
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
-run_params = (speciesName="agrilus_anxius",      # Name of the species
-    years=collect(1991:2023),                         # Either a single year or collect(year1:year2)
+run_params = (speciesName="agrilus_anxius",  # Name of the species
+    years=collect(1991:2023),           # Either a single year or collect(year1:year2)
     maxYears=1,                         # Maximum number of years to complete insect development (must correspond to simulation value)
     country="IE",                       # Country code (IE or NI)
     thinFactor=1,                       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
@@ -43,22 +43,30 @@ run_params = (speciesName="agrilus_anxius",      # Name of the species
     save_figs=true)  # If true save figures
 
 
+# Files containing the ID system from Granite.ie
+# This info is used to package the output into separate files
+granite_hectad_ID = "granite_hectad_defs.csv"
+granite_county_ID = "granite_county_defs.csv"
+granite_hectad_county = "granite_hectad_county_defs.csv"
 
 
 # =================================================================================
 # Specify directories for import and export of data
 
 if isdir(joinpath(homedir(), "DATA//OPRAM"))       # Linux workstation
-    paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//"),
-        dataDir=joinpath(homedir(), "DATA//OPRAM//"))
+    paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//granite_output"),
+    resultDir=joinpath(homedir(), "Desktop//OPRAM//results"),
+        dataDir=joinpath(homedir(), "DATA//OPRAM"))
 
 elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
-    paths = (outDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results//"),
-        dataDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"))
+    paths = (outDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results//granite_output"),
+    resultDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"),
+        dataDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data"))
 
 elseif isdir(joinpath(homedir(), "Desktop//OPRAM//"))
-    paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//"),
-        dataDir=joinpath(homedir(), "Desktop//OPRAM//"))
+    paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//granite_output"),
+    resultDir=joinpath(homedir(), "Desktop//OPRAM//results"),
+        dataDir=joinpath(homedir(), "Desktop//OPRAM"))
 end
 
 include("OPRAM_io_functions.jl");
@@ -67,18 +75,31 @@ include("OPRAM_ddmodel_functions.jl");
 
 
 
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Import granite files to organise hectads and counties
+# Read in the grid data from a file
+hectad_defs = CSV.read(joinpath([paths.dataDir, granite_hectad_ID]), DataFrame);
+county_defs = CSV.read(joinpath([paths.dataDir, granite_county_ID]), DataFrame);
+hectad_county_defs = CSV.read(joinpath([paths.dataDir, granite_hectad_county]), DataFrame);
+
+# Rename county ID column
+rename!(county_defs,:Id => :countyID)
 
 
-# # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# # Import location data and thin it using thinFactor
-# grid = prepare_data(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Import location data and thin it using thinFactor
+# (needed to add the hectad codes to the 10km output) 
+grid = read_grid(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
 
-# # Create easting and northings of bottom left of a hectad
-# grid.east_hectad = convert.(Int32, floor.(grid.east ./ 1e4) .* 1e4)
-# grid.north_hectad = convert.(Int32, floor.(grid.north ./ 1e4) .* 1e4)
+# Create easting and northings of bottom left of a hectad
+grid.east_hectad = convert.(Int32, floor.(grid.east ./ 1e4) .* 1e4)
+grid.north_hectad = convert.(Int32, floor.(grid.north ./ 1e4) .* 1e4)
 
 
-
+# Add in column with county ID
+# grid.countyID = 
+leftjoin!(grid, county_defs, on= :county => :County)
+# [county_defs.Id[county_defs.County.==grid.county[c]] for c in eachindex(grid.county)]
 
 
 # =========================================================
@@ -86,12 +107,30 @@ include("OPRAM_ddmodel_functions.jl");
 # Import data across the years and calculate the average
 
 # Find directory matching the species name in run_params
-speciesName = filter(x -> occursin(r"" * run_params.speciesName, x), readdir(paths.outDir))
+speciesName = filter(x -> occursin(r"" * run_params.speciesName, x), readdir(paths.resultDir))
 if length(speciesName) > 1
     @error "More than one species name found"
 elseif length(speciesName) == 0
     @error "Species not found"
 end
+
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Make directory for the output if one doesn't exist
+if !isdir(paths.outDir)
+    @info "        Making directory " * paths.outDir
+    mkpath(paths.outDir)
+end
+
+# Specify the output directory using the species name
+if !isdir(joinpath(paths.outDir, speciesName[1]))
+    @info "        Making directory " * speciesName[1]
+    mkpath(joinpath(paths.outDir, speciesName[1]))
+end
+
+
+
 
 dVec = Vector{DataFrame}(undef, length(run_params.years))
 for y in eachindex(run_params.years)
@@ -103,12 +142,12 @@ for y in eachindex(run_params.years)
     dates = [Date(run_params.years[y], m, 01) for m in 1:12]
 
     inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
-        readdir(joinpath(paths.outDir, speciesName[1])))
+        readdir(joinpath(paths.resultDir, speciesName[1])))
 
     if length(inFile) > 1
         @error "More than one input file found"
     end
-    adult_emerge = load_object(joinpath(paths.outDir, speciesName[1], inFile[1]))
+    adult_emerge = load_object(joinpath(paths.resultDir, speciesName[1], inFile[1]))
 
     @info " ---- Generating output for specific starting dates"
     # Create output for specific days of year
@@ -136,7 +175,7 @@ df_1km.startMonth = Dates.month.(df_1km.startDate)  # Use month rather than DOY 
 # =========================================================
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Import the averaged data
-aggFile = joinpath(paths.outDir, run_params.speciesName, "average_" * run_params.speciesName * "_" *
+aggFile = joinpath(paths.resultDir, run_params.speciesName, "average_" * speciesName[1] * "_" *
                                                          run_params.averagedPeriod * "_1km.csv")
 d_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
 
@@ -156,7 +195,7 @@ d_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
 @info "Calculating anomalies"
 
 # Combine origninal data frame with 30 year average
-tmp = leftjoin(df_1km, d_agg, on=[:ID, :startMonth])
+leftjoin!(df_1km, d_agg, on=[:ID, :startMonth])
 
 # Calculate anomalies
 transform!(df_1km, [:nGenerations, :nGenerations_median] => ((a, b) -> a .- b) => :nGenerations_anomaly)
@@ -165,28 +204,47 @@ transform!(df_1km, [:emergeDOY, :emergeDOY_median] => ((a, b) -> a .- b) => :eme
 
 # =========================================================
 # =========================================================
-# Export the anomaly and multi year average
+# Export the anomaly and multi year average using a separate file for every year and every county
 
 @info "Writing 1km results to CSV files"
 
+uniqueYears = unique(year.(df_1km.startDate))
+uniqueCounty = sort(unique(grid.countyID))
 
-# Remove unwanted variables
-out_1km = select(df_1km, Not([:startMonth, :emergeDOY, :emergeDOY_median]))
+# Add year and countyID into df_1km
+df_1km.year = year.(df_1km.startDate)
+leftjoin!(df_1km, grid[:,[:ID, :countyID]], on = :ID)
 
+for c in uniqueCounty
+    @info "Writing data for county " * string(c)
+    for y in uniqueYears
 
-# Round number of generations
-out_1km.nGenerations = round.(out_1km.nGenerations, digits=2)
-out_1km.nGenerations_median = round.(out_1km.nGenerations_median, digits=2)
-out_1km.nGenerations_anomaly = round.(out_1km.nGenerations_anomaly, digits=2)
+        # @info "Writing data for year " * string(y) * " and county " * string(c)
 
+        # Create subset to write to file
+        out_1km = select(subset(df_1km, :countyID => x1 -> x1 .== c, :year => x2 -> x2 .== y),
+            Not([:startMonth, :emergeDOY, :east, :north, :year, :countyID]))
 
+        # Round number of generations
+        out_1km.nGenerations = round.(out_1km.nGenerations, digits=2)
+        out_1km.nGenerations_median = round.(out_1km.nGenerations_median, digits=2)
+        out_1km.nGenerations_anomaly = round.(out_1km.nGenerations_anomaly, digits=2)
 
-# Write out the combined data frame
-fileout1 = joinpath(paths.outDir, speciesName[1], "combined_" * speciesName[1] * "_" *
-                                                  string(minimum(run_params.years)) * "_" * string(maximum(run_params.years)) * "_" * string(run_params.thinFactor) * "km.csv")
-CSV.write(fileout1, out_1km, missingstring="NA")
+        # Rename some columns
+        rename!(out_1km, :nGenerations => "nGen", 
+                        :nGenerations_median => "nGen_30yr",
+                        :nGenerations_anomaly => "nGen_anomaly",
+                        :emergeDOY_median => "emergeDOY_30yr")
 
-out_1km = nothing  # Erase out_1km
+        # Create filename
+        fileout1 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_" * string(run_params.thinFactor^2) * "_" *
+            string(c) * "_"  * string(y) * ".csv") 
+
+        CSV.write(fileout1, out_1km, missingstring="NA")
+
+    end
+end
+
 
 # =========================================================
 # =========================================================
@@ -257,9 +315,6 @@ df_10km.emergeDate_median_min[idx2] .= Date.(year.(df_10km.startDate[idx2])) .+ 
 
 
 
-# Add in hectad unique identifier from the grid file
-out_10km = rightjoin(unique(grid[:, [:east_hectad, :north_hectad, :hectad]]), df_10km, on=[:north_hectad, :east_hectad])
-
 
 
 # =========================================================
@@ -268,18 +323,37 @@ out_10km = rightjoin(unique(grid[:, [:east_hectad, :north_hectad, :hectad]]), df
 
 @info "Writing 10km results to CSV files"
 
-# Remove unwanted variables
-select!(df_10km, Not(:nMissing))
-
-# Round results for number of generations
-df_10km.nGenerations_max = round.(df_10km.nGenerations_max, digits=2)
-df_10km.nGenerations_median_max = round.(df_10km.nGenerations_median_max, digits=2)
-df_10km.nGenerations_anomaly_max = round.(df_10km.nGenerations_anomaly_max, digits=2)
+# Add in hectad ID
+leftjoin!(df_10km, unique(grid[:, [:hectad, :east_hectad, :north_hectad]]), on=[:east_hectad, :north_hectad])
 
 
-# Write out the combined data frame
-fileout3 = joinpath(paths.outDir, speciesName[1], "combined_" * speciesName[1] * "_" *
-                                                  string(minimum(run_params.years)) * "_" * string(maximum(run_params.years)) * "_10km.csv")
-CSV.write(fileout3, df_10km, missingstring="NA")
+for y in uniqueYears
 
+    @info "Writing data for year " * string(y)
 
+    # Create subset to write to file
+    out_10km = subset(df_10km, :startDate => x2 -> year.(x2) .== y)
+
+    # Round results for number of generations
+    out_10km.nGenerations_max = round.(out_10km.nGenerations_max, digits=2)
+    out_10km.nGenerations_median_max = round.(out_10km.nGenerations_median_max, digits=2)
+    out_10km.nGenerations_anomaly_max = round.(out_10km.nGenerations_anomaly_max, digits=2)
+
+    # Rename some columns
+    rename!(out_10km, :nGenerations_max => "nGen",
+        :nGenerations_median_max => "nGen_30yr",
+        :nGenerations_anomaly_max => "nGen_anomaly",
+        :emergeDate_min => "emergeDate",
+        :emergeDOY_min => "emergeDOY",
+        :emergeDOY_median_min => "emergeDOY_30yr",
+        :emergeDOY_anomaly_min => "emergeDOY_anomaly")
+
+    # Select specific years
+    select!(out_10km, [:hectad, :startDate, :nGen, :nGen_30yr, :nGen_anomaly, :emergeDate, :emergeDOY, :emergeDOY_30yr, :emergeDOY_anomaly])
+
+    # Create filename
+    fileout3 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_100_" * string(y) * ".csv")
+
+    CSV.write(fileout3, out_10km, missingstring="NA")
+
+end
