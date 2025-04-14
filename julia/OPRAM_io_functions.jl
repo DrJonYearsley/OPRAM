@@ -264,7 +264,7 @@ function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgr
 
 
   # Check RCP and period Arguments
-  if isnothing(indexin(rcp,["2.6","4.5","8.5"]))
+  if isnothing(indexin(rcp,["26","45","85"]))
     @error "RCP must be one of: '2.6', '4.5' or '8.5'"
   end
 
@@ -276,8 +276,12 @@ function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgr
 
 
   # Get the correct filename
-  meteoFile = filter(x -> occursin("TRANSLATE_Tavg_rcp" * rcp * "_" * period, x),
+  if !isnothing(meteoDir)   
+    if length(filter(x -> occursin(".jld2", x), readdir(meteoDir))) > 0
+      meteoFile = filter(x -> occursin("TRANSLATE_Tavg_rcp" * rcp * "_" * period, x),
     readdir(meteoDir))
+    end
+  end
 
   if length(meteoFile) == 0
     @error "No file found for RCP " * rcp * " and period " * period
