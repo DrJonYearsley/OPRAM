@@ -24,18 +24,31 @@
 using TOML
 
 # Model parameters are stored in a TOML file https://toml.io/en/
-paramFile = "parameters.toml"
-params = TOML.parsefile(paramFile)
+if length(ARGS)==1
+  params = TOML.parsefile(ARGS[1])
+
+elseif length(ARGS)==0 & isfile("parameters.toml")
+  params = TOML.parsefile("parameters.toml")
+
+else
+  @error "No parameter file given"
+end
+
+
+
 
 nNodes = params["runtime"]["nNodes"];           # Number of compute nodes to use (if in interactive)
-run_params = (years = 1991:2023,                   # Years to run model
-              meteoRCP = nothing,                     # Climate scenario to use (2.6, 4.5, 8.5)
+
+# Put parameters into a named tuple
+run_params = (years = params["model"]["simYears"], # Years to run model
+              meteoRCP = nothing,                  # Climate scenario to use (2.6, 4.5, 8.5)
               meteoPeriod = "2021-2050",           # Climate period to use (2021-2050, 2041-2070)
-              maxYears = 1,                        # Maximum number of years to complete insect development
-              country = "IE",                      # Can be "IE", "NI" or "AllIreland"
-              saveJLDFile = true,                  # If true save the full result to a JLD2 file
-              thinFactor = 1,                      # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-              gridFile = "IE_grid_locations.csv");  # File containing a 1km grid of lats and longs over Ireland 
+              maxYears = params["model"]["maxYears"], # Maximum number of years to complete insect development
+              maxMeteoYear = params["model"]["maxMeteoYear"], # Maximum number of years to complete insect development
+              country = params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
+              saveJLDFile = params["runtime"]["save2file"], # If true save the full result to a JLD2 file
+              thinFactor = params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+              gridFile = "IE_grid_locations.csv");          # File containing a 1km grid of lats and longs over Ireland 
               # (used for daylength calculations as well as importing and thining of meteo data)
               
 # Define species (predefined)
@@ -74,29 +87,96 @@ species_setup = (speciesFile=joinpath(homedir(), "git_repos/OPRAM/data/species_p
 
 # =========================================================
 # =========================================================
+# If the given paths for output and data do not exist, try to find alternative paths to the data
 
-# Specify directories for import and export of data
-# Set meteoDir to nothing to stop importing these data
-#    e.g. meteoDir_NI = nothing
+# Check output dir exists
+if !isdir(joinpath(homedir(), params["paths"]["output"]))
+  @warn "Can't find output directory!"
+  if isdir(joinpath(homedir(), "Desktop//OPRAM//results"))  # Linux guess
+    @info "Setting output directory to Desktop//OPRAM//results"
+    params["paths"]["output"] = "Desktop//OPRAM//results//"
 
-if isdir(joinpath(homedir(),"DATA//OPRAM"))       # Linux workstation
-  paths = (outDir=joinpath(homedir(),"Desktop//OPRAM//results//"),
-    dataDir=joinpath(homedir(),"DATA//OPRAM//"),
-    meteoDir_IE=joinpath(homedir(),"DATA//OPRAM//Climate_JLD2"),
-    meteoDir_NI=nothing)
-
-elseif isdir(joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
-  paths = (outDir=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//results//"),
-    dataDir=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"),
-    meteoDir_IE=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"),
-    meteoDir_NI=nothing)
-
-elseif isdir(joinpath(homedir(),"Desktop//OPRAM//"))
-  paths = (outDir=joinpath(homedir(),"Desktop//OPRAM//results//"),
-    dataDir=joinpath(homedir(),"Desktop//OPRAM//"),
-    meteoDir_IE=joinpath(homedir(),"Desktop//OPRAM//Irish_Climate_Data//"),
-    meteoDir_NI=nothing)
+  elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"))  # Mac guess
+    @info "Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//results"
+    params["paths"]["output"] = "Google Drive//My Drive//Projects//DAFM_OPRAM//results"
+  else
+    @error "No output directory found"
+  end
 end
+
+# Check data dir exists
+if !isdir(joinpath(homedir(), params["paths"]["data"]))
+  @warn "Can't find data directory!"
+  if isdir(joinpath(homedir(), "DATA", "OPRAM","Data"))  # Linux guess
+    @info "Setting output directory to DATA//OPRAM//Data"
+    params["paths"]["data"] = "DATA//OPRAM//Data"
+
+  elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data"))  # Mac guess
+    @info "Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
+    params["paths"]["data"] = "Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
+  else
+    @error "No data directory found"
+  end
+end
+
+# Check meteo dirs exist (if simulation needs the data)
+if in(params["model"]["country"],["IE","AllIreland"]) & !isdir(joinpath(homedir(), params["paths"]["meteoIE"]))
+  @warn "Can't find meteoIE directory!"
+  if isdir(joinpath(homedir(), "DATA", "OPRAM","Data","Climate_JLD2"))  # Linux guess
+    @info "Setting output directory to DATA//OPRAM//Data//Climate_JLD2"
+    params["paths"]["meteoIE"] = "DATA//OPRAM//Data//Climate_JLD2"
+
+  elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"))  # Mac guess
+    @info "Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+    params["paths"]["meteoIE"] = "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+  else
+    @error "No meteoIE directory found"
+  end
+end
+
+if in(params["model"]["country"],["NI","AllIreland"]) & !isdir(joinpath(homedir(), params["paths"]["meteoNI"]))
+  @warn "Can't find meteoNI directory!"
+  if isdir(joinpath(homedir(), "DATA", "OPRAM","Data","Climate_JLD2"))  # Linux guess
+    @info "Setting output directory to DATA//OPRAM//Data//Climate_JLD2"
+    params["paths"]["meteoNI"] = "DATA//OPRAM//Data//Climate_JLD2"
+
+  elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"))  # Mac guess
+    @info "Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+    params["paths"]["meteoNI"] = "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+  else
+    @error "No meteoNI directory found"
+  end
+end
+
+
+
+
+# Put all the paths together
+paths = (outDir=joinpath(homedir(),params["paths"]["output"]),
+          dataDir=joinpath(homedir(),params["paths"]["data"]),
+          meteoDir_IE = joinpath(homedir(),params["paths"]["meteoIE"]),
+          meteoDir_NI = joinpath(homedir(),params["paths"]["meteoNI"]))
+
+
+
+# if isdir(joinpath(homedir(),"DATA//OPRAM"))       # Linux workstation
+#   paths = (outDir=joinpath(homedir(),"Desktop//OPRAM//results//"),
+#     dataDir=joinpath(homedir(),"DATA//OPRAM//"),
+#     meteoDir_IE=joinpath(homedir(),"DATA//OPRAM//Climate_JLD2"),
+#     meteoDir_NI=nothing)
+
+# elseif isdir(joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
+#   paths = (outDir=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//results//"),
+#     dataDir=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"),
+#     meteoDir_IE=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"),
+#     meteoDir_NI=nothing)
+
+# elseif isdir(joinpath(homedir(),"Desktop//OPRAM//"))
+#   paths = (outDir=joinpath(homedir(),"Desktop//OPRAM//results//"),
+#     dataDir=joinpath(homedir(),"Desktop//OPRAM//"),
+#     meteoDir_IE=joinpath(homedir(),"Desktop//OPRAM//Irish_Climate_Data//"),
+#     meteoDir_NI=nothing)
+# end
 
 # =============== End of parameter setup =====================================================
 # ============================================================================================
