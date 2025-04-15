@@ -105,73 +105,85 @@ species_setup = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFil
 # =========================================================
 # If the given paths for output and data do not exist, try to find alternative paths to the data
 
+# Add on the home directory to the paths
+params["paths"]["data"] = joinpath(homedir(), params["paths"]["data"])
+params["paths"]["output"] = joinpath(homedir(), params["paths"]["output"])
+params["paths"]["meteoIE"] = joinpath(homedir(), params["paths"]["meteoIE"])
+params["paths"]["meteoNI"] = joinpath(homedir(), params["paths"]["meteoNI"])
+
 # Check output dir exists
-if !isdir(joinpath(homedir(), params["paths"]["output"]))
+if !isdir(params["paths"]["output"])
   @warn "Can't find output directory!"
+
   if isdir(joinpath(homedir(), "Desktop//OPRAM//results"))  # Linux guess
-    @info "Setting output directory to Desktop//OPRAM//results"
-    params["paths"]["output"] = "Desktop//OPRAM//results//"
+    @info "      Setting output directory to Desktop//OPRAM//results"
+    params["paths"]["output"] = joinpath(homedir(), "Desktop//OPRAM//results")
 
   elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"))  # Mac guess
-    @info "Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//results"
-    params["paths"]["output"] = "Google Drive//My Drive//Projects//DAFM_OPRAM//results"
+    @info "        Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//results"
+    params["paths"]["output"] = joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//results")
   else
     @error "No output directory found"
   end
 end
 
 # Check data dir exists
-if !isdir(joinpath(homedir(), params["paths"]["data"]))
-  @warn "Can't find data directory!"
+if !isdir(params["paths"]["data"])
+  @info "Can't find data directory!"
   if isdir(joinpath(homedir(), "DATA", "OPRAM","Data"))  # Linux guess
-    @info "Setting output directory to DATA//OPRAM//Data"
-    params["paths"]["data"] = "DATA//OPRAM//Data"
+    @info "       Setting data directory to DATA//OPRAM//Data"
+    params["paths"]["data"] = joinpath(homedir(),"DATA//OPRAM//Data")
 
-  elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data"))  # Mac guess
-    @info "Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
-    params["paths"]["data"] = "Google Drive//My Drive//Projects//DAFM_OPRAM//Data"
+  elseif isdir(joinpath(homedir(), "git_repos/OPRAM/data"))  # Mac guess
+    @info "       Setting data directory to home directory"
+    params["paths"]["data"] = homedir()
   else
     @error "No data directory found"
   end
 end
 
 # Check meteo dirs exist (if simulation needs the data)
-if in(params["model"]["country"],["IE","AllIreland"]) & !isdir(joinpath(homedir(), params["paths"]["meteoIE"]))
-  @warn "Can't find meteoIE directory!"
+if in(params["model"]["country"],["IE","AllIreland"]) & !isdir(params["paths"]["meteoIE"])
+  @info "Can't find meteoIE directory!"
   if isdir(joinpath(homedir(), "DATA", "OPRAM","Data","Climate_JLD2"))  # Linux guess
-    @info "Setting output directory to DATA//OPRAM//Data//Climate_JLD2"
-    params["paths"]["meteoIE"] = "DATA//OPRAM//Data//Climate_JLD2"
+    @info "       Setting meteoIE directory to DATA//OPRAM//Data//Climate_JLD2"
+    params["paths"]["meteoIE"] = joinpath(homedir(), "DATA//OPRAM//Data//Climate_JLD2")
 
   elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"))  # Mac guess
-    @info "Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
-    params["paths"]["meteoIE"] = "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+    @info "       Setting meteoIE directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+    params["paths"]["meteoIE"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2")
   else
     @error "No meteoIE directory found"
   end
 end
 
-if in(params["model"]["country"],["NI","AllIreland"]) & !isdir(joinpath(homedir(), params["paths"]["meteoNI"]))
-  @warn "Can't find meteoNI directory!"
+if in(params["model"]["country"],["NI","AllIreland"]) & !isdir(params["paths"]["meteoNI"])
+  @info "Can't find meteoNI directory!"
   if isdir(joinpath(homedir(), "DATA", "OPRAM","Data","Climate_JLD2"))  # Linux guess
-    @info "Setting output directory to DATA//OPRAM//Data//Climate_JLD2"
-    params["paths"]["meteoNI"] = "DATA//OPRAM//Data//Climate_JLD2"
+    @info "       Setting meteoNI directory to DATA//OPRAM//Data//Climate_JLD2"
+    params["paths"]["meteoNI"] = joinpath(homedir(), "DATA//OPRAM//Data//Climate_JLD2")
 
   elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"))  # Mac guess
-    @info "Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
-    params["paths"]["meteoNI"] = "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+    @info "       Setting meteoNI directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+    params["paths"]["meteoNI"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2")
   else
     @error "No meteoNI directory found"
   end
 end
 
-
+# Set folders to nothing if no data requried
+if params["model"]["country"] == "IE"
+  params["paths"]["meteoNI"] = nothing
+elseif params["model"]["country"] == "NI"
+  params["paths"]["meteoIE"] = nothing
+end  
 
 
 # Put all the paths together
 paths = (outDir=joinpath(homedir(),params["paths"]["output"]),
           dataDir=joinpath(homedir(),params["paths"]["data"]),
-          meteoDir_IE = joinpath(homedir(),params["paths"]["meteoIE"]),
-          meteoDir_NI = joinpath(homedir(),params["paths"]["meteoNI"]))
+          meteoDir_IE = params["paths"]["meteoIE"],
+          meteoDir_NI = params["paths"]["meteoNI"])
 
 
 
