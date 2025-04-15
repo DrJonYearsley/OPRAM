@@ -18,7 +18,7 @@
 
 
 # ============================================================================================
-# =============== Set parameter values =======================================================
+# =============== Import parameter values =======================================================
 
 
 using TOML
@@ -40,23 +40,39 @@ end
 nNodes = params["runtime"]["nNodes"];           # Number of compute nodes to use (if in interactive)
 
 # Put parameters into a named tuple
-run_params = (years = params["model"]["simYears"], # Years to run model
-              meteoRCP = nothing,                  # Climate scenario to use (2.6, 4.5, 8.5)
-              meteoPeriod = "2021-2050",           # Climate period to use (2021-2050, 2041-2070)
-              maxYears = params["model"]["maxYears"], # Maximum number of years to complete insect development
-              maxMeteoYear = params["model"]["maxMeteoYear"], # Maximum number of years to complete insect development
-              country = params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
-              saveJLDFile = params["runtime"]["save2file"], # If true save the full result to a JLD2 file
-              thinFactor = params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-              gridFile = "IE_grid_locations.csv");          # File containing a 1km grid of lats and longs over Ireland 
-              # (used for daylength calculations as well as importing and thining of meteo data)
-              
-# Define species (predefined)
-species_setup = (speciesFile = joinpath(homedir(),"git_repos/OPRAM/data/species_parameters.csv"),  # File containing species parameters
-                  speciesStr = ["anxius","frugiperda", "duplicatus", "cembrae", "decemlineata", " halys", "typo"])  # A vector of strings to uniquely identify a species name in the speciesFile
+if in("simYears",keys(params["model"]))
+  # Run model on past data
+  run_TRANSLATE_future = false
+  run_params = (years = params["model"]["simYears"], # Years to run model
+                maxYears = params["model"]["maxYears"], # Maximum number of years to complete insect development
+                lastMeteoYear = params["model"]["lastMeteoYear"], # Maximum number of years to complete insect development
+                country = params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
+                saveJLDFile = params["runtime"]["save2file"], # If true save the full result to a JLD2 file
+                thinFactor = params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+                gridFile = params["inputData"]["gridFile"]);          # File containing a 1km grid of lats and longs over Ireland 
+                # (used for daylength calculations as well as importing and thining of meteo data)
+elseif in("RCP",keys(params["model"]))
+  # Run model on future data
+  run_TRANSLATE_future = true
+  run_params = (futurePeriod = params["model"]["futurePeriod"], # Years to run model
+                rcp = params["model"]["RCP"],                 # Future RCP scenario
+                maxYears = params["model"]["maxYears"],       # Maximum number of years to complete insect development
+                country = params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
+                saveJLDFile = params["runtime"]["save2file"], # If true save the full result to a JLD2 file
+                thinFactor = params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+                gridFile = params["inputData"]["gridFile"]);  # File containing a 1km grid of lats and longs over Ireland 
+  # (used for daylength calculations as well as importing and thining of meteo data)
+else
+  error("parameter file doesn't contain simulation years")  
+end
 
-species_setup = (speciesFile=joinpath(homedir(), "git_repos/OPRAM/data/species_parameters.csv"),  # File containing species parameters
-  speciesStr=["anxius"])  # A vector of strings to uniquely identify a species name in the speciesFile
+
+# Define species (predefined)
+# species_setup = (speciesFile = joinpath(homedir(),"git_repos/OPRAM/data/species_parameters.csv"),  # File containing species parameters
+                  # speciesStr = ["anxius","frugiperda", "duplicatus", "cembrae", "decemlineata", " halys", "typo"])  # A vector of strings to uniquely identify a species name in the speciesFile
+
+species_setup = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFile"]),  # File containing species parameters
+  speciesStr=params["model"]["speciesList"])  # A vector of strings to uniquely identify a species name in the speciesFile
 
 
 
@@ -218,13 +234,14 @@ include("OPRAM_ddmodel_functions.jl")
 # =========================================================
 # =========================================================
 # Start the main loop of the program
-if isnothing(run_params.meteoRCP) || isnothing(run_params.meteoPeriod)
-  # If no climate scenario is specified, run the model for past climates
-  @time "OPRAM model run complete:" run_model(run_params, species_setup, paths)
-else
+if run_TRANSLATE_future
+  # If a climate scenario is specified, run the model for future climates
   using Distributed;
   using Distributions, Random;
    @time "OPRAM future model run complete:" run_model_futures(run_params, species_setup, paths)
+else
+  # If no climate scenario is specified, run the model for past climates
+  @time "OPRAM model run complete:" run_model(run_params, species_setup, paths)
 end
 
 # =========================================================

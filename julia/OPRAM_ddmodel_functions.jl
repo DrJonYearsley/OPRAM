@@ -62,8 +62,12 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
     # Import meteo data and calculate degree days
     @info "======Running model for year " * string(run_params.years[y]) * "============="
 
+      if run.params.years[y]>run_params.lastMeteoYear
+        @error "Year " * string(run_params.years[y]) * " is greater than the last year of meteo data. Skipping this year."
+      end
+
     @info "Importing " * string(run_params.maxYears) * " years of meteo data, starting at year " * string(run_params.years[y])
-    Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params.maxYears)
+    Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params.maxYears, run_params.lastMeteoYear)
 
     # Remove grid points not in the meteo data
     keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
@@ -176,7 +180,7 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Import TRANSLATE climate data
-  Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.meteoRCP, run_params.meteoPeriod, grid.ID)
+  Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.rcp, run_params.futurePeriod, grid.ID)
 
   # Remove grid points not in the meteo data
   keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]

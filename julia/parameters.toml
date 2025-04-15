@@ -13,18 +13,30 @@ data = "DATA//OPRAM"                     # Folder for other model data
 meteoIE = "DATA//OPRAM//Climate_JLD2"    # Folder containing meteo data for ROI
 meteoNI =  "nothing"                     # Folder containing meteo data for NI
 
-[inputDate] 
-species_defs = "git_repos/OPRAM/data/species_parameters.csv"
+[inputData]   # Input data on the model grid and species params
+speciesFile = "git_repos/OPRAM/data/species_parameters.csv"
 gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 
-[model]
+[model]     # Parameters to define the model
 simYears = [1991,1992,1993,1994,1995,1996,1997,1998,1999,2000,
             2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,
             2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,
             2021,2022,2023]        # Years to run model
 maxYears = 3         # Maximum number of years to complete insect development
-maxMeteoYear = 2023  # The last year of meteo data
+lastMeteoYear = 2023  # The last year of meteo data
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-speciesString = ["frugiperda", "duplicatus", "cembrae", "decemlineata", " halys", "typo"]
+speciesList = ["agrilus"]
 
+# speciesList = ["anxius","frugiperda", "duplicatus", "cembrae", "decemlineata", " halys", "typo"]
+
+# Predefined species are:
+#  :agrilus_anxius
+#  :halyomorpha_halys
+#  :ips_cembrae
+#  :ips_duplicatus
+#  :ips_sexdentatus
+#  :ips_typographus
+#  :leptinotarsa_decemlineata
+#  :oulema_melanopus
+#  :spodoptera_frugiperda

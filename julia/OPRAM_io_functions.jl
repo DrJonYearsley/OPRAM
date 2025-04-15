@@ -71,21 +71,23 @@ end
 
 
 
-function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, maxYears::Int)
+function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, maxYears::Int, lastMeteoYear::Int=2023)
   # Import multiple years of daily min and max temperature for Republic of Ireland and 
   # Northern Ireland
   # Then creates the daily average temp for each eastings and northings of spatial locations
   # Locations are also given a unique ID
   #
   # Arguments:
-  #   meteoYear   the starting year to be imported
-  #   meteoDirs[1]the directory containing the data for the Republic of Ireland 
-  #               (the daily maximum/minimum temps are assumed to be 
-  #                in folders maxtemp_grids and mintemp_grids)
-  #   meteoDirs[2] the directory containing the data for Northern Ireland 
-  #               (the daily maximum/minimum temps are assumed to be 
-  #                in folders NI_TX_daily_grid and NI_TN_daily_grid)
-  #   grid_thin   the grid of locations to use
+  #   meteoYear     the starting year to be imported
+  #   meteoDirs[1]  the directory containing the data for the Republic of Ireland 
+  #                  (the daily maximum/minimum temps are assumed to be 
+  #                   in folders maxtemp_grids and mintemp_grids)
+  #   meteoDirs[2]  the directory containing the data for Northern Ireland 
+  #                  (the daily maximum/minimum temps are assumed to be 
+  #                   in folders NI_TX_daily_grid and NI_TN_daily_grid)
+  #   grid_thin     the grid of locations to use
+  #   maxYears      the maximum number of years to be imported
+  #   lastMeteoYear the last year of meteo data available (default=2023)
   #
   # Output:
   #   A list with three entries
@@ -100,7 +102,9 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
 
 
   # An array containing the years to be imported
-  years = collect(meteoYear:meteoYear+maxYears-1)
+  # Make sure it is no greater than maxMeteoYear
+  years = max.(collect(meteoYear:meteoYear+maxYears-1), lastMeteoYear)
+
 
 
 
