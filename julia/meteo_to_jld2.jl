@@ -7,11 +7,17 @@ using JLD2;
 using DataFrames;
 using SharedArrays;
 
-include("OPRAM_ddmodel_functions.jl")  # Includes functions to import meteo data
+include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 
 
-years = collect(1971:1990)    # The years to import
+years = collect(2023:2024)    # The years to import
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
+
+
+# using CSV   
+
+# dataset = CSV.read(download("https://mywebsite.edu/ml/machine-learning-databases/my.data"))
+
 
 
 # =========================================================
@@ -22,7 +28,7 @@ if isdir("//home//jon//Desktop//OPRAM")
     outDir = "//home//jon//DATA//OPRAM//Climate_JLD2//"
     dataDir = "//home//jon//DATA//OPRAM//"
     meteoDir_IE = "//home//jon//DATA//OPRAM//Irish_Climate_Data//"
-    meteoDir_NI = "//home//jon//DATA//OPRAM//Northern_Ireland_Climate_Data//"
+    meteoDir_NI = nothing
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
     outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2//"
@@ -65,20 +71,23 @@ for y in years
     # +++++++++++++++++++++++++++++++++++++++++++++++++++
     # Import the IE data
     @info "Importing data for year " * string(y)
-    Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE(meteoDir_IE, grid, y)
+    if !isnothing(meteoDir_IE)
+        Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE(meteoDir_IE, grid, y)
 
-    # Save this to a JLD2 file
-   
-    outfile = joinpath([outDir, "meteoIE_Tavg_" * string(y) * ".jld2"])
-    @info "Saving file " * outfile
-    jldsave(outfile; Tavg=Tavg_IE, DOY=DOY_IE, ID=ID_IE)   
+        # Save this to a JLD2 file
 
-        # +++++++++++++++++++++++++++++++++++++++++++++++++++
+        outfile = joinpath([outDir, "meteoIE_Tavg_" * string(y) * ".jld2"])
+        @info "Saving file " * outfile
+        jldsave(outfile; Tavg=Tavg_IE, DOY=DOY_IE, ID=ID_IE)
+    end
+    # +++++++++++++++++++++++++++++++++++++++++++++++++++
     # Import the IE data
-    Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDir_NI, grid, y)
+    if !isnothing(meteoDir_NI)
+        Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDir_NI, grid, y)
 
-    # Save this to a JLD2 file
-    outfile = joinpath([outDir, "meteoNI_Tavg_" * string(y) * ".jld2"])
-    @info "Saving file " * outfile
-    jldsave(outfile; Tavg=Tavg_NI, DOY=DOY_NI, ID=ID_NI)   
+        # Save this to a JLD2 file
+        outfile = joinpath([outDir, "meteoNI_Tavg_" * string(y) * ".jld2"])
+        @info "Saving file " * outfile
+        jldsave(outfile; Tavg=Tavg_NI, DOY=DOY_NI, ID=ID_NI)
+    end
 end
