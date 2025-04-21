@@ -33,8 +33,8 @@ using SharedArrays
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
 run_params = (speciesName="agrilus_anxius",  # Name of the species
-    years=collect(1991:2023),           # Either a single year or collect(year1:year2)
-    maxYears=1,                         # Maximum number of years to complete insect development (must correspond to simulation value)
+    years=collect(2020:2023),           # Either a single year or collect(year1:year2)
+    maxYears=3,                         # Maximum number of years to complete insect development (must correspond to simulation value)
     country="IE",                       # Country code (IE or NI)
     thinFactor=1,                       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
     gridFile="IE_grid_locations.csv",   # File containing a 1km grid of lats and longs over Ireland 
@@ -61,7 +61,7 @@ if isdir(joinpath(homedir(), "DATA//OPRAM"))       # Linux workstation
 elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
     paths = (outDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results//granite_output"),
     resultDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"),
-        dataDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data"))
+        dataDir=joinpath(homedir(), "git_repos/OPRAM//data"))
 
 elseif isdir(joinpath(homedir(), "Desktop//OPRAM//"))
     paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//granite_output"),
@@ -223,7 +223,7 @@ for c in uniqueCounty
 
         # Create subset to write to file
         out_1km = select(subset(df_1km, :countyID => x1 -> x1 .== c, :year => x2 -> x2 .== y),
-            Not([:startMonth, :emergeDOY, :east, :north, :year, :countyID]))
+            Not([:startMonth, :emergeDate, :east, :north, :year, :countyID]))
 
         # Round number of generations
         out_1km.nGenerations = round.(out_1km.nGenerations, digits=2)
@@ -240,7 +240,7 @@ for c in uniqueCounty
         fileout1 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_" * string(run_params.thinFactor^2) * "_" *
             string(c) * "_"  * string(y) * ".csv") 
 
-        CSV.write(fileout1, out_1km, missingstring="NA")
+        CSV.write(fileout1, out_1km, missingstring="NA", dateformat="yyyy-mm-dd")
 
     end
 end
@@ -349,11 +349,11 @@ for y in uniqueYears
         :emergeDOY_anomaly_min => "emergeDOY_anomaly")
 
     # Select specific years
-    select!(out_10km, [:hectad, :startDate, :nGen, :nGen_30yr, :nGen_anomaly, :emergeDate, :emergeDOY, :emergeDOY_30yr, :emergeDOY_anomaly])
+    select!(out_10km, [:hectad, :startDate, :nGen, :nGen_30yr, :nGen_anomaly, :emergeDOY, :emergeDOY_30yr, :emergeDOY_anomaly])
 
     # Create filename
     fileout3 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_100_" * string(y) * ".csv")
 
-    CSV.write(fileout3, out_10km, missingstring="NA")
+    CSV.write(fileout3, out_10km, missingstring="NA", dateformat="yyyy-mm-dd")
 
 end
