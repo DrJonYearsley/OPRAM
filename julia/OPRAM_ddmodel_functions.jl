@@ -230,8 +230,7 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
 
 
             # Add in a column for the replicate number
-            insertcols!(adult_emerge[r], 1, :rep => r)
-
+            insertcols!(adult_emerge[r], 1, :rep => Int8(r))
 
             result = nothing
             @everywhere GDDsh = nothing   # Make sure the shared array is cleared everywhere

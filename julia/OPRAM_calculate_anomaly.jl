@@ -33,7 +33,7 @@ using SharedArrays
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
 run_params = (speciesName="agrilus_anxius",  # Name of the species
-    years=collect(2020:2023),           # Either a single year or collect(year1:year2)
+    years=collect(1991:2024),           # Either a single year or collect(year1:year2)
     maxYears=3,                         # Maximum number of years to complete insect development (must correspond to simulation value)
     country="IE",                       # Country code (IE or NI)
     thinFactor=1,                       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
@@ -195,7 +195,7 @@ d_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
 @info "Calculating anomalies"
 
 # Combine origninal data frame with 30 year average
-leftjoin!(df_1km, d_agg, on=[:ID, :startMonth])
+leftjoin!(df_1km, select(d_agg, Not([:east, :north])), on=[:ID, :startMonth])
 
 # Calculate anomalies
 transform!(df_1km, [:nGenerations, :nGenerations_median] => ((a, b) -> a .- b) => :nGenerations_anomaly)
@@ -213,7 +213,7 @@ uniqueCounty = sort(unique(grid.countyID))
 
 # Add year and countyID into df_1km
 df_1km.year = year.(df_1km.startDate)
-leftjoin!(df_1km, grid[:,[:ID, :countyID]], on = :ID)
+leftjoin!(df_1km, grid[:,[:ID, :countyID, :east, :north]], on = :ID)
 
 for c in uniqueCounty
     @info "Writing data for county " * string(c)
