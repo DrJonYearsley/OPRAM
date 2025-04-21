@@ -54,6 +54,7 @@ elseif in("rcp",keys(params["model"]))
   run_TRANSLATE_future = true
   run_params = (futurePeriod = params["model"]["futurePeriod"], # Years to run model
                 rcp = params["model"]["rcp"],                 # Future RCP scenario
+                nReps = params["model"]["nReps"],             # Number of replicate climate scenarios
                 maxYears = params["model"]["maxYears"],       # Maximum number of years to complete insect development
                 country = params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
                 saveJLDFile = params["runtime"]["save2file"], # If true save the full result to a JLD2 file

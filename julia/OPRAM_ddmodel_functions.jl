@@ -167,7 +167,6 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
   # ====================================================================
   # ====================================================================
 
-  nReps = 50 # Number of replicates to run
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Set species parameters from the parameter file (can be more than one species)
@@ -205,9 +204,9 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
           @info "\n#######  Running model for species " * species_params[s].species_name * " #######"
 
           # Initialise data frame
-          adult_emerge = Vector{DataFrame}(undef, nReps)
+          adult_emerge = Vector{DataFrame}(undef, run_params.nReps)
 
-          for r in 1:nReps
+          for r in 1:run_params.nReps
             @info "====== Replicate " * string(r) * " ==========="
 
             # Generate daily temperature for maxYears
