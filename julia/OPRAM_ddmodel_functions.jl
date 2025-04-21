@@ -62,9 +62,9 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
     # Import meteo data and calculate degree days
     @info "======Running model for year " * string(run_params.years[y]) * "============="
 
-      if run_params.years[y]>run_params.lastMeteoYear
-        @error "Year " * string(run_params.years[y]) * " is greater than the last year of meteo data. Skipping this year."
-      end
+    if run_params.years[y] > run_params.lastMeteoYear
+      @error "Year " * string(run_params.years[y]) * " is greater than the last year of meteo data. Skipping this year."
+    end
 
     @info "Importing " * string(run_params.maxYears) * " years of meteo data, starting at year " * string(run_params.years[y])
     Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params.maxYears, run_params.lastMeteoYear)
@@ -104,7 +104,7 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
           @info "        Saving the results to JLD2 file"
           # Save using jld2 format
           outFile = joinpath([paths.outDir, outPrefix,
-            outPrefix * "_"  * run_params.country * "_" * string(run_params.years[y]) * "_" * string(run_params.thinFactor) * "km.jld2"])
+            outPrefix * "_" * run_params.country * "_" * string(run_params.years[y]) * "_" * string(run_params.thinFactor) * "km.jld2"])
           save_object(outFile, adult_emerge)
         end
 
@@ -167,7 +167,7 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
   # ====================================================================
   # ====================================================================
 
-  nReps = 50; # Number of replicates to run
+  nReps = 50 # Number of replicates to run
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Set species parameters from the parameter file (can be more than one species)
@@ -180,85 +180,95 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Import TRANSLATE climate data
-  Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.rcp, run_params.futurePeriod, grid.ID)
 
-  # Remove grid points not in the meteo data
-  keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
-  grid_final = grid[keep_ID, :]
+  for r in eachindex(run_params.rcp)
+    @info "======Running model for RCP " * run_params.rcp[r] * "============="
 
+    for p in eachindex(run_params.futurePeriod)
+      @info "======Running model for future period " * run_params.futurePeriod[p] * "============="
+    
+      Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.rcp[r], run_params.futurePeriod[p], grid.ID)
 
-  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  # Start the main loop of the program
-
-  # Loop through all the species
-  for s in eachindex(species_params)
-    if ismissing(species_params[s].species_name)
-      @warn "Skipping an undefined species"
-    else
-      @info "\n#######  Running model for species " * species_params[s].species_name * " #######"
-
-      # Initialise data frame
-      adult_emerge = Vector{DataFrame}(undef, nReps)
-
-      for r in 1:nReps
-        @info "====== Replicate " * string(r) * " ==========="
-
-        # Generate daily temperature for maxYears
-        @info "        Generating climate data"
-        TavgVec = Vector{Array{Float32,2}}(undef, run_params.maxYears)
-        for y in 1:run_params.maxYears
-          TavgVec[y] = Tavg_mean .+ Tavg_sd .* rand(Normal(0, 1), size(Tavg_sd))
-        end
-        Tavg = reduce(vcat, TavgVec)
-        DOY = convert.(Int16,collect(1:size(Tavg, 1)))
-
-        @info "        Calculate GDD"
-        GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
-
-        # Calculate model at each location
-        @info "        Calculating adult emergence dates"
-        result = location_loop(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
-
-        # Simplify the results and put them in a DataFrame
-        adult_emerge[r] = cleanup_results(result, idx, grid_final.ID)
-
-
-        # Add in a column for the replicate number
-        insertcols!(adult_emerge[r], 1, :rep => r)
-
-
-        result = nothing
-        @everywhere GDDsh = nothing   # Make sure the shared array is cleared everywhere
-        @everywhere GC.gc()           # Clean up memory (this call may not be needed)
-      end
+      # Remove grid points not in the meteo data
+      keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
+      grid_final = grid[keep_ID, :]
 
 
       # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  
-      # ========== Save output to a JLD2 file ====================================
-      # Specify the output directory using the species name
-      outPrefix = replace(lowercase(species_params[s].species_name), " " => "_")
+      # Start the main loop of the program
 
-      # Make directory for the output prefix if one doesn't exist
-      if !isdir(joinpath(paths.outDir, outPrefix))
-        @info "        Making directory " * outPrefix
-        mkpath(joinpath(paths.outDir, outPrefix))
+      # Loop through all the species
+      for s in eachindex(species_params)
+        if ismissing(species_params[s].species_name)
+          @warn "Skipping an undefined species"
+        else
+          @info "\n#######  Running model for species " * species_params[s].species_name * " #######"
+
+          # Initialise data frame
+          adult_emerge = Vector{DataFrame}(undef, nReps)
+
+          for r in 1:nReps
+            @info "====== Replicate " * string(r) * " ==========="
+
+            # Generate daily temperature for maxYears
+            @info "        Generating climate data"
+            TavgVec = Vector{Array{Float32,2}}(undef, run_params.maxYears)
+            for y in 1:run_params.maxYears
+              TavgVec[y] = Tavg_mean .+ Tavg_sd .* rand(Normal(0, 1), size(Tavg_sd))
+            end
+            Tavg = reduce(vcat, TavgVec)
+            DOY = convert.(Int16, collect(1:size(Tavg, 1)))
+
+            @info "        Calculate GDD"
+            GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
+
+            # Calculate model at each location
+            @info "        Calculating adult emergence dates"
+            result = location_loop(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
+
+            # Simplify the results and put them in a DataFrame
+            adult_emerge[r] = cleanup_results(result, idx, grid_final.ID)
+
+
+            # Add in a column for the replicate number
+            insertcols!(adult_emerge[r], 1, :rep => r)
+
+
+            result = nothing
+            @everywhere GDDsh = nothing   # Make sure the shared array is cleared everywhere
+            @everywhere GC.gc()           # Clean up memory (this call may not be needed)
+          end
+
+
+          # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+          # ========== Save output to a JLD2 file ====================================
+          # Specify the output directory using the species name
+          outPrefix = replace(lowercase(species_params[s].species_name), " " => "_")
+
+          # Make directory for the output prefix if one doesn't exist
+          if !isdir(joinpath(paths.outDir, outPrefix))
+            @info "        Making directory " * outPrefix
+            mkpath(joinpath(paths.outDir, outPrefix))
+          end
+
+          if run_params.saveJLDFile
+            @info "        Saving the results to JLD2 file"
+            # Save using jld2 format
+            outFile = joinpath([paths.outDir, outPrefix,
+              outPrefix * "_" * run_params.country * "_rcp" * run_params.rcp[r] * "_" *
+              run_params.futurePeriod[p] * "_" * string(run_params.thinFactor) * "km.jld2"])
+            save_object(outFile, adult_emerge)
+          end
+
+
+          # # Clear memory of model results before starting next species
+          # # NOTE: Don't clear the CLimate data because it will be reused
+          # adult_emerge = nothing
+        end
+        println(" ")    # Print a blank line
       end
-
-      if run_params.saveJLDFile
-        @info "        Saving the results to JLD2 file"
-        # Save using jld2 format
-        outFile = joinpath([paths.outDir, outPrefix,
-          outPrefix * "_" * run_params.country * "_rcp" * run_params.meteoRCP * "_" * run_params.meteoPeriod * "_" * string(run_params.thinFactor) * "km.jld2"])
-        save_object(outFile, adult_emerge)
-      end
-
-
-      # # Clear memory of model results before starting next species
-      # # NOTE: Don't clear the CLimate data because it will be reused
-      # adult_emerge = nothing
     end
-    println(" ")    # Print a blank line
   end
 end
 
@@ -619,14 +629,14 @@ function extract_results(doy::Int32, result::DataFrame)
 
 
   # Create data frame to hold results
-  out_res = DataFrame(ID=result.ID[idx1], 
-                      startDOY=doy, 
-                      nGenerations=0.0,      # Must be Float because it can be fractional 
-                      emergeDOY=Vector{Union{Missing,Int32}}(missing, length(idx1)))
+  out_res = DataFrame(ID=result.ID[idx1],
+    startDOY=doy,
+    nGenerations=0.0,      # Must be Float because it can be fractional 
+    emergeDOY=Vector{Union{Missing,Int32}}(missing, length(idx1)))
 
   out_res.north_idx = mod.(out_res.ID, 1000)
   out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
-  
+
   allowmissing!(out_res, :nGenerations)
 
   # Set up starting DOY for each location
@@ -805,7 +815,7 @@ function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
 
   # Combine these results into one data frame and include grid info
   # return innerjoin(df_nGen, df_emergeDOY,
-    # on=[:hectad, :east_hectad, :north_hectad, :startDOY, :startDate])
+  # on=[:hectad, :east_hectad, :north_hectad, :startDOY, :startDate])
 
   # Return final dataframe
   return df_agg

@@ -23,7 +23,6 @@ using SharedArrays
 
 
 
-
 # =================================================================================
 # Set parameters for the visualisation
 # If more than one year then take average across years
@@ -70,7 +69,7 @@ include("OPRAM_ddmodel_functions.jl");
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Import location data and thin it using thinFactor
-  grid = prepare_data(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
+  grid = read_grid(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
 
   # Create easting and northings of bottom left of a hectad
   grid.east_hectad = convert.(Int32, floor.(grid.east ./ 1e4) .* 1e4)
@@ -99,10 +98,6 @@ for y in eachindex(run_params.years)
 
     @info "Importing data for year $(run_params.years[y])"
 
-    # Starting dates for output in CSV files
-    # The first of every month
-    dates = [Date(run_params.years[y], m, 01) for m in 1:12]
-
     inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
         readdir(joinpath(paths.outDir, speciesName[1])))
 
@@ -112,6 +107,10 @@ for y in eachindex(run_params.years)
     adult_emerge = load_object(joinpath(paths.outDir, speciesName[1],inFile[1]))
 
     @info " ---- Generating output for specific starting dates"
+    # Starting dates for output in CSV files
+    # The first of every month
+    dates = [Date(run_params.years[y], m, 1) for m in 1:12]
+
     # Create output for specific days of year
     dVec[y] = create_doy_results(dates, adult_emerge)
 

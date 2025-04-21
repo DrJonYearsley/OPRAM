@@ -1,5 +1,3 @@
-#!/snap/bin/julia -p 8
-
 #!/opt/homebrew/bin/julia -p 3
 #
 # This is the main program to run the OPRAM degree day model
@@ -51,11 +49,11 @@ if in("simYears",keys(params["model"]))
                 thinFactor = params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
                 gridFile = params["inputData"]["gridFile"]);          # File containing a 1km grid of lats and longs over Ireland 
                 # (used for daylength calculations as well as importing and thining of meteo data)
-elseif in("RCP",keys(params["model"]))
+elseif in("rcp",keys(params["model"]))
   # Run model on future data
   run_TRANSLATE_future = true
   run_params = (futurePeriod = params["model"]["futurePeriod"], # Years to run model
-                rcp = params["model"]["RCP"],                 # Future RCP scenario
+                rcp = params["model"]["rcp"],                 # Future RCP scenario
                 maxYears = params["model"]["maxYears"],       # Maximum number of years to complete insect development
                 country = params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
                 saveJLDFile = params["runtime"]["save2file"], # If true save the full result to a JLD2 file
@@ -84,8 +82,6 @@ species_setup = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFil
 #                   "base0_thresh800", "base5_thresh800", "base10_thresh800", "base15_thresh800",
 #                   "base0_thresh1000", "base5_thresh1000", "base10_thresh1000", "base15_thresh1000"])  # A vector of strings to uniquely identify a species name in the speciesFile
 
-# species_setup = (speciesFile = joinpath(homedir(),"git_repos/OPRAM/data/userdefined_parameters.csv"),  # File containing species parameters
-#                   speciesStr = ["base0_thresh200"])
 
 # Predefined species are:
 #  :agrilus_anxius
@@ -186,41 +182,17 @@ paths = (outDir=joinpath(homedir(),params["paths"]["output"]),
           meteoDir_NI = params["paths"]["meteoNI"])
 
 
-
-# if isdir(joinpath(homedir(),"DATA//OPRAM"))       # Linux workstation
-#   paths = (outDir=joinpath(homedir(),"Desktop//OPRAM//results//"),
-#     dataDir=joinpath(homedir(),"DATA//OPRAM//"),
-#     meteoDir_IE=joinpath(homedir(),"DATA//OPRAM//Climate_JLD2"),
-#     meteoDir_NI=nothing)
-
-# elseif isdir(joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
-#   paths = (outDir=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//results//"),
-#     dataDir=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"),
-#     meteoDir_IE=joinpath(homedir(),"Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"),
-#     meteoDir_NI=nothing)
-
-# elseif isdir(joinpath(homedir(),"Desktop//OPRAM//"))
-#   paths = (outDir=joinpath(homedir(),"Desktop//OPRAM//results//"),
-#     dataDir=joinpath(homedir(),"Desktop//OPRAM//"),
-#     meteoDir_IE=joinpath(homedir(),"Desktop//OPRAM//Irish_Climate_Data//"),
-#     meteoDir_NI=nothing)
-# end
-
 # =============== End of parameter setup =====================================================
 # ============================================================================================
 
 
 
-# Load packages that will be used
+
+
+# ===============================================================
+# ================ Set up parallel computing======================
+
 using Distributed;
-using CSV;
-using JLD2;
-using Dates;
-using Statistics;
-
-# =========================================================
-# =========================================================
-
 if isinteractive() & nprocs() == 1
   # Enable multiple nodes 
   addprocs(nNodes)
@@ -229,6 +201,17 @@ end
 
 @info "Workers : $(workers())"
 @info "Interactive Session: $(isinteractive())"
+
+
+
+# ===============================================================
+# ===============================================================
+# Load packages that will be used
+using Distributed;
+using CSV;
+using JLD2;
+using Dates;
+using Statistics;
 
 # Load additional packages on all compute nodes
 @everywhere using SharedArrays
@@ -250,9 +233,15 @@ if run_TRANSLATE_future
   # If a climate scenario is specified, run the model for future climates
   using Distributed;
   using Distributions, Random;
+
+  @info "Running OPRAM model for future climate scenarios"
+
    @time "OPRAM future model run complete:" run_model_futures(run_params, species_setup, paths)
 else
   # If no climate scenario is specified, run the model for past climates
+
+  @info "Running OPRAM model for past climate years" 
+
   @time "OPRAM model run complete:" run_model(run_params, species_setup, paths)
 end
 

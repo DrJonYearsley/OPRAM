@@ -103,7 +103,8 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
 
   # An array containing the years to be imported
   # Make sure it is no greater than maxMeteoYear
-  years = max.(collect(meteoYear:meteoYear+maxYears-1), lastMeteoYear)
+  years = min.(collect(meteoYear:meteoYear+maxYears-1), lastMeteoYear)
+  
 
 
 
