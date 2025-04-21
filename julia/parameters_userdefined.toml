@@ -1,6 +1,6 @@
 # Model parameters in TOML format
 
-title = "Degree day model parameter file"
+title = "Degree day model parameter file for user defined options in the app"
 
 [runtime]
 nNodes = 3           # Number of compute nodes to use
@@ -14,29 +14,20 @@ meteoIE = "DATA//OPRAM//Climate_JLD2"    # Folder containing meteo data for ROI
 meteoNI =  "nothing"                     # Folder containing meteo data for NI
 
 [inputData]   # Input data on the model grid and species params
-speciesFile = "git_repos/OPRAM/data/species_parameters.csv"
+speciesFile = "git_repos/OPRAM/data/userdefined_parameters.csv"
 gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 
 [model]     # Parameters to define the model
 simYears = [1991,1992,1993,1994,1995,1996,1997,1998,1999,2000,
             2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,
             2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,
-            2021,2022,2023, 2024]        # Years to run model
+            2021,2022,2023]        # Years to run model
 maxYears = 3         # Maximum number of years to complete insect development
-lastMeteoYear = 2024  # The last year of meteo data
+lastMeteoYear = 2023  # The last year of meteo data
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-speciesList = ["anxius"]
-
-# speciesList = ["anxius", "sexdentatus", "frugiperda", "duplicatus", "cembrae", "decemlineata", " halys", "typo"]
-
-# Predefined species are:
-#  :agrilus_anxius
-#  :halyomorpha_halys
-#  :ips_cembrae
-#  :ips_duplicatus
-#  :ips_sexdentatus
-#  :ips_typographus
-#  :leptinotarsa_decemlineata
-#  :oulema_melanopus
-#  :spodoptera_frugiperda
+speciesList = ["base0_thresh200", "base5_thresh200", "base10_thresh200", "base15_thresh200",
+                   "base0_thresh400", "base5_thresh400", "base10_thresh400", "base15_thresh400",
+                   "base0_thresh600", "base5_thresh600", "base10_thresh600", "base15_thresh600",
+                   "base0_thresh800", "base5_thresh800", "base10_thresh800", "base15_thresh800",
+                   "base0_thresh1000", "base5_thresh1000", "base10_thresh1000", "base15_thresh1000"]
