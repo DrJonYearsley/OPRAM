@@ -19,12 +19,23 @@ import CodecBzip2
 # =================================================================================
 # Filename to import
 
-paulFile = "Code that is under development//Changing Start Dates//Obligative_Three_Year//first_occurrence_threshold_with_date_range_1_2000_Oulema_melanopus_Model_two_multiple_dates.rds"
-paulFile2 = "WebDeveloper//Web Developer Quote - Shiny App//Model Outputs//Oulema_melanopus_model_two/first_occourence_threshold_individual_years/updated_first_occurrence_threshold_1_2000_Oulema_melanopus_model_two.rds"
-
-juliaFile = "result_oulema2000_par_thin1.jld2"
+speciesStr = "dupli"
 year = 2000
 thinFactor = 1
+
+# Find directory matching the species name in run_params
+speciesName = filter(x -> occursin(r"" * run_params.speciesName, x), readdir(paths.outDir))
+if length(speciesName) > 1
+    @error "More than one species name found"
+elseif length(speciesName) == 0
+    @error "Species not found"
+end
+
+
+paulFile = joinpath("results//Changing Start Dates", speciesName[1],"first_occurrence_with_date_range_1_" * string(year) * speciesName[1] * ".rds")
+
+juliaFile = joinpath("results",speciesName[1],"combined_" * speciesName[1] * "*.jld2")
+
 
 
 

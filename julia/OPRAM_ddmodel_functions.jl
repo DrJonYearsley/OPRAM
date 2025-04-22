@@ -62,8 +62,12 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
     # Import meteo data and calculate degree days
     @info "======Running model for year " * string(run_params.years[y]) * "============="
 
+    if run_params.years[y] > run_params.lastMeteoYear
+      @error "Year " * string(run_params.years[y]) * " is greater than the last year of meteo data. Skipping this year."
+    end
+
     @info "Importing " * string(run_params.maxYears) * " years of meteo data, starting at year " * string(run_params.years[y])
-    Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params.maxYears)
+    Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params.maxYears, run_params.lastMeteoYear)
 
     # Remove grid points not in the meteo data
     keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
@@ -100,7 +104,7 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
           @info "        Saving the results to JLD2 file"
           # Save using jld2 format
           outFile = joinpath([paths.outDir, outPrefix,
-            outPrefix * "_"  * run_params.country * "_" * string(run_params.years[y]) * "_" * string(run_params.thinFactor) * "km.jld2"])
+            outPrefix * "_" * run_params.country * "_" * string(run_params.years[y]) * "_" * string(run_params.thinFactor) * "km.jld2"])
           save_object(outFile, adult_emerge)
         end
 
@@ -163,7 +167,6 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
   # ====================================================================
   # ====================================================================
 
-  nReps = 50; # Number of replicates to run
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Set species parameters from the parameter file (can be more than one species)
@@ -176,85 +179,94 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Import TRANSLATE climate data
-  Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.meteoRCP, run_params.meteoPeriod, grid.ID)
 
-  # Remove grid points not in the meteo data
-  keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
-  grid_final = grid[keep_ID, :]
+  for r in eachindex(run_params.rcp)
+    @info "======Running model for RCP " * run_params.rcp[r] * "============="
 
+    for p in eachindex(run_params.futurePeriod)
+      @info "======Running model for future period " * run_params.futurePeriod[p] * "============="
+    
+      Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.rcp[r], run_params.futurePeriod[p], grid.ID)
 
-  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  # Start the main loop of the program
-
-  # Loop through all the species
-  for s in eachindex(species_params)
-    if ismissing(species_params[s].species_name)
-      @warn "Skipping an undefined species"
-    else
-      @info "\n#######  Running model for species " * species_params[s].species_name * " #######"
-
-      # Initialise data frame
-      adult_emerge = Vector{DataFrame}(undef, nReps)
-
-      for r in 1:nReps
-        @info "====== Replicate " * string(r) * " ==========="
-
-        # Generate daily temperature for maxYears
-        @info "        Generating climate data"
-        TavgVec = Vector{Array{Float32,2}}(undef, run_params.maxYears)
-        for y in 1:run_params.maxYears
-          TavgVec[y] = Tavg_mean .+ Tavg_sd .* rand(Normal(0, 1), size(Tavg_sd))
-        end
-        Tavg = reduce(vcat, TavgVec)
-        DOY = convert.(Int16,collect(1:size(Tavg, 1)))
-
-        @info "        Calculate GDD"
-        GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
-
-        # Calculate model at each location
-        @info "        Calculating adult emergence dates"
-        result = location_loop(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
-
-        # Simplify the results and put them in a DataFrame
-        adult_emerge[r] = cleanup_results(result, idx, grid_final.ID)
-
-
-        # Add in a column for the replicate number
-        insertcols!(adult_emerge[r], 1, :rep => r)
-
-
-        result = nothing
-        @everywhere GDDsh = nothing   # Make sure the shared array is cleared everywhere
-        @everywhere GC.gc()           # Clean up memory (this call may not be needed)
-      end
+      # Remove grid points not in the meteo data
+      keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
+      grid_final = grid[keep_ID, :]
 
 
       # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-  
-      # ========== Save output to a JLD2 file ====================================
-      # Specify the output directory using the species name
-      outPrefix = replace(lowercase(species_params[s].species_name), " " => "_")
+      # Start the main loop of the program
 
-      # Make directory for the output prefix if one doesn't exist
-      if !isdir(joinpath(paths.outDir, outPrefix))
-        @info "        Making directory " * outPrefix
-        mkpath(joinpath(paths.outDir, outPrefix))
+      # Loop through all the species
+      for s in eachindex(species_params)
+        if ismissing(species_params[s].species_name)
+          @warn "Skipping an undefined species"
+        else
+          @info "\n#######  Running model for species " * species_params[s].species_name * " #######"
+
+          # Initialise data frame
+          adult_emerge = Vector{DataFrame}(undef, run_params.nReps)
+
+          for r in 1:run_params.nReps
+            @info "====== Replicate " * string(r) * " ==========="
+
+            # Generate daily temperature for maxYears
+            @info "        Generating climate data"
+            TavgVec = Vector{Array{Float32,2}}(undef, run_params.maxYears)
+            for y in 1:run_params.maxYears
+              TavgVec[y] = Tavg_mean .+ Tavg_sd .* rand(Normal(0, 1), size(Tavg_sd))
+            end
+            Tavg = reduce(vcat, TavgVec)
+            DOY = convert.(Int16, collect(1:size(Tavg, 1)))
+
+            @info "        Calculate GDD"
+            GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
+
+            # Calculate model at each location
+            @info "        Calculating adult emergence dates"
+            result = location_loop(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
+
+            # Simplify the results and put them in a DataFrame
+            adult_emerge[r] = cleanup_results(result, idx, grid_final.ID)
+
+
+            # Add in a column for the replicate number
+            insertcols!(adult_emerge[r], 1, :rep => Int8(r))
+
+            result = nothing
+            @everywhere GDDsh = nothing   # Make sure the shared array is cleared everywhere
+            @everywhere GC.gc()           # Clean up memory (this call may not be needed)
+          end
+
+
+          # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+          # ========== Save output to a JLD2 file ====================================
+          # Specify the output directory using the species name
+          outPrefix = replace(lowercase(species_params[s].species_name), " " => "_")
+
+          # Make directory for the output prefix if one doesn't exist
+          if !isdir(joinpath(paths.outDir, outPrefix))
+            @info "        Making directory " * outPrefix
+            mkpath(joinpath(paths.outDir, outPrefix))
+          end
+
+          if run_params.saveJLDFile
+            @info "        Saving the results to JLD2 file"
+            # Save using jld2 format
+            outFile = joinpath([paths.outDir, outPrefix,
+              outPrefix * "_" * run_params.country * "_rcp" * run_params.rcp[r] * "_" *
+              run_params.futurePeriod[p] * "_" * string(run_params.thinFactor) * "km.jld2"])
+            save_object(outFile, adult_emerge)
+          end
+
+
+          # # Clear memory of model results before starting next species
+          # # NOTE: Don't clear the CLimate data because it will be reused
+          # adult_emerge = nothing
+        end
+        println(" ")    # Print a blank line
       end
-
-      if run_params.saveJLDFile
-        @info "        Saving the results to JLD2 file"
-        # Save using jld2 format
-        outFile = joinpath([paths.outDir, outPrefix,
-          outPrefix * "_" * run_params.country * "_rcp" * run_params.meteoRCP * "_" * run_params.meteoPeriod * "_" * string(run_params.thinFactor) * "km.jld2"])
-        save_object(outFile, adult_emerge)
-      end
-
-
-      # # Clear memory of model results before starting next species
-      # # NOTE: Don't clear the CLimate data because it will be reused
-      # adult_emerge = nothing
     end
-    println(" ")    # Print a blank line
   end
 end
 
@@ -615,14 +627,14 @@ function extract_results(doy::Int32, result::DataFrame)
 
 
   # Create data frame to hold results
-  out_res = DataFrame(ID=result.ID[idx1], 
-                      startDOY=doy, 
-                      nGenerations=0.0,      # Must be Float because it can be fractional 
-                      emergeDOY=Vector{Union{Missing,Int32}}(missing, length(idx1)))
+  out_res = DataFrame(ID=result.ID[idx1],
+    startDOY=doy,
+    nGenerations=0.0,      # Must be Float because it can be fractional 
+    emergeDOY=Vector{Union{Missing,Int32}}(missing, length(idx1)))
 
   out_res.north_idx = mod.(out_res.ID, 1000)
   out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
-  
+
   allowmissing!(out_res, :nGenerations)
 
   # Set up starting DOY for each location
@@ -801,7 +813,7 @@ function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
 
   # Combine these results into one data frame and include grid info
   # return innerjoin(df_nGen, df_emergeDOY,
-    # on=[:hectad, :east_hectad, :north_hectad, :startDOY, :startDate])
+  # on=[:hectad, :east_hectad, :north_hectad, :startDOY, :startDate])
 
   # Return final dataframe
   return df_agg
@@ -813,220 +825,3 @@ end
 # ===================================================================
 
 
-
-# ------------------------------------------------------------------------------------------
-
-
-
-# ===================================================================
-# ================ Old Function Definitions ======================
-
-function calculate_GDD_old(year::Int64, params::parameters, grid_thin::DataFrame,
-  meteoDirs::Vector, maxYears::Int, diapauseDOY::Union{Vector{Int64},Nothing}=nothing)
-  # Function to calculate growing degree days from meteo data for a range of years
-  #
-  # Arguments:
-  #   year        starting year for calculations
-  #   params      parameters of the degree day model
-  #   grid_thin   data frame giving spatial grid of locations
-  #   meteoDirs   a 2-element array giving the paths to directories containing
-  #               ROI and NI meteo data  (in this order)
-  #   diapauseDOY the day of year when diapause will start (nothing if no diapause)
-  #   maxYears    Maximum number of years to complete insect development
-  #
-  # Output:
-  #   GDDsh       shared array of growing degree days (only giving days when 
-  #               GDD are accumulated)
-  #   idx         row, column indices of TRUE elements in gdd_update (where GDD accumulates)
-  #   locInd1     Start index in GDDsh for each spatial location
-  #   locInd2     End index in GDDsh for each spatial location
-  # *************************************************************
-
-
-  # Import weather data along with location and day of year
-  @info "Calculating for starting year " * string(year)
-
-  @time "Imported meteo data" Tavg, DOY, ID = read_meteo(year, meteoDirs, grid_thin, maxYears)
-
-  # # Make grid_thin consisent with ID's from meteo
-  # idx = [id in ID for id in grid_thin.ID]
-  # grid_thin = grid_thin[idx, :]
-
-  # Calculate days where development updates (Tavg>baseline)
-  gdd_update = Tavg .> params.base_temperature
-
-  # Add in diapause (if necessary)
-  if !ismissing(params.diapause_photoperiod)
-    @info "Removing days when insect is in diapause"
-    @time "Diapause" begin
-      # Make grid_thin consisent with ID's from meteo
-      diapauseDOY = diapauseDOY[idx]
-
-      # Find unique DOY in diapauseDOY
-      uniqueDiapause = unique(diapauseDOY) # Unique DOY when diapause starts
-
-      # Create overwinteringBool
-      overwinterBool = falses(size(Tavg))  # True if overwintering 
-
-      # Identify when diapuse will occur
-      if ismissing(params.diapause_temperature)   # diapause determined only by photoperiod
-        # Is DOY past the diapause threshold DOY?
-        for i in eachindex(uniqueDiapause)
-          locidx = findall(x -> x == uniqueDiapause[i], diapauseDOY)
-          DOYidx = findall(x -> x >= uniqueDiapause[i], DOY)
-
-          overwinterBool[DOYidx, locidx] .= true
-        end
-      else # diapause determined by photoperiod AND temp
-        for i in eachindex(uniqueDiapause)
-          locidx = findall(x -> x == uniqueDiapause[i], diapauseDOY)
-          DOYidx = findall(x -> x >= uniqueDiapause[i], DOY)
-
-          overwinterBool[DOYidx, locidx] = Tavg[DOYidx, locidx] .<= params.diapause_temperature
-        end
-      end
-
-      # Remove overwintering from gdd_update
-      gdd_update[gdd_update.&&overwinterBool] .= false
-    end
-  end
-
-  # List ID's for all GDDs above the base temp
-  idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
-  # IDvec = [convert(Int32, idx[i][2]) for i in eachindex(idx)]  # Location ID index (column coord in idx)
-
-  # Calculate GDD as a shared array
-  GDDsh = SharedArray{Float32,1}(Tavg[gdd_update] .- params.base_temperature)
-
-
-  # Find indices separatng different locations
-  ind = vec(sum(gdd_update, dims=1))
-  locInd2 = accumulate(+, ind)  # End locations
-  locInd1 = vcat(1, locInd2[1:end-1] .+ 1)
-
-  return GDDsh, idx, locInd1, locInd2
-
-end
-
-
-
-# ------------------------------------------------------------------------------------------
-
-
-
-function location_loop_old!(locInd1::Vector{Int64}, locInd2::Vector{Int64}, result::SharedMatrix{Int16},
-  GDD::SharedVector{Float32}, threshold::Float32)
-  # Function to loop around locations and run development model emergence()
-  #
-  # Arguments:
-  #   locInd1     vector of starting indices for spatial locations
-  #   locInd2     vector of ending indices for spatial locations
-  #   GDD         average daily temp minus base temp for each spatial location in locs
-  #                (each location must be ordered chronologically)
-  #   result      a DataFrame to store the results (this is pre-defined for all locations)
-  #               this dataframe will be updated (in place) with the results
-  #               Col 1: starting day of year, Col 2: emergence day of year, Col 3: cpu number
-  #   threshold   an integer threshold for the emergence model
-  #
-  # *************************************************************
-
-  # Loop around all spatial locations (distributed across nodes)
-  @sync @distributed for l in eachindex(locInd1)
-    # Calculate cumulative degree growing days for one location
-    cumGDD = cumsum(GDD[locInd1[l]:locInd2[l]])
-
-    # Calculate emergence time
-    result[locInd1[l]:locInd2[l], 2] .= emergence(cumGDD, result[locInd1[l]:locInd2[l], 1], threshold)
-    result[locInd1[l]:locInd2[l], 3] .= myid()
-  end
-
-end
-
-
-
-
-# ------------------------------------------------------------------------------------------
-
-
-
-
-
-
-function photoperiod2_old(latitude::Vector{Float64}, DOY::Vector{Int16}, threshold)
-  # Calculate daylength in hours using the algorithm from the R package geosphere
-  # This package uses the algorithm in 
-  # Forsythe, William C., Edward J. Rykiel Jr., Randal S. Stahl, Hsin-i Wu and 
-  # Robert M. Schoolfield, 1995. A model comparison for daylength as a function of 
-  # latitude and day of the year. Ecological Modeling 80:87-95.
-
-  # Check latitude and doy have the same length
-  if length(latitude) != length(DOY)
-    @warn "function photoperiod: latitude and DOY are not the same length"
-  end
-
-  # daylength only affects overwintering at end of year (i.e entering diapause)
-  doy150_idx = findall(DOY .> 150)
-
-  # Return true if daylength allows diapause to happen 
-  # (diapause not relevant before day 150 of year)
-  overwinterBool = Vector{Bool}(undef, length(DOY))  # True if overwintering 
-  for i in eachindex(doy150_idx)
-    P = asin(0.39795 * cos(0.2163108 + 2 * atan(0.9671396 * tan(0.0086 * (convert(Float64, DOY[doy150_idx[i]]) - 186.0)))))
-    a = (sind(0.8333) + sind(latitude[doy150_idx[i]]) * sin(P)) / (cosd(latitude[doy150_idx[i]]) * cos(P))
-    a = min(max(a, -1), 1)
-
-    # Overwintering if daylength less than threshold     
-    overwinterBool[doy150_idx[i]] = 24.0 - (24.0 / pi) * acos(a) < threshold
-  end
-
-  # Return true if daylength allows development to happen 
-  # (daylength not relevant before day 150 of year)
-  return .!overwinterBool
-end
-
-
-
-# ------------------------------------------------------------------------------------------
-
-
-function prepare_data_old(grid_path::String, thinFactor::Int64, country::String="IE")
-  # Function to prepare the data for the degree day model
-  #
-  # Arguments:
-  #   grid_path   path to the file containing the grid of locations
-  #   thinFactor  factor for thining spatial grid 
-  #                (thin_factor = 10, every 10th grid point, i.e. 10km spacing)
-  #   country     the countrys to use (IE or NI or "AllIreland")
-  #
-  # Output:
-  #   grid       dataframe of the locations of every grid square
-  # *************************************************************
-
-  # =========================================================
-  # =========================================================
-  # Import location data and thin it using thinFactor
-
-  @info "Importing spatial grid"
-  # Import grid location data
-  grid = CSV.read(grid_path, DataFrame, missingstring="NA")
-
-  # Sort locations in order of IDs
-  grid = grid[sortperm(grid.ID), :]
-
-  # Keep only locations for the required country
-  if country == "IE"
-    subset!(grid, :country => c -> c .== "IE")
-  elseif country == "NI"
-    subset!(grid, :country => c -> c .== "NI")
-  end
-
-  # Thin the locations using the thinFactor
-  subset!(grid, :east => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8,
-    :north => x -> mod.(x, (thinFactor * 1e3)) .< 1e-8)
-
-  return grid
-end
-
-
-# ================ End of Old Function Definitions ==================
-# ===================================================================
