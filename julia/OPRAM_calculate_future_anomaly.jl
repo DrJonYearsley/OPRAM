@@ -181,7 +181,7 @@ df_group = nothing  # Remove df_group
 # =========================================================
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Import the averaged data
-aggFile = joinpath(paths.resultDir, run_params.speciesName, "average_" * speciesName[1] * "_" *
+aggFile = joinpath(paths.resultDir, speciesName[1], "average_" * speciesName[1] * "_" *
                                                             run_params.averagedPeriod * "_1km.csv")
 df_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
 

@@ -32,7 +32,7 @@ using SharedArrays
 # If more than one year then take average across years
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
-run_params = (speciesName="agrilus_anxius",  # Name of the species
+run_params = (speciesName="sexdentatus",  # Name of the species
     years=collect(1991:2024),           # Either a single year or collect(year1:year2)
     maxYears=3,                         # Maximum number of years to complete insect development (must correspond to simulation value)
     country="IE",                       # Country code (IE or NI)
@@ -175,7 +175,7 @@ df_1km.startMonth = Dates.month.(df_1km.startDate)  # Use month rather than DOY 
 # =========================================================
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Import the averaged data
-aggFile = joinpath(paths.resultDir, run_params.speciesName, "average_" * speciesName[1] * "_" *
+aggFile = joinpath(paths.resultDir, speciesName[1], "average_" * speciesName[1] * "_" *
                                                          run_params.averagedPeriod * "_1km.csv")
 d_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
 
