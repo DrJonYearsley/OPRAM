@@ -9,7 +9,11 @@ year = 2010
 county = 6  # 6=cork
 dataFolder = "~/Google Drive/My Drive/Projects/DAFM_OPRAM/results/granite_output"
 githubFolder = "~/git_repos/OPRAM/data"
+start = paste0(year,"-01-01")
 
+
+
+# ===================================
 
 # Import data
 filein = paste0(species_name,"_100_",year,".csv")
@@ -24,7 +28,7 @@ granite = read.csv(file.path(githubFolder,"granite_hectad_county_defs.csv"))
 grid = read.csv(file.path(githubFolder,"IE_grid_locations.csv"))
 grid_hectad = read.csv(file.path(githubFolder,"IE_hectad_locations.csv"))
 
-start = paste0(year,"-01-01")
+
 d_start01 = subset(d, startDate==as.Date(start))
 d1km_start01 = subset(d1km, startDate==as.Date(start))
 
