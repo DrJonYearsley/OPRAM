@@ -49,20 +49,26 @@ d1km_start01$north = grid$north[match(d1km_start01$ID, grid$ID)]
 sf_start01 = st_as_sf(d_start01, coords = c("east","north"), crs=29903)
 sf_start01
 
-br = c(0,59, 90,
+br = c(1, 60, 90,
        105, 120, 130, 140, 151,
        161, 171, 181, 191, 201, 212,
        222, 232, 243, 258, 273, 365,
-       730, 1096)
+       731, 1096, 2000)
 
 cols = c("#a1d99b", "#238b45",
   "#9ebcda", "#8c96c6", "#8c6bb1", "#88419d", "#810f7c",
   "#fec44f", "#fe9929", "#ec7014", "#cc4c02", "#993404", "#662506",
   "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#253494", "#081d58",
-  "#fde0ef", "#ffffbf","#B2B2B2")
+  "#ef00ef", "#ffffbf","#B2B2B2")
 
-labs_emerge = format(as.Date(start) + br,"%d %b")
+labs_emerge = c("Jan-Feb",
+                format(as.Date(start) + br[c(2)],"%b"),
+                format(as.Date(start) + br[-c(1,2,21:23)],"%d %b"),
+                format(as.Date(start) + br[c(21:22)],"%Y"),
+                "No emergence")
 
+# cols = c(  "#fec44f", "#fe9929", "#ec7014", "#cc4c02", "#993404", "#662506")
+# br = c(1,30,60,90, 120,250,350)
 
 ggplot() +
   geom_sf(data=sf_start01, aes(colour=emergeDOY), size=3) + 
@@ -71,12 +77,14 @@ ggplot() +
     breaks = br,
     values = (br-1)/(2000-1),
     limits=c(1,2000),
-    labels = ~ format(as.Date(start, format="%Y-%m-%d")+pmax(., 1,na.rm=TRUE), format = "%d %b %Y")
+    # labels = ~ format(as.Date(start, format="%Y-%m-%d")+pmax(., 1,na.rm=TRUE), format = "%d %b %Y")
+    labels = labs_emerge,
+    right=FALSE
   ) +
   labs(title=species_name) +
   theme_void() + 
   theme(legend.key.height = unit(dev.size()[2]/10 , "inches")) +
-  guides(colour = guide_coloursteps(show.limits = FALSE))
+  guides(colour = guide_coloursteps(show.limits = TRUE))
 
 
 
