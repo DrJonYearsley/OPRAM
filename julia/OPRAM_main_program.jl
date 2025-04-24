@@ -26,7 +26,7 @@ if length(ARGS)==1
   params = TOML.parsefile(ARGS[1])
 
 elseif length(ARGS)==0 & isfile("parameters.toml")
-  params = TOML.parsefile("parameters_future.toml")
+  params = TOML.parsefile("parameters.toml")
 
 else
   @error "No parameter file given"
