@@ -1,3 +1,5 @@
+#!/opt/homebrew/bin/julia -p 3
+#
 # Julia program to:
 #  extract results from model jld2 files for the future predictions
 #  calculate the average results across all replicates
@@ -23,6 +25,19 @@ using Dates
 using JLD2
 using Distributed
 using SharedArrays
+using TOML
+
+# ==============================================================
+# Model parameters are stored in a TOML file https://toml.io/en/
+if length(ARGS) == 1
+    params = TOML.parsefile(ARGS[1])
+
+elseif length(ARGS) == 0 & isfile("parameters_future.toml")
+    params = TOML.parsefile("parameters_future.toml")
+
+else
+    @error "No parameter file given"
+end
 
 
 
@@ -32,23 +47,22 @@ using SharedArrays
 # If more than one year then take average across years
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
-run_params = (speciesName="agrilus_anxius",  # Name of the species
-    rcp="26",
-    futurePeriod="2021-2050",         # Climate future period
-    maxYears=3,                         # Maximum number of years to complete insect development (must correspond to simulation value)
-    country="IE",                       # Country code (IE or NI)
-    thinFactor=1,                       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-    gridFile="IE_grid_locations.csv",   # File containing a 1km grid of lats and longs over Ireland 
-    averagedPeriod="1991_2020",
-    # (used for daylength calculations as well as importing and thining of meteo data)
-    save_figs=true)  # If true save figures
+run_params = (speciesName=params["model"]["speciesList"],  # Name of the species
+    rcp=params["model"]["rcp"],
+    futurePeriod=params["model"]["futurePeriod"],         # Climate future period
+    maxYears=params["model"]["maxYears"],                         # Maximum number of years to complete insect development (must correspond to simulation value)
+    country=params["model"]["country"],                       # Country code (IE or NI)
+    thinFactor=params["model"]["thinFactor"],                       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+    gridFile=params["inputData"]["gridFile"],   # File containing a 1km grid of lats and longs over Ireland 
+    thirty_years=string(params["model"]["thirty_years"][1]) *
+                 "_" * string(params["model"]["thirty_years"][2]))    # (used for daylength calculations as well as importing and thining of meteo data)
 
 
 # Files containing the ID system from Granite.ie
 # This info is used to package the output into separate files
-granite_hectad_ID = "granite_hectad_defs.csv"
-granite_county_ID = "granite_county_defs.csv"
-granite_hectad_county = "granite_hectad_county_defs.csv"
+granite_hectad_ID = "git_repos/OPRAM/data/granite_hectad_defs.csv"
+granite_county_ID = "git_repos/OPRAM/data/granite_county_defs.csv"
+granite_hectad_county = "git_repos/OPRAM/data/granite_hectad_county_defs.csv"
 
 
 # =================================================================================
@@ -62,7 +76,7 @@ if isdir(joinpath(homedir(), "DATA//OPRAM"))       # Linux workstation
 elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
     paths = (outDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results//granite_output"),
         resultDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"),
-        dataDir=joinpath(homedir(), "git_repos/OPRAM//data"))
+        dataDir=homedir())
 
 elseif isdir(joinpath(homedir(), "Desktop//OPRAM//"))
     paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//granite_output"),
@@ -107,227 +121,245 @@ leftjoin!(grid, county_defs, on=:county => :County)
 # =========================================================
 # Import data across the years and calculate the average
 
-# Find directory matching the species name in run_params
-speciesName = filter(x -> occursin(r"" * run_params.speciesName, x), readdir(paths.resultDir))
-if length(speciesName) > 1
-    @error "More than one species name found"
-elseif length(speciesName) == 0
-    @error "Species not found"
+for s in eachindex(run_params.speciesName)
+
+    # Find directory matching the species name in run_params
+    speciesName = filter(x -> occursin(r"" * run_params.speciesName[s], x), readdir(paths.resultDir))
+    if length(speciesName) > 1
+        @error "More than one species name found"
+    elseif length(speciesName) == 0
+        @error "Species not found"
+    end
+
+    @info "Importing data for $(speciesName[1])"
+
+
+
+    # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Make directory for the output if one doesn't exist
+    if !isdir(paths.outDir)
+        @info "        Making directory " * paths.outDir
+        mkpath(paths.outDir)
+    end
+
+    # Specify the output directory using the species name
+    if !isdir(joinpath(paths.outDir, speciesName[1]))
+        @info "        Making directory " * speciesName[1]
+        mkpath(joinpath(paths.outDir, speciesName[1]))
+    end
+
+    for i in eachindex(run_params.rcp)
+        for j in eachindex(run_params.futurePeriod)
+
+            # Import model results
+            @info "Importing data for year $(run_params.futurePeriod[j]) and RCP $(run_params.rcp[i])"
+
+            # Starting dates for output in CSV files
+            # The first of every month
+            dates = [Date(2035, m, 01) for m in 1:12]
+
+            inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_rcp" * run_params.rcp[i] * "_" * run_params.futurePeriod[j] * "_1km.jld2", x),
+                readdir(joinpath(paths.resultDir, speciesName[1])))
+
+            if length(inFile) > 1
+                @error "More than one input file found"
+            end
+            adult_emerge = load_object(joinpath(paths.resultDir, speciesName[1], inFile[1]))
+
+            dVec = Vector{DataFrame}(undef, length(adult_emerge))
+            for r in eachindex(adult_emerge)
+                @info " ---- Generating output for specific starting dates for replicate " * string(r)
+                # Create output for specific days of year for each replicate
+                dVec[r] = create_doy_results(dates, adult_emerge[r])
+            end
+            adult_emerge = nothing  # Remove adult_emerge
+
+            # Put all the results together into one Dataframe and then find the mean across replicates
+            df_1km = reduce(vcat, dVec)
+            dVec = nothing   # remove dVec
+
+            # Define DOY for start and emerge dates (and set as integer)
+            idx = .!ismissing.(df_1km.emergeDate)
+            df_1km.emergeDOY = Vector{Union{Missing,Int16}}(missing, nrow(df_1km))
+            df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+ 1
+            df_1km.startMonth = Dates.month.(df_1km.startDate)  # Use month rather than DOY to avoid leap year problems
+
+            # Group data frame by location and then starting Date 
+            df_group = groupby(df_1km, [:ID, :startMonth])
+
+            # Calculate average over all replicates
+            df_av = combine(df_group,
+                :nGenerations => (x -> mean(x)) => :nGenerations,                  # Mean generations
+                :emergeDOY => (x -> mean(x)) => :emergeDOY)                # Mean emergence DOY
+
+
+            df_1km = nothing    # Remove df_1km
+            df_group = nothing  # Remove df_group
+
+
+            # =========================================================
+            # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+            # Import the averaged data
+            aggFile = joinpath(paths.resultDir, speciesName[1], "average_" * speciesName[1] * "_" *
+                                                                run_params.thirty_years * "_1km.csv")
+            df_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
+
+
+
+
+
+            # =========================================================
+            # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+            # =========================================================
+            # =========================================================
+            # Combine the multi year median with the original data and calculate anomalies
+
+            @info "Calculating anomalies"
+
+            # Combine origninal data frame with 30 year average
+            leftjoin!(df_av, select(df_agg, Not([:east, :north])), on=[:ID, :startMonth])
+
+            # Calculate anomalies
+            transform!(df_av, [:nGenerations, :nGenerations_median] => ((a, b) -> a .- b) => :nGenerations_anomaly)
+            transform!(df_av, [:emergeDOY, :emergeDOY_median] => ((a, b) -> a .- b) => :emergeDOY_anomaly)
+
+
+            # =========================================================
+            # =========================================================
+            # Export the anomaly and multi year average using a separate file for every year and every county
+
+            @info "Writing 1km results to CSV files"
+
+            uniqueCounty = sort(unique(grid.countyID))
+
+            # Add year and countyID into df_1km
+            leftjoin!(df_av, grid[:, [:ID, :countyID, :east, :north]], on=:ID)
+
+            for c in uniqueCounty
+                @info "Writing data for county " * string(c)
+
+                # Create subset to write to file
+                out_av = select(subset(df_av, :countyID => x1 -> x1 .== c),
+                    [:ID, :startMonth, :nGenerations, :nGenerations_anomaly, :emergeDOY, :emergeDOY_anomaly])
+
+                # Round number of generations
+                out_av.nGenerations = round.(out_av.nGenerations, digits=2)
+                out_av.nGenerations_anomaly = round.(out_av.nGenerations_anomaly, digits=2)
+
+                # Rename some columns
+                rename!(out_av, :nGenerations => "nGen",
+                    :nGenerations_anomaly => "nGen_anomaly")
+
+                # Create filename
+                fileout1 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_" * string(run_params.thinFactor^2) * "_" *
+                                                                  string(c) * "_rcp" * run_params.rcp[i] * "_" * run_params.futurePeriod[j] * ".csv")
+
+                CSV.write(fileout1, out_av, missingstring="NA", dateformat="yyyy-mm-dd")
+            end
+
+
+            # =========================================================
+            # =========================================================
+            # Create 10km summary
+
+
+            @info "Aggregating data to 10km resolution"
+
+            # Add bottom left eastings and northings of a hectad into df_1km
+            # leftjoin!(df_1km, grid[:, [:ID, :east, :north]], on=[:ID])
+            df_av.east_hectad = convert.(Int32, floor.(df_av.east ./ 1e4) .* 1e4)
+            df_av.north_hectad = convert.(Int32, floor.(df_av.north ./ 1e4) .* 1e4)
+
+
+            # Set missing values to be extremes (e.g. generations are small and emergeDOY is large)
+            idx1 = ismissing.(df_av.emergeDOY)
+            df_av.emergeDOY[idx1] .= 9999
+            df_av.nGenerations[idx1] .= -9999
+
+            idx3 = ismissing.(df_av.emergeDOY_anomaly)
+            df_av.emergeDOY_anomaly[idx3] .= 9999
+            df_av.nGenerations_anomaly[idx3] .= -9999
+
+
+            # Group data frame by location and then starting Date 
+            df_group = groupby(df_av, [:east_hectad, :north_hectad, :startMonth])
+
+
+
+            # Calculate worst case results within each hectad for nGenerations and emergeDOY
+            # for each starting date. 
+            # These worst case scenarios are not affected by locations where no emergence occurred
+            df_10km = combine(df_group,
+                :nGenerations => (x -> quantile(x, 1.0)) => :nGenerations_max,                  # Max generations per hectad
+                :nGenerations_anomaly => (x -> quantile(x, 1.0)) => :nGenerations_anomaly_max,
+                :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min,                         # Min emergence DOY
+                :emergeDOY_anomaly => (x -> quantile(x, 1.0)) => :emergeDOY_anomaly_min,
+                :nGenerations => (x -> sum(x .< 0)) => :nMissing)                              # Count number of no emergence events  
+
+            # Add in missing values where 10km worst case is out of bounds
+            # (i.e. nGenerations<0 or emergeDOY>5000)
+            allowmissing!(df_10km, [:nGenerations_max, :nGenerations_anomaly_max, :emergeDOY_min, :emergeDOY_anomaly_min])
+            df_10km.nGenerations_max[df_10km.nGenerations_max.<0] .= missing
+            df_10km.nGenerations_anomaly_max[abs.(df_10km.nGenerations_anomaly_max).>5000] .= missing
+            df_10km.emergeDOY_min[df_10km.emergeDOY_min.>5000] .= missing
+            df_10km.emergeDOY_anomaly_min[abs.(df_10km.emergeDOY_anomaly_min).>5000] .= missing
+
+            # # Add in columns with start and emergence dates where we have no missing data
+            # df_10km.emergeDate_min = Vector{Union{Missing,Date}}(missing, nrow(df_10km))
+
+            # idx1 = .!ismissing.(df_10km.emergeDOY_min)
+            # df_10km.emergeDate_min[idx1] .= Date.(year.(df_10km.startDate[idx1])) .+ Day.(floor.(df_10km.emergeDOY_min[idx1]))
+
+            # idx2 = .!ismissing.(df_10km.emergeDOY_median_min)
+            # df_10km.emergeDate_median_min[idx2] .= Date.(year.(df_10km.startDate[idx2])) .+ Day.(floor.(df_10km.emergeDOY_median_min[idx2]))
+
+
+
+
+
+
+
+            # =========================================================
+            # =========================================================
+            # Export 10km summary for the anomaly and multi year average
+
+            @info "Writing 10km results to CSV files"
+
+            # Add in hectad ID
+            leftjoin!(df_10km, unique(grid[:, [:hectad, :east_hectad, :north_hectad]]), on=[:east_hectad, :north_hectad])
+
+
+
+            # Round results for number of generations
+            df_10km.nGenerations_max = round.(df_10km.nGenerations_max, digits=2)
+            df_10km.nGenerations_anomaly_max = round.(df_10km.nGenerations_anomaly_max, digits=2)
+
+            # Rename some columns
+            rename!(df_10km, :nGenerations_max => "nGen",
+                :nGenerations_anomaly_max => "nGen_anomaly",
+                :emergeDOY_min => "emergeDOY",
+                :emergeDOY_anomaly_min => "emergeDOY_anomaly")
+
+            # Select specific years
+            select!(df_10km, [:hectad, :startMonth, :nGen, :nGen_anomaly, :emergeDOY, :emergeDOY_anomaly])
+
+            # Create filename
+            fileout3 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_100_rcp" * run_params.rcp[i] * "_" * run_params.futurePeriod[j] * ".csv")
+
+            CSV.write(fileout3, df_10km, missingstring="NA", dateformat="yyyy-mm-dd")
+
+            # Clear variables
+            df_10km = nothing
+            df_av = nothing
+            df_group = nothing
+            df_1km = nothing
+            df_agg = nothing
+
+        end
+    end
 end
 
-
-
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Make directory for the output if one doesn't exist
-if !isdir(paths.outDir)
-    @info "        Making directory " * paths.outDir
-    mkpath(paths.outDir)
-end
-
-# Specify the output directory using the species name
-if !isdir(joinpath(paths.outDir, speciesName[1]))
-    @info "        Making directory " * speciesName[1]
-    mkpath(joinpath(paths.outDir, speciesName[1]))
-end
-
-
-
-# Import model results
-@info "Importing data for year $(run_params.futurePeriod)"
-
-# Starting dates for output in CSV files
-# The first of every month
-dates = [Date(2035, m, 01) for m in 1:12]
-
-inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_rcp" * run_params.rcp * "_" * run_params.futurePeriod * "_1km.jld2", x),
-    readdir(joinpath(paths.resultDir, speciesName[1])))
-
-if length(inFile) > 1
-    @error "More than one input file found"
-end
-adult_emerge = load_object(joinpath(paths.resultDir, speciesName[1], inFile[1]))
-
-dVec = Vector{DataFrame}(undef, length(adult_emerge))
-for r in eachindex(adult_emerge)
-    @info " ---- Generating output for specific starting dates for replicate " * string(r)
-    # Create output for specific days of year for each replicate
-    dVec[r] = create_doy_results(dates, adult_emerge[r])
-end
-adult_emerge = nothing  # Remove adult_emerge
-
-# Put all the results together into one Dataframe and then find the mean across replicates
-df_1km = reduce(vcat, dVec)
-dVec = nothing   # remove dVec
-
-# Define DOY for start and emerge dates (and set as integer)
-idx = .!ismissing.(df_1km.emergeDate)
-df_1km.emergeDOY = Vector{Union{Missing,Int16}}(missing, nrow(df_1km))
-df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+ 1
-df_1km.startMonth = Dates.month.(df_1km.startDate)  # Use month rather than DOY to avoid leap year problems
-
-# Group data frame by location and then starting Date 
-df_group = groupby(df_1km, [:ID, :startMonth])
-
-# Calculate average over all replicates
-df_av = combine(df_group,
-    :nGenerations => (x -> mean(x)) => :nGenerations,                  # Mean generations
-    :emergeDOY => (x -> mean(x)) => :emergeDOY)                # Mean emergence DOY
-
-
-df_1km = nothing    # Remove df_1km
-df_group = nothing  # Remove df_group
-
-
 # =========================================================
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Import the averaged data
-aggFile = joinpath(paths.resultDir, speciesName[1], "average_" * speciesName[1] * "_" *
-                                                            run_params.averagedPeriod * "_1km.csv")
-df_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
-
-
-
-
-
-# =========================================================
-# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-
-
-# =========================================================
-# =========================================================
-# Combine the multi year median with the original data and calculate anomalies
-
-@info "Calculating anomalies"
-
-# Combine origninal data frame with 30 year average
-leftjoin!(df_av, select(df_agg, Not([:east, :north])), on=[:ID, :startMonth])
-
-# Calculate anomalies
-transform!(df_av, [:nGenerations, :nGenerations_median] => ((a, b) -> a .- b) => :nGenerations_anomaly)
-transform!(df_av, [:emergeDOY, :emergeDOY_median] => ((a, b) -> a .- b) => :emergeDOY_anomaly)
-
-
-# =========================================================
-# =========================================================
-# Export the anomaly and multi year average using a separate file for every year and every county
-
-@info "Writing 1km results to CSV files"
-
-uniqueCounty = sort(unique(grid.countyID))
-
-# Add year and countyID into df_1km
-leftjoin!(df_av, grid[:, [:ID, :countyID, :east, :north]], on=:ID)
-
-for c in uniqueCounty
-    @info "Writing data for county " * string(c)
-
-    # Create subset to write to file
-    out_av = select(subset(df_av, :countyID => x1 -> x1 .== c),
-        [:ID, :startMonth, :nGenerations, :nGenerations_anomaly, :emergeDOY, :emergeDOY_anomaly])
-
-    # Round number of generations
-    out_av.nGenerations = round.(out_av.nGenerations, digits=2)
-    out_av.nGenerations_anomaly = round.(out_av.nGenerations_anomaly, digits=2)
-
-    # Rename some columns
-    rename!(out_av, :nGenerations => "nGen",
-        :nGenerations_anomaly => "nGen_anomaly")
-
-    # Create filename
-    fileout1 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_" * string(run_params.thinFactor^2) * "_" *
-                                                      string(c) * "_rcp" * run_params.rcp * "_" * run_params.futurePeriod * ".csv")
-
-    CSV.write(fileout1, out_av, missingstring="NA", dateformat="yyyy-mm-dd")
-end
-
-
-# =========================================================
-# =========================================================
-# Create 10km summary
-
-
-@info "Aggregating data to 10km resolution"
-
-# Add bottom left eastings and northings of a hectad into df_1km
-# leftjoin!(df_1km, grid[:, [:ID, :east, :north]], on=[:ID])
-df_av.east_hectad = convert.(Int32, floor.(df_av.east ./ 1e4) .* 1e4)
-df_av.north_hectad = convert.(Int32, floor.(df_av.north ./ 1e4) .* 1e4)
-
-
-# Set missing values to be extremes (e.g. generations are small and emergeDOY is large)
-idx1 = ismissing.(df_av.emergeDOY)
-df_av.emergeDOY[idx1] .= 9999
-df_av.nGenerations[idx1] .= -9999
-
-idx3 = ismissing.(df_av.emergeDOY_anomaly)
-df_av.emergeDOY_anomaly[idx3] .= 9999
-df_av.nGenerations_anomaly[idx3] .= -9999
-
-
-# Group data frame by location and then starting Date 
-df_group = groupby(df_av, [:east_hectad, :north_hectad, :startMonth])
-
-
-
-# Calculate worst case results within each hectad for nGenerations and emergeDOY
-# for each starting date. 
-# These worst case scenarios are not affected by locations where no emergence occurred
-df_10km = combine(df_group,
-    :nGenerations => (x -> quantile(x, 1.0)) => :nGenerations_max,                  # Max generations per hectad
-    :nGenerations_anomaly => (x -> quantile(x, 1.0)) => :nGenerations_anomaly_max,
-    :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min,                         # Min emergence DOY
-    :emergeDOY_anomaly => (x -> quantile(x, 1.0)) => :emergeDOY_anomaly_min,
-    :nGenerations => (x -> sum(x .< 0)) => :nMissing)                              # Count number of no emergence events  
-
-# Add in missing values where 10km worst case is out of bounds
-# (i.e. nGenerations<0 or emergeDOY>5000)
-allowmissing!(df_10km, [:nGenerations_max, :nGenerations_anomaly_max, :emergeDOY_min, :emergeDOY_anomaly_min])
-df_10km.nGenerations_max[df_10km.nGenerations_max.<0] .= missing
-df_10km.nGenerations_anomaly_max[abs.(df_10km.nGenerations_anomaly_max).>5000] .= missing
-df_10km.emergeDOY_min[df_10km.emergeDOY_min.>5000] .= missing
-df_10km.emergeDOY_anomaly_min[abs.(df_10km.emergeDOY_anomaly_min).>5000] .= missing
-
-# # Add in columns with start and emergence dates where we have no missing data
-# df_10km.emergeDate_min = Vector{Union{Missing,Date}}(missing, nrow(df_10km))
-
-# idx1 = .!ismissing.(df_10km.emergeDOY_min)
-# df_10km.emergeDate_min[idx1] .= Date.(year.(df_10km.startDate[idx1])) .+ Day.(floor.(df_10km.emergeDOY_min[idx1]))
-
-# idx2 = .!ismissing.(df_10km.emergeDOY_median_min)
-# df_10km.emergeDate_median_min[idx2] .= Date.(year.(df_10km.startDate[idx2])) .+ Day.(floor.(df_10km.emergeDOY_median_min[idx2]))
-
-
-
-
-
-
-
-# =========================================================
-# =========================================================
-# Export 10km summary for the anomaly and multi year average
-
-@info "Writing 10km results to CSV files"
-
-# Add in hectad ID
-leftjoin!(df_10km, unique(grid[:, [:hectad, :east_hectad, :north_hectad]]), on=[:east_hectad, :north_hectad])
-
-
-
-# Round results for number of generations
-df_10km.nGenerations_max = round.(df_10km.nGenerations_max, digits=2)
-df_10km.nGenerations_anomaly_max = round.(df_10km.nGenerations_anomaly_max, digits=2)
-
-# Rename some columns
-rename!(df_10km, :nGenerations_max => "nGen",
-    :nGenerations_anomaly_max => "nGen_anomaly",
-    :emergeDOY_min => "emergeDOY",
-    :emergeDOY_anomaly_min => "emergeDOY_anomaly")
-
-# Select specific years
-select!(df_10km, [:hectad, :startMonth, :nGen, :nGen_anomaly, :emergeDOY, :emergeDOY_anomaly])
-
-# Create filename
-fileout3 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_100_rcp" * run_params.rcp * "_" * run_params.futurePeriod * ".csv")
-
-CSV.write(fileout3, df_10km, missingstring="NA", dateformat="yyyy-mm-dd")
