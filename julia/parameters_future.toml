@@ -18,15 +18,16 @@ speciesFile = "git_repos/OPRAM/data/species_parameters.csv"
 gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 
 [model]     # Parameters to define the model
-nReps = 20          # Number of replicates to run
+nReps = 10          # Number of replicates to run
 #futurePeriod = ["2021-2050", "2041-2070"]  # Climate future period
 #rcp = ["26","45","85"]                     # Climate future RCP
 futurePeriod = ["2021-2050"]  # Climate future period
-rcp = ["26"]                     # Climate future RCP
+rcp = ["26", "45"]        # Climate future RCP
 maxYears = 4         # Maximum number of years to complete insect development
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-speciesList = ["agrilus"]
+speciesList = ["agrilus", "sexdentatus", "duplicatus", "cembrae"]
+thirty_years = [1991, 2020]  # 30yr period to average
 
 # speciesList = ["anxius","frugiperda", "duplicatus", "cembrae", "decemlineata", " halys", "typo"]
 

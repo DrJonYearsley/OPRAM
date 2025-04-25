@@ -18,7 +18,8 @@ speciesFile = "git_repos/OPRAM/data/userdefined_parameters.csv"
 gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 
 [model]     # Parameters to define the model
-rcp = ["26","45","85]
+nReps = 10  # Number of replicates to run
+rcp = ["26","45","85]     # Climate future RCP
 futurePeriod = ["2021-2050", "2041-2070"]        # Years to run model
 maxYears = 4         # Maximum number of years to complete insect development
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
