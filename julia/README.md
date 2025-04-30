@@ -12,13 +12,47 @@ OPRAM_io_functions.jl | Functions to import/export data (meteo, grid and species
 
 
 
+## Parameter files
+Parameters are defined in TOML formatted files (https://toml.io/en/) that are human readable.
+These parameter files are used by 
+
+  + OPRAM_main_program.jl  
+  + OPRAM_calculate_average.jl  
+  + OPRAM_calculate_anomaly.jl  
+  + OPRAM_calculate_anomaly_future.jl   
+
+
+
+Filename  | Description
+----------| --------------------------------
+parameters.toml  |  Model parameter settings for past climates and pre-defined species
+parameters_userdefined.toml |  Model parameter settings for past climates and user-defined species
+parameters_future.toml   |  Model parameter settings for future climates and pre-defined species
+parameters_userdefined_future.toml |  Model parameter settings for future climates and user-defined species
+
+
+## Data Preparation
+
+Filename  | Description
+----------| --------------------------------
+meteo_to_jld.jl  | Convert Met Eireann gridded csv files into a jld2 file
+translate_to_jld.jl  | Convert Met Eireann TRANSLATE csv file into a jld2 file
+
+
+
+
 ## Helper programs
 
 Filename  | Description
 ----------| --------------------------------
+OPRAM_visualise.jl  | Create some visualisations of the model (Model visualisation is better done in R with OPRAM_visualisations.R)
 visualise_GDD_results.jl | Create maps of Ireland showing key model outputs (can also display averages across years)
-agrilus_ngen_2018_2020.png | Example of a map from visualise_GDD_results.jl
+map_plot.jl  | Another program to plot maps of the results
 compare_to_R.jl | Compare output from Julia to the output from the model in R
 compare_meteo.jl| Compare two years of meteo data (both ROI and NI gridded data)
 matrix_model.jl | Create a metric model that iterates the model and viualises the long-term distribution of emergence dates
+calculate_daylength.jl   |  Calculate day length from latitude and day of year 
+
+
+
 
