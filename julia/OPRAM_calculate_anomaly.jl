@@ -33,7 +33,7 @@ if length(ARGS) == 1
     params = TOML.parsefile(ARGS[1])
 
 elseif length(ARGS) == 0 & isfile("parameters.toml")
-    params = TOML.parsefile("parameters.toml")
+    params = TOML.parsefile("parameters_userdefined.toml")
 
 else
     @error "No parameter file given"
@@ -55,7 +55,7 @@ run_params = (
     thinFactor=params["model"]["thinFactor"],       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
     gridFile=params["inputData"]["gridFile"],       # File containing a 1km grid of lats and longs over Ireland 
     thirty_years=string(params["model"]["thirty_years"][1]) * "_" * string(params["model"]["thirty_years"][2]))
-    # (used for daylength calculations as well as importing and thining of meteo data)
+# (used for daylength calculations as well as importing and thining of meteo data)
 
 
 # Files containing the ID system from Granite.ie
@@ -124,8 +124,6 @@ leftjoin!(grid, county_defs, on=:county => :County)
 # Import data across the years and calculate the average
 
 for s in eachindex(run_params.speciesName)
-    @info "Importing data for species " * run_params.speciesName[s]
-
 
     # Find directory matching the species name in run_params
     speciesName = filter(x -> occursin(r"" * run_params.speciesName[s], x), readdir(paths.resultDir))
@@ -135,6 +133,7 @@ for s in eachindex(run_params.speciesName)
         @error "Species not found"
     end
 
+    @info "Importing data for species " * speciesName[1]
 
 
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -185,7 +184,8 @@ for s in eachindex(run_params.speciesName)
     # Define DOY for start and emerge dates (and set as integer)
     idx = .!ismissing.(df_1km.emergeDate)
     df_1km.emergeDOY = Vector{Union{Missing,Int64}}(missing, nrow(df_1km))
-    df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+ 1
+    df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+
+                            Dates.dayofyear.(df_1km.startDate[idx])
     df_1km.startMonth = Dates.month.(df_1km.startDate)  # Use month rather than DOY to avoid leap year problems
 
 
@@ -373,7 +373,8 @@ for s in eachindex(run_params.speciesName)
         select!(out_10km, [:hectad, :startDate, :nGen, :nGen_30yr, :nGen_anomaly, :emergeDOY, :emergeDOY_30yr, :emergeDOY_anomaly])
 
         # Create filename
-        fileout3 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_100_" * string(y) * ".csv")
+        fileout3 = joinpath(paths.outDir, speciesName[1],
+            speciesName[1] * "_100_" * string(y) * ".csv")
 
         CSV.write(fileout3, out_10km, missingstring="NA", dateformat="yyyy-mm-dd")
 
@@ -386,4 +387,8 @@ for s in eachindex(run_params.speciesName)
     df_group = nothing
     df_1km = nothing
     df_agg = nothing
+
+
+    # Print blank line
+    println(" ")
 end

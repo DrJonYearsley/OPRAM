@@ -30,7 +30,7 @@ if length(ARGS) == 1
     params = TOML.parsefile(ARGS[1])
 
 elseif length(ARGS) == 0 & isfile("parameters.toml")
-    params = TOML.parsefile("parameters.toml")
+    params = TOML.parsefile("parameters_userdefined.toml")
 
 else
     @error "No parameter file given"
@@ -104,7 +104,6 @@ grid.north_hectad = convert.(Int32, floor.(grid.north ./ 1e4) .* 1e4)
 
 
 for s in eachindex(run_params.speciesName)
-    @info "Importing data for $(run_params.speciesName[s])"
 
     # Find directory matching the species name in run_params
     speciesName = filter(x -> occursin(r"" * run_params.speciesName[s], x), readdir(paths.outDir))
@@ -113,6 +112,9 @@ for s in eachindex(run_params.speciesName)
     elseif length(speciesName) == 0
         @error "Species not found"
     end
+
+    @info "Importing data for $(speciesName[1])"
+
 
     dVec = Vector{DataFrame}(undef, length(run_params.years))
     for y in eachindex(run_params.years)
@@ -152,7 +154,8 @@ for s in eachindex(run_params.speciesName)
     # Define DOY for start and emerge dates (and set as integer)
     idx = .!ismissing.(df_1km.emergeDate)
     df_1km.emergeDOY = Vector{Union{Missing,Int64}}(missing, nrow(df_1km))
-    df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+ 1
+    df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+ 
+    Dates.dayofyear.(df_1km.startDate[idx])
     df_1km.startMonth = Dates.month.(df_1km.startDate)  # Use month rather than DOY to avoid leap year problems
 
     # Set missing DOY to be a large number and missing generations to be -9999
@@ -215,4 +218,7 @@ for s in eachindex(run_params.speciesName)
     d_agg = nothing
     df_1km = nothing
     df_group = nothing
+
+    # Print blank line on the screen
+    println(" ")
 end

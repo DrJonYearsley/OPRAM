@@ -4,8 +4,8 @@ library(ggplot2)
 library(sf)
 library(lubridate)
 rm(list=ls())
-species_name = "ips_sexdentatus"
-year = 2010
+species_name = "agrilus_anxius"
+year = 2023
 county = 6  # 6=cork
 dataFolder = "~/Google Drive/My Drive/Projects/DAFM_OPRAM/results/granite_output"
 githubFolder = "~/git_repos/OPRAM/data"
@@ -17,7 +17,7 @@ start = paste0(year,"-01-01")
 
 # Import data
 filein = paste0(species_name,"_100_",year,".csv")
-d = read.csv(file.path(dataFolder,species_name,filein))
+d10km= read.csv(file.path(dataFolder,species_name,"..",filein))
 
 filein_1km = paste0(species_name,"_1_",county,"_",year,".csv")
 d1km = read.csv(file.path(dataFolder,species_name,filein_1km))
@@ -27,7 +27,10 @@ d1km = read.csv(file.path(dataFolder,species_name,filein_1km))
 granite = read.csv(file.path(githubFolder,"granite_hectad_county_defs.csv"))
 grid = read.csv(file.path(githubFolder,"IE_grid_locations.csv"))
 grid_hectad = read.csv(file.path(githubFolder,"IE_hectad_locations.csv"))
-grid_hectad = read.csv(file.path("~/Downloads/IE_hectad_locations.csv"))
+
+grid_hectad$country = grid$country[match(grid_hectad$hectad, grid$hectad)]
+sf_grid = st_as_sf(grid, coords = c("east","north"), crs=29903)
+sf_hectad = st_as_sf(grid_hectad, coords = c("east","north"), crs=29903)
 
 
 subset(grid_hectad, hectad=="L46")
@@ -62,7 +65,7 @@ unique(grid_hectad$north/10000)
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
-d_start01 = subset(d, startDate==as.Date(start))
+d_start01 = subset(d10km, startDate==as.Date(start))
 d1km_start01 = subset(d1km, startDate==as.Date(start))
 
 # Add in coords
@@ -94,17 +97,22 @@ cols = c("#a1d99b", "#238b45",
   "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#253494", "#081d58",
   "#ef00ef", "#ffffbf","#B2B2B2")
 
+start_date = as.Date(start)
 labs_emerge = c("Jan-Feb",
-                format(as.Date(start) + br[c(2)],"%b"),
-                format(as.Date(start) + br[-c(1,2,20:22)],"%d %b"),
-                format(as.Date(start) + br[c(20:21)],"%Y"),
+                format(start_date - yday(start) + 1 + br[c(2)],"%b"),
+                format(start_date - yday(start) + 1 + br[-c(1,2,20:22)],"%d %b"),
+                format(start_date - yday(start) + 1 + br[c(20:21)],"%Y"),
                 "No emergence")
 
 # cols = c(  "#fec44f", "#fe9929", "#ec7014", "#cc4c02", "#993404", "#662506")
 # br = c(1,30,60,90, 120,250,350)
 
 ggplot() +
-  geom_sf(data=sf_start01, aes(colour=emergeDOY), size=3) + 
+  geom_sf(data=subset(sf_hectad,country=="NI"), 
+          aes(fill=country),
+          colour="grey", 
+          size=1) + 
+  geom_sf(data=sf_start01, aes(colour=emergeDOY), size=2.5) + 
   scale_color_stepsn("Date of\nEmergence",
     colours = cols,
     breaks = br,
@@ -114,12 +122,13 @@ ggplot() +
     labels = labs_emerge,
     right=FALSE
   ) +
-  labs(title=species_name) +
+  labs(title=paste(species_name, "Start Date:", start)) +
   theme_void() + 
-  theme(legend.key.height = unit(dev.size()[2]/10 , "inches")) +
+  theme(legend.key.height = unit(dev.size()[2]/10 , "inches"),
+        legend.text = element_text(vjust=0)) +
   guides(colour = guide_coloursteps(show.limits = TRUE))
 
-
+ggsave(paste0("~/Desktop/",species_name,"_",start,".png"), bg="white")
 
 # Bin width is 7 days
 
@@ -264,6 +273,28 @@ ggplot() +
   guides(colour = guide_coloursteps(show.limits = FALSE))
 
 
+ggplot() +
+  # geom_sf(data=subset(sf_grid,county=="Cork"), 
+  #         aes(fill=county),
+  #         colour="white", 
+  #         size=0.01) + 
+  geom_sf(data=sf_1km, aes(colour=emergeDOY), size=0.5, shape=15) + 
+  scale_color_stepsn("Date of\nEmergence",
+                     colours = cols,
+                     breaks = br,
+                     values = (br-1)/(2000-1),
+                     limits=c(1,2000),
+                     # labels = ~ format(as.Date(start, format="%Y-%m-%d")+pmax(., 1,na.rm=TRUE), format = "%d %b %Y")
+                     labels = labs_emerge,
+                     right=FALSE
+  ) +
+  labs(title=paste(species_name, "Start Date:", start)) +
+  theme_void() + 
+  theme(legend.key.height = unit(dev.size()[2]/10 , "inches"),
+        legend.text = element_text(vjust=0)) +
+  guides(colour = guide_coloursteps(show.limits = TRUE))
+
+ggsave(paste0("~/Desktop/",species_name,"_",start,"_Cork.png"), bg="white")
 
 
 
