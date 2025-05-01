@@ -181,7 +181,8 @@ for s in eachindex(run_params.speciesName)
             # Define DOY for start and emerge dates (and set as integer)
             idx = .!ismissing.(df_1km.emergeDate)
             df_1km.emergeDOY = Vector{Union{Missing,Int16}}(missing, nrow(df_1km))
-            df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+ 1
+            df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+ 
+                                    Dates.dayofyear.(df_1km.startDate[idx])
             df_1km.startMonth = Dates.month.(df_1km.startDate)  # Use month rather than DOY to avoid leap year problems
 
             # Group data frame by location and then starting Date 
