@@ -1,11 +1,11 @@
-﻿species,baseline_temperature,threshold,diapause,diapause_daylength,diapause_temperature,Reference1,Reference2,Reference3
-Agrilus anxius,1.7,1004,quiescence,NA,NA,https://doi.org/10.1093/jee/90.6.1615,,
-Spodoptera frugiperda,13.01,391.02,quiescence,NA,NA,https://doi.org/10.3390/insects11040228,,
-Ips sexdentatus,11,517,quiescence,NA,NA,https://hal.univ-lorraine.fr/hal-01836196v1,,
-Ips duplicatus,11.1,217.3,quiescence,NA,NA,https://doi.org/10.1111/afe.12345,,
-Ips cembrae,11.3,243.3,quiescence,NA,NA,https://doi.org/10.1111/jen.12351,,
-Leptinotarsa decemlineata,10,300,obligate,12,NA,https://doi.org/10.1093/ee/28.3.425,https://doi.org/10.1016/0167-8809(88)90086-2,
-"Oulema melanopus, model 1",10,491.7,obligate,12,NA,https://doi.org/10.2307/3527,https://doi.org/doi:10.25335/s5k5-c192,
-"Oulema melanopus, model 2",9,553,obligate,12,NA,https://doi.org/10.4039/Ent110257-3 ,https://doi.org/doi:10.25335/s5k5-c192,
-Halyomorpha halys,12.9,625,facultative,15,20,https://doi.org/10.2108/zsj.20.963,https://doi.org/10.1603/IPM14002,https://doi.org/10.1093/ee/37.2.348
-Ips typographus,8.3,557,facultative,14.5,14.5,https://doi.org/10.1016/j.ecolmodel.2019.108775,https://doi.org/10.1111/j.1439-0418.1998.tb01482.x,
+﻿species,baseline_temperature,threshold,diapause,diapause_daylength,diapause_temperature,Reference1,Reference2,Reference3,event,commonName
+Agrilus anxius,1.7,1004,quiescence,NA,NA,https://doi.org/10.1093/jee/90.6.1615,,,First flight,Bronze birch borer
+Spodoptera frugiperda,13.01,391.02,quiescence,NA,NA,https://doi.org/10.3390/insects11040228,,,,Fall armyworm
+Ips sexdentatus,11,517,quiescence,NA,NA,https://hal.univ-lorraine.fr/hal-01836196v1,,,,Six-toothed bark beetle
+Ips duplicatus,11.1,217.3,quiescence,NA,NA,https://doi.org/10.1111/afe.12345,,,,Double-spined bark beetle
+Ips cembrae,11.3,243.3,quiescence,NA,NA,https://doi.org/10.1111/jen.12351,,,,Large larch bark beetle
+Leptinotarsa decemlineata,10,300,obligate,12,NA,https://doi.org/10.1093/ee/28.3.425,https://doi.org/10.1016/0167-8809(88)90086-2,,,Colorado potato beetle
+"Oulema melanopus, model 1",10,491.7,obligate,12,NA,https://doi.org/10.2307/3527,https://doi.org/doi:10.25335/s5k5-c192,,,Cereal leaf beetle
+"Oulema melanopus, model 2",9,553,obligate,12,NA,https://doi.org/10.4039/Ent110257-3 ,https://doi.org/doi:10.25335/s5k5-c192,,,Cereal leaf beetle
+Halyomorpha halys,12.9,625,facultative,15,20,https://doi.org/10.2108/zsj.20.963,https://doi.org/10.1603/IPM14002,https://doi.org/10.1093/ee/37.2.348,,Brown marmorated stink bug
+Ips typographus,8.3,557,facultative,14.5,14.5,https://doi.org/10.1016/j.ecolmodel.2019.108775,https://doi.org/10.1111/j.1439-0418.1998.tb01482.x,,,European spruce bark beetle
