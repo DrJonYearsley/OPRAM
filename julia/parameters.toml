@@ -1,6 +1,6 @@
 # Model parameters in TOML format
 
-title = "Degree day model parameter file"
+title = "Degree day model parameter file for speciec species"
 
 [runtime]
 nNodes = 3           # Number of compute nodes to use
@@ -29,7 +29,16 @@ country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
 #speciesList = ["anxius"]
 
-speciesList = ["anxius", "sexdentatus", "frugiperda", "duplicatus", "cembrae", "decemlineata", " halys", "typo"]
+# List species to simulate. Species with several life stages are grouped together. 
+# This grouping only affects the programs OPRAM_calculate_average and OPRAM_calculate anomaly
+speciesList = ["anxius", 
+                "sexdentatus", 
+                "frugiperda", 
+                "duplicatus", 
+                "cembrae", 
+                "decemlineata", 
+                "halys", 
+               "typo"]
 
 # Predefined species are:
 #  :agrilus_anxius

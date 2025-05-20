@@ -70,8 +70,13 @@ end
 # species_setup = (speciesFile = joinpath(homedir(),"git_repos/OPRAM/data/species_parameters.csv"),  # File containing species parameters
                   # speciesStr = ["anxius","frugiperda", "duplicatus", "cembrae", "decemlineata", " halys", "typo"])  # A vector of strings to uniquely identify a species name in the speciesFile
 
+# Work out unique species to simulate (Remove obvious duplicates)
+speciesStr = Vector{String}(undef,0)
+for s in eachindex(params["model"]["speciesList"])
+  speciesStr = unique(vcat(speciesStr, params["model"]["speciesList"][s]))
+end
 species_setup = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFile"]),  # File containing species parameters
-  speciesStr=params["model"]["speciesList"])  # A vector of strings to uniquely identify a species name in the speciesFile
+                  speciesStr=speciesStr)  # A vector of strings to uniquely identify a species name in the speciesFile
 
 
 
