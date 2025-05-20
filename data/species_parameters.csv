@@ -9,3 +9,12 @@ Leptinotarsa decemlineata,10,300,obligate,12,NA,https://doi.org/10.1093/ee/28.3.
 "Oulema melanopus, model 2",9,553,obligate,12,NA,https://doi.org/10.4039/Ent110257-3 ,https://doi.org/doi:10.25335/s5k5-c192,,,Cereal leaf beetle
 Halyomorpha halys,12.9,625,facultative,15,20,https://doi.org/10.2108/zsj.20.963,https://doi.org/10.1603/IPM14002,https://doi.org/10.1093/ee/37.2.348,,Brown marmorated stink bug
 Ips typographus,8.3,557,facultative,14.5,14.5,https://doi.org/10.1016/j.ecolmodel.2019.108775,https://doi.org/10.1111/j.1439-0418.1998.tb01482.x,,,European spruce bark beetle
+Thaumetopoea processionea (egg),6.6,81,obligate,,NA,,,,Egg hatching,Oak processionary moth
+Thaumetopoea processionea (2nd larvae),9.87,68.12,obligate,,NA,https://doi.org/10.1016/j.foreco.2023.121525,,,Hatching to L2,Oak processionary moth
+Thaumetopoea processionea (3rd larvae),9.42,129.48,obligate,,NA,https://doi.org/10.1016/j.foreco.2023.121525,,,Hatching to L3,Oak processionary moth
+Thaumetopoea processionea (4th larvae),9.96,177.93,obligate,,NA,https://doi.org/10.1016/j.foreco.2023.121525,,,Hatching to L4,Oak processionary moth
+Thaumetopoea processionea (5th larvae),10.11,246.57,obligate,,NA,https://doi.org/10.1016/j.foreco.2023.121525,,,Hatching to L5,Oak processionary moth
+Thaumetopoea processionea (6th larvae),10.17,341.79,obligate,,NA,https://doi.org/10.1016/j.foreco.2023.121525,,,Hatching to L6,Oak processionary moth
+Thaumetopoea processionea (pupae),9.8,581,obligate,,NA,https://doi.org/10.1016/j.foreco.2023.121525,,,Hatching to Pupation,Oak processionary moth
+Thaumetopoea processionea (adult),9.11,1088.55,,,,https://doi.org/10.1016/j.foreco.2023.121525,,,Hatching to adult emergence,Oak processionary moth
+Thaumetopoea processionea (UK model),6.5,1200,,NA,NA,,,,Adult emergence,Oak processionary moth
