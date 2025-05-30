@@ -121,6 +121,7 @@ for s in eachindex(run_params.speciesName)
 
         @info "Importing data for year $(run_params.years[y])"
 
+        # Find the relevant file name and import the corresponding jld2 file
         inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
             readdir(joinpath(paths.outDir, speciesName[1])))
 
@@ -129,6 +130,8 @@ for s in eachindex(run_params.speciesName)
         end
         adult_emerge = load_object(joinpath(paths.outDir, speciesName[1], inFile[1]))
 
+
+        
         @info " ---- Generating output for specific starting dates"
         # Starting dates for output in CSV files
         # The first of every month
