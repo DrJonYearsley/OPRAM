@@ -572,15 +572,18 @@ function cleanup_results(result::SharedMatrix{Int16}, idx::Vector{CartesianIndex
               result[1:end-1, 2] .!= result[2:end, 2])
   push!(idxKeep2, true)    # Add a true value at the end
 
-  # Remove all but the first result with DOY >= 365 (results only for 1 year)
-  # Keep data with DOY<=365 or when DOY>365 and the previous result was less than 365
-  idxKeep3 = result[2:end, 1] .<= 365 .||
-             (loc_idx[1:end-1] .== loc_idx[2:end] .&&
-              (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
-  pushfirst!(idxKeep3, true)    # Add a true value at the start
+  # Comment these lines out so that muti-stage life cycles can be constructed 
+  # (requiring data for more than 1 year)
+  # # Remove all but the first result with DOY >= 365 (results only for 1 year)
+  # # Keep data with DOY<=365 or when DOY>365 and the previous result was less than 365
+  # idxKeep3 = result[2:end, 1] .<= 365 .||
+  #            (loc_idx[1:end-1] .== loc_idx[2:end] .&&
+  #             (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
+  # pushfirst!(idxKeep3, true)    # Add a true value at the start
+  
 
   # Combine all 3 indices together
-  idxKeep = idxKeep1 .&& idxKeep2 .&& idxKeep3
+  idxKeep = idxKeep1 .&& idxKeep2
 
 
   # Create a data frame, using real location ID (second element of meteo)

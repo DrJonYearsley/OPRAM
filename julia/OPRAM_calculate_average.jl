@@ -29,8 +29,8 @@ using TOML
 if length(ARGS) == 1
     params = TOML.parsefile(ARGS[1])
 
-elseif length(ARGS) == 0 & isfile("parameters.toml")
-    params = TOML.parsefile("parameters_userdefined.toml")
+elseif length(ARGS) == 0 & isfile("processing_params.toml")
+    params = TOML.parsefile("processing_params.toml")
 
 else
     @error "No parameter file given"
@@ -47,7 +47,7 @@ run_params = (
     speciesName=params["model"]["speciesList"],         # Name of the species
     years=params["model"]["thirty_years"][1]:params["model"]["thirty_years"][2],                                  # the years collect(year1:year2)
     maxYears=params["model"]["maxYears"],           # Maximum number of years to complete insect development (must correspond to simulation value)
-    lastMeteoYear=params["model"]["lastMeteoYear"], # Maximum number of years to complete insect development
+    # lastMeteoYear=params["model"]["lastMeteoYear"], # Maximum number of years to complete insect development
     country=params["model"]["country"],             # Can be "IE", "NI" or "AllIreland"
     thinFactor=params["model"]["thinFactor"],       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
     gridFile=params["inputData"]["gridFile"]);      # File containing a 1km grid of lats and longs over Ireland 
@@ -76,7 +76,7 @@ elseif isdir(joinpath(homedir(), "Desktop//OPRAM//"))
 end
 
 include("OPRAM_io_functions.jl");
-include("OPRAM_ddmodel_functions.jl");
+include("OPRAM_processing_functions.jl");
 
 
 
@@ -106,7 +106,9 @@ grid.north_hectad = convert.(Int32, floor.(grid.north ./ 1e4) .* 1e4)
 for s in eachindex(run_params.speciesName)
 
     # Find directory matching the species name in run_params
-    speciesName = filter(x -> occursin(r"" * run_params.speciesName[s], x), readdir(paths.outDir))
+    regex = Regex(replace(lowercase(run_params.speciesName[s]), 
+                   r"\s" => "\\w"))  # Replace spaces with reg expression
+    speciesName = filter(x -> occursin( regex, x), readdir(paths.outDir))
     if length(speciesName) > 1
         @error "More than one species name found"
     elseif length(speciesName) == 0
@@ -115,38 +117,40 @@ for s in eachindex(run_params.speciesName)
 
     @info "Importing data for $(speciesName[1])"
 
+    df_1km = doy_results(run_params.years, speciesName[1], run_params, paths)
+    # Function to extract model results for specific days of year
 
-    dVec = Vector{DataFrame}(undef, length(run_params.years))
-    for y in eachindex(run_params.years)
+    # dVec = Vector{DataFrame}(undef, length(run_params.years))
+    # for y in eachindex(run_params.years)
 
-        @info "Importing data for year $(run_params.years[y])"
+    #     @info "Importing data for year $(run_params.years[y])"
 
-        # Find the relevant file name and import the corresponding jld2 file
-        inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
-            readdir(joinpath(paths.outDir, speciesName[1])))
+    #     # Find the relevant file name and import the corresponding jld2 file
+    #     inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
+    #         readdir(joinpath(paths.outDir, speciesName[1])))
 
-        if length(inFile) > 1
-            @error "More than one input file found"
-        end
-        adult_emerge = load_object(joinpath(paths.outDir, speciesName[1], inFile[1]))
+    #     if length(inFile) > 1
+    #         @error "More than one input file found"
+    #     end
+    #     adult_emerge = load_object(joinpath(paths.outDir, speciesName[1], inFile[1]))
 
 
         
-        @info " ---- Generating output for specific starting dates"
-        # Starting dates for output in CSV files
-        # The first of every month
-        dates = [Date(run_params.years[y], m, 1) for m in 1:12]
+    #     @info " ---- Generating output for specific starting dates"
+    #     # Starting dates for output in CSV files
+    #     # The first of every month
+    #     dates = [Date(run_params.years[y], m, 1) for m in 1:12]
 
-        # Create output for specific days of year
-        dVec[y] = create_doy_results(dates, adult_emerge)
+    #     # Create output for specific days of year
+    #     dVec[y] = create_doy_results(dates, adult_emerge)
 
-        # Select columns to work with
-        select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
-    end
+    #     # Select columns to work with
+    #     select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
+    # end
 
-    # Put all the model results data together into one Matrix
-    df_1km = reduce(vcat, dVec)
-    dVec = nothing
+    # # Put all the model results data together into one Matrix
+    # df_1km = reduce(vcat, dVec)
+    # dVec = nothing
 
 
     # =========================================================

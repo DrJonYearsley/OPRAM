@@ -32,8 +32,8 @@ using TOML
 if length(ARGS) == 1
     params = TOML.parsefile(ARGS[1])
 
-elseif length(ARGS) == 0 & isfile("parameters.toml")
-    params = TOML.parsefile("parameters_userdefined.toml")
+elseif length(ARGS) == 0 & isfile("processing_params.toml")
+    params = TOML.parsefile("processing_params.toml")
 
 else
     @error "No parameter file given"
@@ -114,9 +114,7 @@ grid.north_hectad = convert.(Int32, floor.(grid.north ./ 1e4) .* 1e4)
 
 
 # Add in column with county ID
-# grid.countyID = 
 leftjoin!(grid, county_defs, on=:county => :County)
-# [county_defs.Id[county_defs.County.==grid.county[c]] for c in eachindex(grid.county)]
 
 
 # =========================================================

@@ -384,6 +384,81 @@ end
 
 # ------------------------------------------------------------------------------------------
 
+
+
+function read_CSV_meteoIE2(meteoDir_IE::String, grid_thin::DataFrame, years)
+  # Import multiple years of daily min and max temperature from a CSV file
+  # for Republic of Ireland and place in a data frame with 
+  # the ID, eastings and northings of spatial locations
+  #
+  # Arguments:
+  #   meteoDir_IE the directory containing the data for the Republic of Ireland 
+  #               (the daily maximum/minimum temps are assumed to be 
+  #                in folders maxtemp_grids and mintemp_grids)
+  #   grid_thin   the grid of locations to use
+  #   years       years to be read (could be a vector or a scalar)
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of daily max temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:     Matrix of daily min temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Third entry:   A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Fourth entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
+  #
+  # *************************************************************
+
+
+  # Create empty array of arrays to hold daily max and min temps 
+  TmaxVec = Vector{Array{Float32,2}}(undef, length(years) * 12)
+  TminVec = Vector{Array{Float32,2}}(undef, length(years) * 12)
+
+  # Read one meteo file to find locations information and calculate a filter
+  coordFile = filter(x -> occursin("TX_" * string(years[1]) * "01", x), readdir(joinpath(meteoDir_IE, "maxtemp_grids")))
+  meteoCoords = CSV.read(joinpath([meteoDir_IE, "maxtemp_grids", coordFile[1]]), DataFrame, select=[1, 2], types=Int32)
+
+  # Find indices of meteo data to use 
+  # (needed in case meteo file has missing grid points or different order compared to grid_thin)
+  IDidx = [findfirst(abs.(grid_thin.east .- meteoCoords.east[i]) .== 0 .&& abs.(grid_thin.north .- meteoCoords.north[i]) .== 0) for i in 1:nrow(meteoCoords)]
+  idx = findall(IDidx .!= nothing)
+
+  for y in eachindex(years)
+    for month in 1:12
+      # Import data for month and year (y)
+
+      # Get the correct filename
+      meteoFileTX = filter(x -> occursin("TX_" * string(years[y]) * string(month, pad=2), x), readdir(joinpath(meteoDir_IE, "maxtemp_grids")))
+      meteoFileTN = filter(x -> occursin("TN_" * string(years[y]) * string(month, pad=2), x), readdir(joinpath(meteoDir_IE, "mintemp_grids")))
+
+      # Import the data for min and max daily temperature (removing first two coordinate columns)
+      meteoTX = CSV.read(joinpath([meteoDir_IE, "maxtemp_grids", meteoFileTX[1]]), DataFrame, drop=[1, 2], types=Float32)
+      meteoTN = CSV.read(joinpath([meteoDir_IE, "mintemp_grids", meteoFileTN[1]]), DataFrame, drop=[1, 2], types=Float32)
+
+      # Calculate daily average temp with locations as columns, days as rows
+      TmaxVec[(y-1)*12+month] = permutedims(Array{Float32,2}(meteoTX[idx, :]))
+      TminVec[(y-1)*12+month] = permutedims(Array{Float32,2}(meteoTN[idx, :]))
+    end
+  end
+
+  # Put all the temperature data together into one Matrix
+  Tmax = reduce(vcat, TmaxVec)
+  Tmin = reduce(vcat, TminVec)
+
+  # Calculate day of year (used for photoperiod calculations)
+  DOM = size.(TmaxVec, 1)      # Day of month
+  local DOY = reduce(vcat, [collect(1:sum(DOM[(1+12*(y-1)):12*y])) for y in 1:length(years)])  # Day of year
+  DOY = convert.(Int16, DOY)
+
+  # Return mean daily temp, day of year and location ID
+  return Tmax, Tmin, DOY, grid_thin.ID[IDidx[idx]]
+end
+
+# ------------------------------------------------------------------------------------------
+
+
 function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years)
   # Import multiple years of daily mean temperature for Northern Ireland
   # create the daily average temp, and the ID, eastings and northings of spatial locations
