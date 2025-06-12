@@ -1,4 +1,5 @@
-#  Create a file containing all grid locations for and EOBS climate data set
+#  Create a file containing all grid locations for 
+# and EOBS climate data set
 #
 #  Jon Yearsley (Jon.Yearsley@ucd.ie)
 #  Jan 2025

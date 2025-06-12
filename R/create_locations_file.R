@@ -1,4 +1,5 @@
-#  Create a file containing all grid locations for ROI and Northern Ireland
+#  Create a file containing all grid locations 
+# for ROI and Northern Ireland
 #
 #  Jon Yearsley (Jon.Yearsley@ucd.ie)
 #  Nov 2024
@@ -215,10 +216,14 @@ table(locations$county)
 # =============================================================================
 # Write a hectad file --------------------
 # This file contains all unique hectads and the coordinates for the bottom left corner
-df_hectads = aggregate(cbind(east,north)~hectad, 
+df_hectads1 = aggregate(cbind(east,north)~hectad+country, 
                       data=df_final, 
                       FUN=function(x){floor(min(x,na.rm=TRUE)/1e4)*1e4})
 
+# Remove NI label if hectad also has IE label
+hectad_ie = df_hectads1$hectad[df_hectads1$country=="IE"]
+df_hectads = subset(df_hectads1, country=="IE" | 
+                            (country=="NI" & !(hectad %in% hectad_ie)))
 
 
 # Add in lat long
@@ -229,7 +234,8 @@ df_hectads$latitude = hectad_lonlat[,"latitude"]
 
 ggplot(data=df_hectads,
        aes(x=east,
-           y=north)) + 
+           y=north,
+           colour=country)) + 
   geom_point() + 
   coord_equal()
 
@@ -238,3 +244,4 @@ write.csv(df_hectads,
           file = file.path(dataDir, fileout_10km),
           quote=FALSE,
           row.names = FALSE)
+
