@@ -1,5 +1,5 @@
-species,baseline_temperature,threshold,diapause,diapause_daylength,diapause_temperature,Reference1,Reference2,Reference3,event,commonName
-Agrilus anxius,1.7,1004,quiescence,NA,NA,https://doi.org/10.1093/jee/90.6.1615,,,First flight,Bronze birch borer
+﻿species,baseline_temperature,threshold,diapause,diapause_daylength,diapause_temperature,Reference1,Reference2,Reference3,event,commonName
+Agrilus anxius,10,277,quiescence,NA,NA,https://doi.org/10.1603/EN12238,,,First flight,Bronze birch borer
 Spodoptera frugiperda,13.01,391.02,quiescence,NA,NA,https://doi.org/10.3390/insects11040228,,,,Fall armyworm
 Ips sexdentatus,11,517,quiescence,NA,NA,https://hal.univ-lorraine.fr/hal-01836196v1,,,,Six-toothed bark beetle
 Ips duplicatus,11.1,217.3,quiescence,NA,NA,https://doi.org/10.1111/afe.12345,,,,Double-spined bark beetle
