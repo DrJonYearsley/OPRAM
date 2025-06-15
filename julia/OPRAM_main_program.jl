@@ -32,7 +32,7 @@ else
   @error "No parameter file given"
 end
 
-
+  params = TOML.parsefile("userdefined_parameters.toml")
 
 
 nNodes = params["runtime"]["nNodes"];           # Number of compute nodes to use (if in interactive)
@@ -242,12 +242,14 @@ if run_TRANSLATE_future
 
   @info "Running OPRAM model for future climate scenarios"
 
-   @time "OPRAM future model run complete:" run_model_futures(run_params, species_setup, paths)
+  # Run future climate degree-day model
+  @time "OPRAM future model run complete:" run_model_futures(run_params, species_setup, paths)
 else
   # If no climate scenario is specified, run the model for past climates
 
   @info "Running OPRAM model for past climate years" 
 
+  # Run past climate degree-day model
   @time "OPRAM model run complete:" run_model(run_params, species_setup, paths)
 end
 

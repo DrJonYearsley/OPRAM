@@ -31,36 +31,45 @@ function import_species(speciesFile::String, speciesStr::String)
   # that correspond to the speciesStr
 
   # Import set species parameters
-  params = CSV.read(speciesFile, DataFrame, 
-                    missingstring="NA")
+  params = CSV.read(speciesFile, DataFrame,
+    missingstring="NA")
 
   # Create a list of species names in lowercase
   spList = lowercase.(params.species)
 
-  # Split the species name into bits based on separators '_', ',',',';',':' and ' '
-  spNameBits = split(lowercase(speciesStr), ('_',' ',',',';',':'))
-
-  # Find the index of the species in the list matching the speciesName
-  species_idx = [all(occursin.(spNameBits,s)) for s in spList]
-
-
-  if sum(species_idx) == 0
-    # Can't find specie name in the parameter file
-    @warn "Species " * speciesStr * " not found in species file" * speciesFile
-    @info "!!!!!!! No parameters set for species " * speciesStr
-    return parameters(species_name=missing,)
-   
-  elseif sum(species_idx) > 1
-    @error "Multiple species found for " * speciesStr * " in file " * speciesFile *
-    ". Provide a species string that is more specific."
-
+  if lowercase(speciesStr) == "all"
+    # If speciesStr is "all", return all parameters for all species in the file
+    return parameters.(params.species, params.baseline_temperature, params.threshold,
+      params.diapause_daylength, params.diapause_temperature)
   else
-    # Use the values from the species parameter file
-    return parameters(species_name=params.species[findfirst(species_idx)], 
-                      base_temperature=params.baseline_temperature[findfirst(species_idx)], 
-                      threshold=params.threshold[findfirst(species_idx)], 
-                      diapause_daylength=params.diapause_daylength[findfirst(species_idx)], 
-                      diapause_temperature=params.diapause_temperature[findfirst(species_idx)])
+    # Work out which species to return
+
+    # Split the species name into bits based on separators '_', ',',',';',':' and ' '
+    spNameBits = split(lowercase(speciesStr), ('_', ' ', ',', ';', ':'))
+
+
+    # Find the index of the species in the list matching the speciesName
+    species_idx = [all(occursin.(spNameBits, s)) for s in spList]
+
+
+    if sum(species_idx) == 0
+      # Can't find specie name in the parameter file
+      @warn "Species " * speciesStr * " not found in species file" * speciesFile
+      @info "!!!!!!! No parameters set for species " * speciesStr
+      return parameters(species_name=missing,)
+
+    elseif sum(species_idx) > 1
+      @error "Multiple species found for " * speciesStr * " in file " * speciesFile *
+             ". Provide a species string that is more specific."
+
+    else
+      # Use the values from the species parameter file
+      return parameters(species_name=params.species[findfirst(species_idx)],
+        base_temperature=params.baseline_temperature[findfirst(species_idx)],
+        threshold=params.threshold[findfirst(species_idx)],
+        diapause_daylength=params.diapause_daylength[findfirst(species_idx)],
+        diapause_temperature=params.diapause_temperature[findfirst(species_idx)])
+    end
   end
 
 end
@@ -104,7 +113,7 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
   # An array containing the years to be imported
   # Make sure it is no greater than maxMeteoYear
   years = min.(collect(meteoYear:meteoYear+maxYears-1), lastMeteoYear)
-  
+
 
 
 
@@ -113,13 +122,13 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
   # Import the weather data
 
   # ROI data
-  if !isnothing(meteoDirs[1])   
+  if !isnothing(meteoDirs[1])
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[1]))) > 0
       # Check for jld2 files and import them
-      Tavg_IE, DOY_IE, ID_IE = read_JLD2_meteo(meteoDirs[1], years, grid_thin.ID, "IE");
+      Tavg_IE, DOY_IE, ID_IE = read_JLD2_meteo(meteoDirs[1], years, grid_thin.ID, "IE")
     else
       # Otherwise import csv files
-      Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE(meteoDirs[1], grid_thin, years);
+      Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE(meteoDirs[1], grid_thin, years)
     end
   end
 
@@ -128,10 +137,10 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
   if !isnothing(meteoDirs[2])
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
       # Check for jld2 files and import them
-      Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, "NI");
+      Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, "NI")
     else
       # Otherwise import csv files
-    Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDirs[2], grid_thin, years);
+      Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDirs[2], grid_thin, years)
     end
   end
 
@@ -210,22 +219,22 @@ function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{
   IDVec = Vector{Array{Int64,1}}(undef, length(years))
 
   for y in eachindex(years)
-      # Get the correct filename
-      meteoFile = filter(x -> occursin("meteo" * country * "_Tavg_" * string(years[y]), x), 
-                        readdir(meteoDir))
+    # Get the correct filename
+    meteoFile = filter(x -> occursin("meteo" * country * "_Tavg_" * string(years[y]), x),
+      readdir(meteoDir))
 
-      # Import the data for Tavg
-      f = jldopen(joinpath(meteoDir,meteoFile[1]), "r");
-      TavgVec[y] = read(f, "Tavg")
-      DOYVec[y] = read(f, "DOY") 
-      IDVec[y] = read(f, "ID")
-      close(f)
+    # Import the data for Tavg
+    f = jldopen(joinpath(meteoDir, meteoFile[1]), "r")
+    TavgVec[y] = read(f, "Tavg")
+    DOYVec[y] = read(f, "DOY")
+    IDVec[y] = read(f, "ID")
+    close(f)
   end
 
   # Check all ID's are equivalent
-  if length(IDVec)>1 
-    if any(IDVec[1].!=IDVec[2]) || any(IDVec[2].!=IDVec[3])
-    @error "Locations in different meteo files are not the same"
+  if length(IDVec) > 1
+    if any(IDVec[1] .!= IDVec[2]) || any(IDVec[2] .!= IDVec[3])
+      @error "Locations in different meteo files are not the same"
     end
   end
 
@@ -238,7 +247,7 @@ function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{
 
   # Put location ID's (columns of Tavg) in order of ID
   idx = [findfirst(IDVec[1] .== id) for id in ID]
-  Tavg = Tavg[:,idx]
+  Tavg = Tavg[:, idx]
   return Tavg, DOY, ID
 end
 
@@ -269,11 +278,11 @@ function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgr
 
 
   # Check RCP and period Arguments
-  if isnothing(indexin(rcp,["26","45","85"]))
+  if isnothing(indexin(rcp, ["26", "45", "85"]))
     @error "RCP must be one of: '2.6', '4.5' or '8.5'"
   end
 
-  if isnothing(indexin(period,["2021-2055", "2041-2070"]))
+  if isnothing(indexin(period, ["2021-2055", "2041-2070"]))
     @error "Period must be one of: '2021-2055', '2041-2070'"
   end
 
@@ -281,10 +290,10 @@ function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgr
 
 
   # Get the correct filename
-  if !isnothing(meteoDir)   
+  if !isnothing(meteoDir)
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDir))) > 0
       meteoFile = filter(x -> occursin("TRANSLATE_Tavg_rcp" * rcp * "_" * period, x),
-    readdir(meteoDir))
+        readdir(meteoDir))
     end
   end
 
@@ -307,8 +316,8 @@ function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgr
   # Put location ID's (columns of Tavg) in order of ID
   idx = [findfirst(ID .== id) for id in IDgrid]
 
-  Tavg_mean = Tavg_mean[:,idx]
-  Tavg_sd = Tavg_sd[:,idx]
+  Tavg_mean = Tavg_mean[:, idx]
+  Tavg_sd = Tavg_sd[:, idx]
 
   return Tavg_mean, Tavg_sd, DOY, ID
 end
@@ -530,35 +539,35 @@ end
 
 
 function read_grid(gridFilePath::String, thinFactor::Int, countryStr::String="IE")
-# Import the grid of locations and thin it using a thinning factor and the country of interest
-# 
-# Arguments:
-#   dataDir     the directory containing the grid data
-#   gridFile    the name of the file containing the grid data
-#   grid_thin   the thinning factor to use (default=1_)
-#   countryStr  one of "IE", "NI", "AllIreland" (default="IE")
-#
-# Output:
-#   A DataFrame containing the grid of locations
-# *************************************************************
+  # Import the grid of locations and thin it using a thinning factor and the country of interest
+  # 
+  # Arguments:
+  #   dataDir     the directory containing the grid data
+  #   gridFile    the name of the file containing the grid data
+  #   grid_thin   the thinning factor to use (default=1_)
+  #   countryStr  one of "IE", "NI", "AllIreland" (default="IE")
+  #
+  # Output:
+  #   A DataFrame containing the grid of locations
+  # *************************************************************
 
-# Read in the grid data from a file
-grid = CSV.read(gridFilePath, DataFrame, missingstring="NA");
+  # Read in the grid data from a file
+  grid = CSV.read(gridFilePath, DataFrame, missingstring="NA")
 
-# Sort locations in order of IDs
-grid = grid[sortperm(grid.ID), :];
+  # Sort locations in order of IDs
+  grid = grid[sortperm(grid.ID), :]
 
 
-# Keep only locations for the required country
-if countryStr == "IE"
-  subset!(grid, :country => c -> c .== "IE")
-elseif countryStr == "NI"
-  subset!(grid, :country => c -> c .== "NI")
-end
+  # Keep only locations for the required country
+  if countryStr == "IE"
+    subset!(grid, :country => c -> c .== "IE")
+  elseif countryStr == "NI"
+    subset!(grid, :country => c -> c .== "NI")
+  end
 
-# Thin the locations  using the thinFactor
-thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&& 
-                  mod.(grid.north, (thinFactor * 1e3)) .< 1e-8 );
+  # Thin the locations  using the thinFactor
+  thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&&
+                    mod.(grid.north, (thinFactor * 1e3)) .< 1e-8)
 
 
   return grid[thinInd, :]

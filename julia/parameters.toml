@@ -1,4 +1,5 @@
-# Model parameters in TOML format
+# Degree Day Model parameters in TOML format
+# This parameter file is used by OPRAM_main_program.jl
 
 title = "Degree day model parameter file for speciec species"
 
@@ -31,14 +32,16 @@ thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample ev
 
 # List species to simulate. Species with several life stages are grouped together. 
 # This grouping only affects the programs OPRAM_calculate_average and OPRAM_calculate anomaly
-speciesList = ["anxius", 
-                "sexdentatus", 
-                "frugiperda", 
-                "duplicatus", 
-                "cembrae", 
-                "decemlineata", 
-                "halys", 
-               "typo"]
+speciesList = ["Agrilus anxius", 
+                "Ips sexdentatus", 
+                "Spodoptera frugiperda", 
+                "Ips duplicatus", 
+                "Ips cembrae", 
+                "Leptinotarsa decemlineata", 
+                "Halyomorpha halys", 
+               "Ips typographus",
+               "Oulema melanopus, model 1",
+               "Oulema melanopus, model 2"]
 
 # Predefined species are:
 #  :agrilus_anxius
@@ -48,5 +51,5 @@ speciesList = ["anxius",
 #  :ips_sexdentatus
 #  :ips_typographus
 #  :leptinotarsa_decemlineata
-#  :oulema_melanopus
+#  :oulema_melanopus (models 1 and 2)
 #  :spodoptera_frugiperda
