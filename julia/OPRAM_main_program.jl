@@ -32,7 +32,7 @@ else
   @error "No parameter file given"
 end
 
-  params = TOML.parsefile("userdefined_parameters.toml")
+  params = TOML.parsefile("parameters_userdefined.toml")
 
 
 nNodes = params["runtime"]["nNodes"];           # Number of compute nodes to use (if in interactive)
