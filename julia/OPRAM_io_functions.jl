@@ -26,6 +26,163 @@ end
 # =========================================================
 # ============= Defne functions ===========================
 
+function import_parameters(tomlFile::String)
+  # Import parameters from a TOML file
+  # The file should contain a section called "parameters" with the following fields:
+  #   species_name, base_temperature, threshold, diapause_daylength, diapause_temperature
+  #
+  # Returns a parameters object with the values from the TOML file
+
+  params = TOML.parsefile(tomlFile)
+
+  nNodes = params["runtime"]["nNodes"]           # Number of compute nodes to use (if in interactive)
+
+  # Put parameters into a named tuple
+  if in("simYears", keys(params["model"]))
+    # Run model on past data
+    run_params = (
+      TRANSLATE_future = false,
+      years=params["model"]["simYears"], # Years to run model
+      maxYears=params["model"]["maxYears"], # Maximum number of years to complete insect development
+      lastMeteoYear=params["model"]["lastMeteoYear"], # Maximum number of years to complete insect development
+      country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
+      saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
+      thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+      gridFile=params["inputData"]["gridFile"])  # File containing a 1km grid of lats and longs over Ireland 
+  # (used for daylength calculations as well as importing and thining of meteo data)
+  elseif in("rcp", keys(params["model"]))
+    # Run model on future data
+    run_params = (
+      TRANSLATE_future = true,
+      futurePeriod=params["model"]["futurePeriod"], # Years to run model
+      rcp=params["model"]["rcp"],                 # Future RCP scenario
+      nReps=params["model"]["nReps"],             # Number of replicate climate scenarios
+      maxYears=params["model"]["maxYears"],       # Maximum number of years to complete insect development
+      country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
+      saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
+      thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+      gridFile=params["inputData"]["gridFile"])  # File containing a 1km grid of lats and longs over Ireland 
+  # (used for daylength calculations as well as importing and thining of meteo data)
+  else
+    error("parameter file doesn't contain simulation years")
+  end
+
+  # Work out unique species to simulate (Remove obvious duplicates)
+  speciesStr = Vector{String}(undef, 0)
+  for s in eachindex(params["model"]["speciesList"])
+    speciesStr = unique(vcat(speciesStr, params["model"]["speciesList"][s]))
+  end
+  species_params = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFile"]),  # File containing species parameters
+    speciesStr=speciesStr)  # A vector of strings to uniquely identify a species name in the speciesFile
+
+  # Predefined species are:
+  #  :agrilus_anxius
+  #  :halyomorpha_halys
+  #  :ips_cembrae
+  #  :ips_duplicatus
+  #  :ips_sexdentatus
+  #  :ips_typographus
+  #  :leptinotarsa_decemlineata
+  #  :oulema_melanopus
+  #  :spodoptera_frugiperda
+
+
+
+
+  # =========================================================
+  # =========================================================
+  # If the given paths for output and data do not exist, try to find alternative paths to the data
+
+  # Add on the home directory to the paths
+  params["paths"]["data"] = joinpath(homedir(), params["paths"]["data"])
+  params["paths"]["output"] = joinpath(homedir(), params["paths"]["output"])
+  params["paths"]["meteoIE"] = joinpath(homedir(), params["paths"]["meteoIE"])
+  params["paths"]["meteoNI"] = joinpath(homedir(), params["paths"]["meteoNI"])
+
+  # Check output dir exists
+  if !isdir(params["paths"]["output"])
+    @warn "Can't find output directory!"
+
+    if isdir(joinpath(homedir(), "Desktop//OPRAM//results"))  # Linux guess
+      @info "      Setting output directory to Desktop//OPRAM//results"
+      params["paths"]["output"] = joinpath(homedir(), "Desktop//OPRAM//results")
+
+    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"))  # Mac guess
+      @info "        Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//results"
+      params["paths"]["output"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results")
+    else
+      @error "No output directory found"
+    end
+  end
+
+  # Check data dir exists
+  if !isdir(params["paths"]["data"])
+    @info "Can't find data directory!"
+    if isdir(joinpath(homedir(), "DATA", "OPRAM", "Data"))  # Linux guess
+      @info "       Setting data directory to DATA//OPRAM//Data"
+      params["paths"]["data"] = joinpath(homedir(), "DATA//OPRAM//Data")
+
+    elseif isdir(joinpath(homedir(), "git_repos/OPRAM/data"))  # Mac guess
+      @info "       Setting data directory to home directory"
+      params["paths"]["data"] = homedir()
+    else
+      @error "No data directory found"
+    end
+  end
+
+  # Check meteo dirs exist (if simulation needs the data)
+  if in(params["model"]["country"], ["IE", "AllIreland"]) & !isdir(params["paths"]["meteoIE"])
+    @info "Can't find meteoIE directory!"
+    if isdir(joinpath(homedir(), "DATA", "OPRAM", "Data", "Climate_JLD2"))  # Linux guess
+      @info "       Setting meteoIE directory to DATA//OPRAM//Data//Climate_JLD2"
+      params["paths"]["meteoIE"] = joinpath(homedir(), "DATA//OPRAM//Data//Climate_JLD2")
+
+    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"))  # Mac guess
+      @info "       Setting meteoIE directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+      params["paths"]["meteoIE"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2")
+    else
+      @error "No meteoIE directory found"
+    end
+  end
+
+  if in(params["model"]["country"], ["NI", "AllIreland"]) & !isdir(params["paths"]["meteoNI"])
+    @info "Can't find meteoNI directory!"
+    if isdir(joinpath(homedir(), "DATA", "OPRAM", "Data", "Climate_JLD2"))  # Linux guess
+      @info "       Setting meteoNI directory to DATA//OPRAM//Data//Climate_JLD2"
+      params["paths"]["meteoNI"] = joinpath(homedir(), "DATA//OPRAM//Data//Climate_JLD2")
+
+    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"))  # Mac guess
+      @info "       Setting meteoNI directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
+      params["paths"]["meteoNI"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2")
+    else
+      @error "No meteoNI directory found"
+    end
+  end
+
+  # Set folders to nothing if no data requried
+  if params["model"]["country"] == "IE"
+    params["paths"]["meteoNI"] = nothing
+  elseif params["model"]["country"] == "NI"
+    params["paths"]["meteoIE"] = nothing
+  end
+
+
+  # Put all the paths together
+  paths = (outDir=joinpath(homedir(), params["paths"]["output"]),
+    dataDir=joinpath(homedir(), params["paths"]["data"]),
+    meteoDir_IE=params["paths"]["meteoIE"],
+    meteoDir_NI=params["paths"]["meteoNI"])
+
+  return nNodes, run_params, species_params, paths
+end
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
+
 function import_species(speciesFile::String, speciesStr::String)
   # Import species parameters from a CSV file and find species 
   # that correspond to the speciesStr

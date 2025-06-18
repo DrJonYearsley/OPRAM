@@ -141,11 +141,7 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
 end
 
 
-
-
-
 # ------------------------------------------------------------------------------------------
-
 
 
 function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, paths::NamedTuple)
