@@ -78,8 +78,6 @@ end
 @info "Interactive Session: $(isinteractive())"
 
 
-
-
 # =========================================================
 # =========================================================
 # Start the main loop of the program

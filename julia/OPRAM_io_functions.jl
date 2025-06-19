@@ -1,5 +1,6 @@
-# Functions to import meteo data in various formats
+# Functions to import and export data for the OPRAM model
 #
+# function import_parameters(tomlFile::String)
 # function import_species(speciesFile::String, speciesName::String)
 # function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame, maxYears::Int)
 # function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
@@ -33,6 +34,7 @@ function import_parameters(tomlFile::String)
   #
   # Returns a parameters object with the values from the TOML file
 
+  # Read TOML parameter file
   params = TOML.parsefile(tomlFile)
 
   nNodes = params["runtime"]["nNodes"]           # Number of compute nodes to use (if in interactive)
@@ -42,11 +44,12 @@ function import_parameters(tomlFile::String)
     # Run model on past data
     run_params = (
       TRANSLATE_future = false,
+      saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
+      save1year=params["runtime"]["save1year"],    # If true save only the first year's results
       years=params["model"]["simYears"], # Years to run model
       maxYears=params["model"]["maxYears"], # Maximum number of years to complete insect development
       lastMeteoYear=params["model"]["lastMeteoYear"], # Maximum number of years to complete insect development
       country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
-      saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
       gridFile=params["inputData"]["gridFile"])  # File containing a 1km grid of lats and longs over Ireland 
   # (used for daylength calculations as well as importing and thining of meteo data)
@@ -54,12 +57,13 @@ function import_parameters(tomlFile::String)
     # Run model on future data
     run_params = (
       TRANSLATE_future = true,
+      saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
+      save1year=params["runtime"]["save1year"],    # If true save only the first year's results
       futurePeriod=params["model"]["futurePeriod"], # Years to run model
       rcp=params["model"]["rcp"],                 # Future RCP scenario
       nReps=params["model"]["nReps"],             # Number of replicate climate scenarios
       maxYears=params["model"]["maxYears"],       # Maximum number of years to complete insect development
       country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
-      saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
       gridFile=params["inputData"]["gridFile"])  # File containing a 1km grid of lats and longs over Ireland 
   # (used for daylength calculations as well as importing and thining of meteo data)
@@ -74,18 +78,6 @@ function import_parameters(tomlFile::String)
   end
   species_params = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFile"]),  # File containing species parameters
     speciesStr=speciesStr)  # A vector of strings to uniquely identify a species name in the speciesFile
-
-  # Predefined species are:
-  #  :agrilus_anxius
-  #  :halyomorpha_halys
-  #  :ips_cembrae
-  #  :ips_duplicatus
-  #  :ips_sexdentatus
-  #  :ips_typographus
-  #  :leptinotarsa_decemlineata
-  #  :oulema_melanopus
-  #  :spodoptera_frugiperda
-
 
 
 

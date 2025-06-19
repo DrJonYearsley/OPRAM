@@ -5,9 +5,9 @@ title = "Degree day model parameter file for speciec species"
 
 [runtime]
 nNodes = 3           # Number of compute nodes to use
-save2file = "1year"  # "1year" save starting dates for the simYear
-                     # "all" save all years from simYear tp simYear+meaxYears-1
-                     # otherwise don't save
+save2file = true     # If true save the results to a JLD2 file
+save1year = true     # if true save first year's results, otherwise
+                     # save all years from simYear tp simYear+meaxYears-1
 
 
 [paths]   # All paths are relative to the user's home directory
