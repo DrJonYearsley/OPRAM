@@ -5,7 +5,9 @@ title = "Degree day model parameter file for speciec species"
 
 [runtime]
 nNodes = 3           # Number of compute nodes to use
-save2file = true     # If true save the full result to a JLD2 file
+save2file = "1year"  # "1year" save starting dates for the simYear
+                     # "all" save all years from simYear tp simYear+meaxYears-1
+                     # otherwise don't save
 
 
 [paths]   # All paths are relative to the user's home directory
@@ -28,20 +30,20 @@ maxYears = 4         # Maximum number of years to complete insect development
 lastMeteoYear = 2024  # The last year of meteo data
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-#speciesList = ["anxius"]
+speciesList = ["cembrae"]
 
 # List species to simulate. Species with several life stages are grouped together. 
 # This grouping only affects the programs OPRAM_calculate_average and OPRAM_calculate anomaly
-speciesList = ["Agrilus anxius", 
-                "Ips sexdentatus", 
-                "Spodoptera frugiperda", 
-                "Ips duplicatus", 
-                "Ips cembrae", 
-                "Leptinotarsa decemlineata", 
-                "Halyomorpha halys", 
-               "Ips typographus",
-               "Oulema melanopus, model 1",
-               "Oulema melanopus, model 2"]
+#speciesList = ["Agrilus anxius", 
+#                "Ips sexdentatus", 
+#                "Ips duplicatus", 
+#                "Spodoptera frugiperda", 
+#                "Ips cembrae", 
+#                "Leptinotarsa decemlineata", 
+#                "Halyomorpha halys", 
+#               "Ips typographus",
+#               "Oulema melanopus, model 1",
+#               "Oulema melanopus, model 2"]
 
 # Predefined species are:
 #  :agrilus_anxius
