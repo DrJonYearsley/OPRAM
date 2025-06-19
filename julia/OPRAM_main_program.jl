@@ -28,17 +28,16 @@ using CSV;
 using JLD2;
 using Dates;
 using Statistics;
+using DataFrames;
+using SharedArrays;
 
-# Load additional packages on all compute nodes
-@everywhere using SharedArrays
-@everywhere using DataFrames;
+
 
 # =========================================================
 # =========================================================
 
 # Include the functions to import the data and run the degree day model
 include("OPRAM_io_functions.jl")
-include("OPRAM_ddmodel_functions.jl")
 
 # ============================================================================================
 # =============== Import parameter values =======================================================
@@ -51,7 +50,7 @@ if length(ARGS)==1
   nNodes, run_params, species_params, paths =  process_parameters(ARGS[1])
 
 elseif length(ARGS)==0 & isfile("parameters.toml")
-  nNodes, run_params, species_params, paths =  import_parameters("parameters.toml")
+  nNodes, run_params, species_params, paths =  import_parameters("parameters_userdefined.toml")
 
 else
   @error "No parameter file given"
@@ -72,6 +71,13 @@ if isinteractive() & nprocs() == 1
   # Enable multiple nodes 
   addprocs(nNodes)
 end
+
+# Load additional packages on all compute nodes
+@everywhere using SharedArrays
+@everywhere using DataFrames;
+
+# This must be included ater the worker nodes have been assigned
+include("OPRAM_ddmodel_functions.jl")
 
 
 @info "Workers : $(workers())"
