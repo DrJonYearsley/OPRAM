@@ -81,7 +81,7 @@ end
 # =========================================================
 # =========================================================
 # Start the main loop of the program
-if run_params.run_TRANSLATE_future
+if run_params.TRANSLATE_future
   # If a climate scenario is specified, run the model for future climates
   using Distributed;
   using Distributions, Random;

@@ -39,6 +39,25 @@ function import_parameters(tomlFile::String)
 
   nNodes = params["runtime"]["nNodes"]           # Number of compute nodes to use (if in interactive)
 
+
+# Perform some checks on file anmes
+# Check grid file exists
+  if !isfile(params["inputData"]["gridFile"])
+    @info "Can't find grid file!"
+
+    if isfile(joinpath(homedir(),"DATA","OPRAM", params["inputData"]["gridFile"]))  # Guess 1
+      params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
+      @info "gridFile set to" * params["inputData"]["gridFile"]
+ 
+    elseif isfile(joinpath(homedir(), params["inputData"]["gridFile"]))  # Guess 2
+      params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
+      @info "gridFile set to" * params["inputData"]["gridFile"]
+    else
+      @error "No grid file found"
+    end
+  end
+
+
   # Put parameters into a named tuple
   if in("simYears", keys(params["model"]))
     # Run model on past data
@@ -150,6 +169,9 @@ function import_parameters(tomlFile::String)
       @error "No meteoNI directory found"
     end
   end
+
+
+
 
   # Set folders to nothing if no data requried
   if params["model"]["country"] == "IE"
