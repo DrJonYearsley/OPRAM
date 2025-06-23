@@ -124,14 +124,16 @@ leftjoin!(grid, county_defs, on=:county => :County)
 for s in eachindex(run_params.speciesName)
 
     # Find directory matching the species name in run_params
-    speciesName = filter(x -> occursin(r"" * run_params.speciesName[s], x), readdir(paths.resultDir))
+    regex = Regex(replace(lowercase(run_params.speciesName[s]), 
+                   r"\s" => "\\w"))  # Replace spaces with reg expression
+    speciesName = filter(x -> occursin( regex, x), readdir(paths.resultDir))
     if length(speciesName) > 1
         @error "More than one species name found"
     elseif length(speciesName) == 0
         @error "Species not found"
     end
 
-    @info "Importing data for species " * speciesName[1]
+    @info "Importing data for $(speciesName[1])"
 
 
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
