@@ -3,8 +3,8 @@
 # on Met Eireann daily temperature data
 #
 # This file contains the following functions
-# function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::NamedTuple)
-# function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, paths::NamedTuple)
+# function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
+# function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
 # function location_loop(locInd1::Vector{Int64}, locInd2::Vector{Int64},idx::Vector{CartesianIndex{2}}, 
 #                        GDD::SharedVector{Float32}, threshold::Float32)
 # function emergence(cumGDD::Vector{Float32}, cumGDD_doy::Vector{Int16}, threshold::Float32)
@@ -24,12 +24,12 @@
 # ============= Defne functions ===========================
 
 
-function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::NamedTuple)
+function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
   # Function to run the degree day model for a range of years and for a range of species
   #
   # Arguments:
   #   run_params      a named tuple containing the parameters for the model
-  #   species_setup   a named tuple containing the parameters for the species
+  #   species_params   a named tuple containing the parameters for the species
   #   paths           a named tuple containing the paths to the data
   #
   # Output:
@@ -47,12 +47,12 @@ function run_model(run_params::NamedTuple, species_setup::NamedTuple, paths::Nam
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Set species parameters from the parameter file (can be more than one species)
-  if species_setup.speciesStr[1] == "all"
-    @info "Importing all species from the species file" * string(species_setup.speciesStr)
-    species_params = import_species(species_setup.speciesFile, species_setup.speciesStr[1])
+  if species_params.speciesStr[1] == "all"
+    @info "Importing all species from the species file" * string(species_params.speciesStr)
+    species_params = import_species(species_params.speciesFile, species_params.speciesStr[1])
   else
-    @info "Importing species from the species file: " * string(species_setup.speciesStr)
-    species_params = [import_species(species_setup.speciesFile, species_setup.speciesStr[s]) for s in eachindex(species_setup.speciesStr)]
+    @info "Importing species from the species file: " * string(species_params.speciesStr)
+    species_params = [import_species(species_params.speciesFile, species_params.speciesStr[s]) for s in eachindex(species_params.speciesStr)]
   end
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -147,7 +147,7 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, paths::NamedTuple)
+function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
   # Function to run the degree day model for a range of future climate predictions and for a range of species
   #
   # The differences to run_model are:
@@ -157,7 +157,7 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
   #
   # Arguments:
   #   run_params      a named tuple containing the parameters for the model
-  #   species_setup   a named tuple containing the parameters for the species
+  #   species_params   a named tuple containing the parameters for the species
   #   paths           a named tuple containing the paths to the data
   #
   # Output:
@@ -175,12 +175,12 @@ function run_model_futures(run_params::NamedTuple, species_setup::NamedTuple, pa
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Set species parameters from the parameter file (can be more than one species)
-  if species_setup.speciesStr[1] == "all"
-    @info "Importing all species from the species file" * string(species_setup.speciesStr)
-    species_params = import_species(species_setup.speciesFile, species_setup.speciesStr[1])
+  if species_params.speciesStr[1] == "all"
+    @info "Importing all species from the species file" * string(species_params.speciesStr)
+    species_params = import_species(species_params.speciesFile, species_params.speciesStr[1])
   else
-    @info "Importing species from the species file" * string(species_setup.speciesStr)
-    species_params = [import_species(species_setup.speciesFile, species_setup.speciesStr[s]) for s in eachindex(species_setup.speciesStr)]
+    @info "Importing species from the species file" * string(species_params.speciesStr)
+    species_params = [import_species(species_params.speciesFile, species_params.speciesStr[s]) for s in eachindex(species_params.speciesStr)]
   end
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
