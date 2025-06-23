@@ -40,15 +40,15 @@ function import_parameters(tomlFile::String)
   nNodes = params["runtime"]["nNodes"]           # Number of compute nodes to use (if in interactive)
 
 
-# Perform some checks on file anmes
-# Check grid file exists
+  # Perform some checks on file anmes
+  # Check grid file exists
   if !isfile(params["inputData"]["gridFile"])
     @info "Can't find grid file!"
 
-    if isfile(joinpath(homedir(),"DATA","OPRAM", params["inputData"]["gridFile"]))  # Guess 1
+    if isfile(joinpath(homedir(), "DATA", "OPRAM", params["inputData"]["gridFile"]))  # Guess 1
       params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
       @info "gridFile set to" * params["inputData"]["gridFile"]
- 
+
     elseif isfile(joinpath(homedir(), params["inputData"]["gridFile"]))  # Guess 2
       params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
       @info "gridFile set to" * params["inputData"]["gridFile"]
@@ -62,7 +62,7 @@ function import_parameters(tomlFile::String)
   if in("simYears", keys(params["model"]))
     # Run model on past data
     run_params = (
-      TRANSLATE_future = false,
+      TRANSLATE_future=false,
       saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
       save1year=params["runtime"]["save1year"],    # If true save only the first year's results
       years=params["model"]["simYears"], # Years to run model
@@ -75,7 +75,7 @@ function import_parameters(tomlFile::String)
   elseif in("rcp", keys(params["model"]))
     # Run model on future data
     run_params = (
-      TRANSLATE_future = true,
+      TRANSLATE_future=true,
       saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
       save1year=params["runtime"]["save1year"],    # If true save only the first year's results
       futurePeriod=params["model"]["futurePeriod"], # Years to run model
@@ -202,8 +202,8 @@ function import_species(speciesFile::String, speciesStr::String)
   # that correspond to the speciesStr
 
   # Import set species parameters
-  params = CSV.read(speciesFile, DataFrame,
-    missingstring="NA")
+  params = CSV.read(speciesFile, DataFrame, missingstring="NA", 
+                     types = [String, Float32, Float32, String, Union{Float32, Missing}, Union{Float32, Missing}, String, String, String, String, String])
 
   # Create a list of species names in lowercase
   spList = lowercase.(params.species)
@@ -745,6 +745,101 @@ function read_grid(gridFilePath::String, thinFactor::Int, countryStr::String="IE
 end
 
 
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+function read_OPRAM_JLD2(resultPath::String, speciesName::String, years::Vector{Int}, country::String, grid::DataFrame)
+# A function to import the OPRAM results from JLD2 files (as written by the run_model function)
+# and create a single DataFrame with the results
+#
+#  The function checks to amke sure all the required spatial locations are included. 
+#  Missing spatial locations are add as missing data
+#
+# Arguments:
+#   resultPath  the path to the results directory
+#   speciesName the name of the species to import
+#   years       the years to import (as a vector of integers)
+#   country     the country to import the results for (as a string, e.g. "IE" or "NI")
+#   grid        the grid of locations to use (as a DataFrame)
+#
+# Output:
+#   A DataFrame with the results for the specified species and years  
+# *************************************************************
+
+# Check if the resultPath exists
+  if !isdir(resultPath)
+    @error "Result path does not exist: $(resultPath)"
+  end
+
+
+  dVec = Vector{DataFrame}(undef, length(years))
+  for y in eachindex(years)
+
+    @info "Importing data for year $(years[y])"
+
+    # Starting dates for output in CSV files
+    # The first of every month
+    dates = [Date(years[y], m, 01) for m in 1:12]
+
+    inFile = filter(x -> occursin(r"^" * speciesName * "_" * country * "_" * string(years[y]) * "_1km.jld2", x),
+      readdir(joinpath(resultPath, speciesName)))
+
+    if length(inFile) > 1
+      @error "More than one input file found"
+    end
+    adult_emerge = load_object(joinpath(resultPath, speciesName, inFile[1]))
+
+    @info " ---- Generating output for specific starting dates"
+    # Create output for specific days of year
+    dVec[y] = create_doy_results(dates, adult_emerge)
+
+    # Select columns to work with
+    select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
+
+    # Find spatial locations not included in the results
+    missingIDs = setdiff(grid.ID, dVec[y].ID)
+    # Add missing spatial locations as missing values
+    if length(missingIDs) > 0
+      @info " ---- Adding missing locations $(length(missingIDs))"
+      # Create a DataFrame with missing values for the missing IDs for each starting date
+      startDates = unique(dVec[y].startDate[.!ismissing.(dVec[y].startDate)])
+      missingData = DataFrame(ID=repeat(missingIDs,inner=length(startDates)), 
+                             startDate=repeat(startDates,outer=length(missingIDs)), 
+                             emergeDate=missing, 
+                             nGenerations=missing)
+
+      # Add the missing data to the results
+      dVec[y] = vcat(dVec[y], missingData)
+
+      # Sort the DataFrame by ID
+      sort!(dVec[y], :ID)
+    else
+      @info " ---- No missing locations found"
+    end
+  end
+
+  # Put all the data together into one Matrix
+  df_1km = reduce(vcat, dVec)
+
+
+
+  # Define DOY for emerge dates (and set as integer)
+  idx = .!ismissing.(df_1km.emergeDate)
+  df_1km.emergeDOY = Vector{Union{Missing,Int64}}(missing, nrow(df_1km))
+  df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+
+                          Dates.dayofyear.(df_1km.startDate[idx])
+
+  # Define starting month for start dates (and set as integer)
+  idx = .!ismissing.(df_1km.startDate)
+  df_1km.startMonth = Vector{Union{Missing,Int}}(missing, nrow(df_1km))
+  df_1km.startMonth[idx] = Dates.month.(df_1km.startDate[idx])  # Use month rather than DOY to avoid leap year problems
+
+  return df_1km
+
+end
 
 # ================ End of Function Definitions ======================
 # ===================================================================
