@@ -32,8 +32,8 @@ using TOML
 if length(ARGS) == 1
     params = TOML.parsefile(ARGS[1])
 
-elseif length(ARGS) == 0 & isfile("processing_params.toml")
-    params = TOML.parsefile("processing_params.toml")
+elseif length(ARGS) == 0 & isfile("parameters.toml")
+    params = TOML.parsefile("parameters.toml")
 
 else
     @error "No parameter file given"
@@ -87,7 +87,7 @@ end
 
 # Include function definitions
 include("OPRAM_io_functions.jl");
-include("OPRAM_ddmodel_functions.jl");
+include("OPRAM_processing_functions.jl");
 
 
 
@@ -148,43 +148,43 @@ for s in eachindex(run_params.speciesName)
     end
 
 
+    df_1km = read_OPRAM_JLD2(paths.resultDir, speciesName[1], run_params.years, "IE", grid)
 
+    # dVec = Vector{DataFrame}(undef, length(run_params.years))
+    # for y in eachindex(run_params.years)
 
-    dVec = Vector{DataFrame}(undef, length(run_params.years))
-    for y in eachindex(run_params.years)
+    #     @info "Importing data for year $(run_params.years[y])"
 
-        @info "Importing data for year $(run_params.years[y])"
+    #     # Starting dates for output in CSV files
+    #     # The first of every month
+    #     dates = [Date(run_params.years[y], m, 01) for m in 1:12]
 
-        # Starting dates for output in CSV files
-        # The first of every month
-        dates = [Date(run_params.years[y], m, 01) for m in 1:12]
+    #     inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
+    #         readdir(joinpath(paths.resultDir, speciesName[1])))
 
-        inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
-            readdir(joinpath(paths.resultDir, speciesName[1])))
+    #     if length(inFile) > 1
+    #         @error "More than one input file found"
+    #     end
+    #     adult_emerge = load_object(joinpath(paths.resultDir, speciesName[1], inFile[1]))
 
-        if length(inFile) > 1
-            @error "More than one input file found"
-        end
-        adult_emerge = load_object(joinpath(paths.resultDir, speciesName[1], inFile[1]))
+    #     @info " ---- Generating output for specific starting dates"
+    #     # Create output for specific days of year
+    #     dVec[y] = create_doy_results(dates, adult_emerge)
 
-        @info " ---- Generating output for specific starting dates"
-        # Create output for specific days of year
-        dVec[y] = create_doy_results(dates, adult_emerge)
+    #     # Select columns to work with
+    #     select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
+    # end
 
-        # Select columns to work with
-        select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
-    end
+    # # Put all the temperature data together into one Matrix
+    # df_1km = reduce(vcat, dVec)
+    # dVec = nothing
 
-    # Put all the temperature data together into one Matrix
-    df_1km = reduce(vcat, dVec)
-    dVec = nothing
-
-    # Define DOY for start and emerge dates (and set as integer)
-    idx = .!ismissing.(df_1km.emergeDate)
-    df_1km.emergeDOY = Vector{Union{Missing,Int64}}(missing, nrow(df_1km))
-    df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+
-                            Dates.dayofyear.(df_1km.startDate[idx])
-    df_1km.startMonth = Dates.month.(df_1km.startDate)  # Use month rather than DOY to avoid leap year problems
+    # # Define DOY for start and emerge dates (and set as integer)
+    # idx = .!ismissing.(df_1km.emergeDate)
+    # df_1km.emergeDOY = Vector{Union{Missing,Int64}}(missing, nrow(df_1km))
+    # df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+
+    #                         Dates.dayofyear.(df_1km.startDate[idx])
+    # df_1km.startMonth = Dates.month.(df_1km.startDate)  # Use month rather than DOY to avoid leap year problems
 
 
 
@@ -241,16 +241,28 @@ for s in eachindex(run_params.speciesName)
             # @info "Writing data for year " * string(y) * " and county " * string(c)
 
             # Create subset to write to file
-            out_1km = select(subset(df_1km, :countyID => x1 -> x1 .== c, :year => x2 -> x2 .== y),
-                Not([:startMonth, :emergeDate, :east, :north, :year, :countyID]))
+            # out_1km = select(subset(df_1km, :countyID => x1 -> x1 .== c, :year => x2 -> x2 .== y),
+            #     Not([:startMonth, :emergeDate, :east, :north, :year, :countyID]))
+           out_1km = select(subset(df_1km, :countyID => x1 -> x1 .== c, :year => x2 -> x2 .== y),
+                :ID, :east, :north, :startDate, 
+                Not([:startMonth, :emergeDate, :year, :countyID]))
+
 
             # Round number of generations
             out_1km.nGenerations = round.(out_1km.nGenerations, digits=2)
             out_1km.nGenerations_median = round.(out_1km.nGenerations_median, digits=2)
             out_1km.nGenerations_anomaly = round.(out_1km.nGenerations_anomaly, digits=2)
 
+            # Round median and anomaly emergence DOY to 1 decimal place
+            out_1km.emergeDOY_median = round.(out_1km.emergeDOY_median, digits=1)
+            out_1km.emergeDOY_anomaly = round.(out_1km.emergeDOY_anomaly, digits=1)
+ 
+
             # Rename some columns
-            rename!(out_1km, :nGenerations => "nGen",
+            rename!(out_1km, 
+                :east => "eastings",
+                :north => "northings",
+                :nGenerations => "nGen",
                 :nGenerations_median => "nGen_30yr",
                 :nGenerations_anomaly => "nGen_anomaly",
                 :emergeDOY_median => "emergeDOY_30yr")
@@ -267,7 +279,7 @@ for s in eachindex(run_params.speciesName)
 
     # =========================================================
     # =========================================================
-    # Create 10km summary
+    # Create 10km summary ---------
 
 
     @info "Aggregating data to 10km resolution"
@@ -357,6 +369,10 @@ for s in eachindex(run_params.speciesName)
         out_10km.nGenerations_max = round.(out_10km.nGenerations_max, digits=2)
         out_10km.nGenerations_median_max = round.(out_10km.nGenerations_median_max, digits=2)
         out_10km.nGenerations_anomaly_max = round.(out_10km.nGenerations_anomaly_max, digits=2)
+
+        # Round emergence DOY to 1 decimal place
+        out_10km.emergeDOY_median_min = round.(out_10km.emergeDOY_median_min, digits=1)
+        out_10km.emergeDOY_anomaly_min = round.(out_10km.emergeDOY_anomaly_min, digits=1)
 
         # Rename some columns
         rename!(out_10km, :nGenerations_max => "nGen",
