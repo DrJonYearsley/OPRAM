@@ -29,8 +29,8 @@ using TOML
 if length(ARGS) == 1
     params = TOML.parsefile(ARGS[1])
 
-elseif length(ARGS) == 0 & isfile("processing_params.toml")
-    params = TOML.parsefile("processing_params.toml")
+elseif length(ARGS) == 0 & isfile("parameters.toml")
+    params = TOML.parsefile("parameters.toml")
 
 else
     @error "No parameter file given"
