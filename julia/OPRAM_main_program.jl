@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/julia -p 3
+#!//home/jon/.juliaup/bin/julia -p 7
 #
 # This is the main program to run the OPRAM degree day model
 #
@@ -47,7 +47,7 @@ include("OPRAM_io_functions.jl")
 
 # Model parameters are stored in a TOML file https://toml.io/en/
 if length(ARGS)==1
-  nNodes, run_params, species_params, paths =  process_parameters(ARGS[1])
+  nNodes, run_params, species_params, paths =  import_parameters(ARGS[1])
 
 elseif length(ARGS)==0 & isfile("parameters.toml")
   nNodes, run_params, species_params, paths =  import_parameters("parameters.toml")
