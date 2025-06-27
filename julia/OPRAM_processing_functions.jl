@@ -19,56 +19,56 @@
 # ============= Defne functions ===========================
 
 function doy_results(years, speciesName, params, paths)
-# Function to extract model results for specific days of year
-# across multiple years
-#
-# Arguments:
-#   dates              information about the spatial grid
-#   years              results from the model on 1km grid
-#   speciesName        name of the species
-#   run_params         a tuple of runtime parameters
-#  
-#  Output:
-#   a data frame with the following columns:
-#       ID            unique ID for each spatial location
-#       startDate     date when larval development begins
-#       emergeDate    date of adult emergence
-#       nGenerations  the number of generations within the year
-#       
-#       
-########################################################################
+  # Function to extract model results for specific days of year
+  # across multiple years
+  #
+  # Arguments:
+  #   dates              information about the spatial grid
+  #   years              results from the model on 1km grid
+  #   speciesName        name of the species
+  #   run_params         a tuple of runtime parameters
+  #  
+  #  Output:
+  #   a data frame with the following columns:
+  #       ID            unique ID for each spatial location
+  #       startDate     date when larval development begins
+  #       emergeDate    date of adult emergence
+  #       nGenerations  the number of generations within the year
+  #       
+  #       
+  ########################################################################
 
 
-    dVec = Vector{DataFrame}(undef, length(years))
-    for y in eachindex(years)
-        @info "Importing data for year $(years[y])"
+  dVec = Vector{DataFrame}(undef, length(years))
+  for y in eachindex(years)
+    @info "Importing data for year $(years[y])"
 
-        # Find the relevant file name and import the corresponding jld2 file
-        inFile = filter(x -> occursin(r"^" * speciesName * "_" * params.country * "_" * string(years[y]) * "_1km.jld2", x),
-            readdir(joinpath(paths.outDir, speciesName)))
+    # Find the relevant file name and import the corresponding jld2 file
+    inFile = filter(x -> occursin(r"^" * speciesName * "_" * params.country * "_" * string(years[y]) * "_1km.jld2", x),
+      readdir(joinpath(paths.outDir, speciesName)))
 
-        if length(inFile) > 1
-            @error "More than one input file found"
-        end
-        # Load data on emergence dates
-        emerge = load_object(joinpath(paths.outDir, speciesName, inFile[1]))
-
-
-        
-        @info " ---- Generating output for specific starting dates"
-        # Starting dates for output in CSV files
-        # The first of every month
-        dates = [Date(years[y], m, 1) for m in 1:12]
-
-        # Create output for specific days of year
-        dVec[y] = create_doy_results(dates, emerge)
-
-        # Select columns to work with
-        select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
+    if length(inFile) > 1
+      @error "More than one input file found"
     end
+    # Load data on emergence dates
+    @time emerge = load_object(joinpath(paths.outDir, speciesName, inFile[1]))
 
-    # Put all the model results data together into one Matrix
-    return reduce(vcat, dVec)
+
+
+    @info " ---- Generating output for specific starting dates"
+    # Starting dates for output in CSV files
+    # The first of every month
+    dates = [Date(years[y], m, 1) for m in 1:12]
+
+    # Create output for specific days of year
+    @time dVec[y] = create_doy_results(dates, emerge)
+
+    # Select columns to work with
+    select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
+  end
+
+  # Put all the model results data together into one Matrix
+  return reduce(vcat, dVec)
 end
 
 
@@ -80,7 +80,7 @@ end
 
 
 
-function extract_results(doy::Int32, result::DataFrame)
+@everywhere function extract_results(doy::Int32, result::DataFrame)
   # Function to calculate number of generations per year, and first
   # day of adult emergence based on a starting development on doy
   #
@@ -145,7 +145,7 @@ function extract_results(doy::Int32, result::DataFrame)
     else
       # Work out all values of within_a_year
       # Is the generation complete within the year?
-      within_a_year = result.emergeDOY[idx3] .<= 365   
+      within_a_year = result.emergeDOY[idx3] .<= 365
     end
 
     # Create booleans that will increment generation count
@@ -157,7 +157,7 @@ function extract_results(doy::Int32, result::DataFrame)
 
     # Calculate end of year fraction of time towards next generation
     out_res.nGenerations[partial_generation] .+= (365 .- startDOY[partial_generation]) ./
-                  (result.emergeDOY[idx3[partial_generation]] - startDOY[partial_generation])
+                                                 (result.emergeDOY[idx3[partial_generation]] - startDOY[partial_generation])
 
     # If this is the first time through the loop, record the emergance day
     if first_pass
@@ -242,6 +242,61 @@ end
 
 
 # ------------------------------------------------------------------------------------------
+
+
+
+
+function dist_create_doy_results(dates::Vector{Date}, adult_emerge::DataFrame)
+  # Function to calculate number of generations per year, and first
+  # day of adult emergence for specific starting days of year.
+  # If emergence date exceeds simulation timeframe then set to missing
+  #
+  #   dates           a vector of dates when larval development begins
+  #   run_params      a tuple of runtime parameters
+  #   adult_emerge    data frame containing the results from the model
+  #  
+  #  Output:
+  #   a data frame with the following columns:
+  #       ID            unique ID for each spatial location  
+  #       startDOY      starting DOY for larval development  
+  #       startDate     starting date for larval development  
+  #       nGenerations  number of generations in a year    
+  #       emergeDOY     adult emergence day of year 
+  #       emergeDate    adult emergence date 
+  #       east_idx      index for eastings of the unique spatial locations in result
+  #       north_idx     index for northings of the unique spatial location in result
+  ########################################################################
+
+  out = DataFrame()    # Initialise dataframe for outputs
+
+
+  for d in eachindex(dates)
+    # Produce results for a specific DOY
+    result = extract_results(convert(Int32, dayofyear(dates[d])), adult_emerge)
+
+    # Add in a column with starting dates and emergence dates rather than DOY
+    result.startDate .= dates[d]
+
+    # Initialise column with missing values
+    result.emergeDate = Vector{Union{Missing,Date}}(missing, length(result.ID))
+
+    # Find results with a non-zero emergence DOY
+    idx = .!ismissing.(result.emergeDOY)
+    # Calculate date of emergence from day of year
+    result.emergeDate[idx] = Date(year(dates[d])) .+ Day.(result.emergeDOY[idx] .- 1)
+
+    # Add these results to the other outputs
+    append!(out, result)
+  end
+
+  return out
+end
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
 
 
 
