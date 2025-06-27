@@ -51,7 +51,7 @@ function doy_results(years, speciesName, params, paths)
       @error "More than one input file found"
     end
     # Load data on emergence dates
-    @time emerge = load_object(joinpath(paths.outDir, speciesName, inFile[1]))
+    emerge = load_object(joinpath(paths.outDir, speciesName, inFile[1]))
 
 
 
@@ -61,7 +61,7 @@ function doy_results(years, speciesName, params, paths)
     dates = [Date(years[y], m, 1) for m in 1:12]
 
     # Create output for specific days of year
-    @time dVec[y] = create_doy_results(dates, emerge)
+    dVec[y] = create_doy_results(dates, emerge)
 
     # Select columns to work with
     select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
@@ -80,7 +80,7 @@ end
 
 
 
-@everywhere function extract_results(doy::Int32, result::DataFrame)
+function extract_results(doy::Int32, result::DataFrame)
   # Function to calculate number of generations per year, and first
   # day of adult emergence based on a starting development on doy
   #

@@ -112,7 +112,7 @@ include("OPRAM_processing_functions.jl");
 # Work out unique species to simulate (Remove obvious duplicates)
 speciesStr = Vector{String}(undef, 0)
 for s in eachindex(params["model"]["speciesList"])
-    speciesStr = unique(vcat(speciesStr, params["model"]["speciesList"][s]))
+    global speciesStr = unique(vcat(speciesStr, params["model"]["speciesList"][s]))
 end
 species_params = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFile"]),  # File containing species parameters
     speciesStr=speciesStr)  # A vector of strings to uniquely identify a species name in the speciesFile
