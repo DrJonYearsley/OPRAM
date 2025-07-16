@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/julia -p 3
+#!//home/jon/.juliaup/bin/julia -p 7
 #
 # Julia program to:
 #  extract results from model jld2 files 
@@ -87,7 +87,8 @@ granite_hectad_county = "git_repos/OPRAM/data/granite_hectad_county_defs.csv"
 
 if isdir("/media/jon/Seagate_5TB/OPRAM_results")       # Linux workstation
     paths = (outDir="/media/jon/Seagate_5TB/OPRAM_results",
-        dataDir="/media/jon/Seagate_5TB/OPRAM_results")
+            resultDir=joinpath(homedir(), "/media/jon/Seagate_5TB/OPRAM_results"),
+        dataDir="/home/jon/")
 
 elseif isdir(joinpath(homedir(), "DATA//OPRAM"))       # Linux workstation
     paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//granite_output"),
@@ -148,7 +149,7 @@ rename!(county_defs, :Id => :countyID)
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Import location data and thin it using thinFactor
 # (needed to add the hectad codes to the 10km output) 
-grid = read_grid(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
+grid = read_grid(run_params.gridFile, run_params.thinFactor, run_params.country)
 
 # Create easting and northings of bottom left of a hectad
 grid.east_hectad = convert.(Int32, floor.(grid.east ./ 1e4) .* 1e4)
@@ -166,9 +167,9 @@ leftjoin!(grid, county_defs, on=:county => :County)
 for s in eachindex(species_params)
 
     # Find directory matching the species name in run_params
-    regex = Regex(replace(lowercase(species_params[s].speciesName), 
+    regex = Regex(replace(lowercase(species_params[s].species_name), 
                    r"\s" => "\\w"))  # Replace spaces with reg expression
-    speciesName = filter(x -> occursin( regex, x), readdir(paths.resultDir))
+    speciesName = filter(x -> occursin( regex, x), readdir(paths.outDir))
     if length(speciesName) > 1
         @error "More than one species name found"
     elseif length(speciesName) == 0
@@ -193,42 +194,6 @@ for s in eachindex(species_params)
 
 
     df_1km = read_OPRAM_JLD2(paths.resultDir, speciesName[1], run_params.years, "IE", grid)
-
-    # dVec = Vector{DataFrame}(undef, length(run_params.years))
-    # for y in eachindex(run_params.years)
-
-    #     @info "Importing data for year $(run_params.years[y])"
-
-    #     # Starting dates for output in CSV files
-    #     # The first of every month
-    #     dates = [Date(run_params.years[y], m, 01) for m in 1:12]
-
-    #     inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
-    #         readdir(joinpath(paths.resultDir, speciesName[1])))
-
-    #     if length(inFile) > 1
-    #         @error "More than one input file found"
-    #     end
-    #     adult_emerge = load_object(joinpath(paths.resultDir, speciesName[1], inFile[1]))
-
-    #     @info " ---- Generating output for specific starting dates"
-    #     # Create output for specific days of year
-    #     dVec[y] = create_doy_results(dates, adult_emerge)
-
-    #     # Select columns to work with
-    #     select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
-    # end
-
-    # # Put all the temperature data together into one Matrix
-    # df_1km = reduce(vcat, dVec)
-    # dVec = nothing
-
-    # # Define DOY for start and emerge dates (and set as integer)
-    # idx = .!ismissing.(df_1km.emergeDate)
-    # df_1km.emergeDOY = Vector{Union{Missing,Int64}}(missing, nrow(df_1km))
-    # df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+
-    #                         Dates.dayofyear.(df_1km.startDate[idx])
-    # df_1km.startMonth = Dates.month.(df_1km.startDate)  # Use month rather than DOY to avoid leap year problems
 
 
 
