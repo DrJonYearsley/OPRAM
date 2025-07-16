@@ -20,6 +20,7 @@
 # Load the required packages
 using CSV
 using DataFrames
+
 using Statistics
 using Dates
 using JLD2
@@ -33,13 +34,29 @@ if length(ARGS) == 1
     params = TOML.parsefile(ARGS[1])
 
 elseif length(ARGS) == 0 & isfile("parameters.toml")
-    params = TOML.parsefile("parameters.toml")
+    params = TOML.parsefile("parameters_userdefined.toml")
 
 else
     @error "No parameter file given"
 end
 
 
+# Perform some checks on file names
+# Check grid file exists
+if !isfile(params["inputData"]["gridFile"])
+    @info "Can't find grid file!"
+
+    if isfile(joinpath(homedir(), "DATA", "OPRAM", params["inputData"]["gridFile"]))  # Guess 1
+        params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
+        @info "gridFile set to" * params["inputData"]["gridFile"]
+
+    elseif isfile(joinpath(homedir(), params["inputData"]["gridFile"]))  # Guess 2
+        params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
+        @info "gridFile set to" * params["inputData"]["gridFile"]
+    else
+        @error "No grid file found"
+    end
+end
 
 
 # =================================================================================
@@ -68,7 +85,11 @@ granite_hectad_county = "git_repos/OPRAM/data/granite_hectad_county_defs.csv"
 # =================================================================================
 # Specify directories for import and export of data
 
-if isdir(joinpath(homedir(), "DATA//OPRAM"))       # Linux workstation
+if isdir("/media/jon/Seagate_5TB/OPRAM_results")       # Linux workstation
+    paths = (outDir="/media/jon/Seagate_5TB/OPRAM_results",
+        dataDir="/media/jon/Seagate_5TB/OPRAM_results")
+
+elseif isdir(joinpath(homedir(), "DATA//OPRAM"))       # Linux workstation
     paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//granite_output"),
         resultDir=joinpath(homedir(), "Desktop//OPRAM//results"),
         dataDir=joinpath(homedir(), "DATA//OPRAM"))
@@ -89,6 +110,27 @@ end
 include("OPRAM_io_functions.jl");
 include("OPRAM_processing_functions.jl");
 
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Import species info
+# Work out unique species to simulate (Remove obvious duplicates)
+speciesStr = Vector{String}(undef, 0)
+for s in eachindex(params["model"]["speciesList"])
+    global speciesStr = unique(vcat(speciesStr, params["model"]["speciesList"][s]))
+end
+species_setup = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFile"]),  # File containing species parameters
+    speciesStr=speciesStr)  # A vector of strings to uniquely identify a species name in the speciesFile
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Set species parameters from the parameter file (can be more than one species)
+if species_setup.speciesStr[1] == "all"
+    @info "Importing all species from the species file" * string(species_setup.speciesStr)
+    species_params = import_species(species_setup.speciesFile, species_setup.speciesStr[1])
+else
+    @info "Importing species from the species file: " * string(species_setup.speciesStr)
+    species_params = [import_species(species_setup.speciesFile, species_setup.speciesStr[s]) for s in eachindex(species_setup.speciesStr)]
+end
 
 
 
@@ -121,10 +163,10 @@ leftjoin!(grid, county_defs, on=:county => :County)
 # =========================================================
 # Import data across the years and calculate the average
 
-for s in eachindex(run_params.speciesName)
+for s in eachindex(species_params)
 
     # Find directory matching the species name in run_params
-    regex = Regex(replace(lowercase(run_params.speciesName[s]), 
+    regex = Regex(replace(lowercase(species_params[s].speciesName), 
                    r"\s" => "\\w"))  # Replace spaces with reg expression
     speciesName = filter(x -> occursin( regex, x), readdir(paths.resultDir))
     if length(speciesName) > 1
