@@ -199,6 +199,11 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
 
       Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.rcp[r], run_params.futurePeriod[p], grid.ID)
 
+      if run_params.nReps==1
+        # If only one replicate then use the mean temperature
+        Tavg_sd .= 0
+      end
+
       # Remove grid points not in the meteo data
       keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
       grid_final = grid[keep_ID, :]
@@ -237,7 +242,7 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
             result = location_loop(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
 
             # Simplify the results and put them in a DataFrame
-            adult_emerge[r] = cleanup_results(result, idx, grid_final.ID)
+            adult_emerge[r] = cleanup_results(result, idx, grid_final.ID, run_params.save1year)
 
 
             # Add in a column for the replicate number

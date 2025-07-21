@@ -38,7 +38,7 @@ end
 
 
 
-# Perform some checks on file anmes
+# Perform some checks on file names
 # Check grid file exists
 if !isfile(params["inputData"]["gridFile"])
     @info "Can't find grid file!"

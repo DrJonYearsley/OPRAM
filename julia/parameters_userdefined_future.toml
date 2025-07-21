@@ -3,12 +3,13 @@
 title = "Degree day model parameter file for user defined options in the app"
 
 [runtime]
-nNodes = 3           # Number of compute nodes to use
+nNodes = 5           # Number of compute nodes to use
 save2file = true     # If true save the full result to a JLD2 file
-
+save1year = true     # if true save first year's results, otherwise
+                     # save all years from simYear tp simYear+meaxYears-1
 
 [paths]   # All paths are relative to the user's home directory
-output =  "Desktop//OPRAM//results"      # Folder to save model output
+output =  "/media/jon/Seagate_5TB/OPRAM_results"      # Folder to save model output
 data = "DATA//OPRAM"                     # Folder for other model data
 meteoIE = "DATA//OPRAM//Climate_JLD2"    # Folder containing meteo data for ROI
 meteoNI =  "nothing"                     # Folder containing meteo data for NI
@@ -18,14 +19,11 @@ speciesFile = "git_repos/OPRAM/data/userdefined_parameters.csv"
 gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 
 [model]     # Parameters to define the model
-nReps = 10  # Number of replicates to run
-rcp = ["26","45","85]     # Climate future RCP
+nReps = 1  # Number of replicates to run
+rcp = ["26","45","85"]     # Climate future RCP
 futurePeriod = ["2021-2050", "2041-2070"]        # Years to run model
 maxYears = 4         # Maximum number of years to complete insect development
+thirty_years = [1991, 2020]             # 30yr period to average
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-speciesList = ["base0_thresh200", "base5_thresh200", "base10_thresh200", "base15_thresh200",
-                   "base0_thresh400", "base5_thresh400", "base10_thresh400", "base15_thresh400",
-                   "base0_thresh600", "base5_thresh600", "base10_thresh600", "base15_thresh600",
-                   "base0_thresh800", "base5_thresh800", "base10_thresh800", "base15_thresh800",
-                   "base0_thresh1000", "base5_thresh1000", "base10_thresh1000", "base15_thresh1000"]
+speciesList = ["all"]
