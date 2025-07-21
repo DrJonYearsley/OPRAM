@@ -18,11 +18,17 @@ library(raster)
 rm(list=ls())
 
 # Specify folder containing the CSV files
-dataFolder = "~/Google Drive/My Drive/Projects/DAFM_OPRAM/results/granite_output"
-outFolder = "~/Google Drive/My Drive/Projects/DAFM_OPRAM/results/granite_output/gisdata/"
+dataFolder = "/media/jon/Seagate_5TB/OPRAM_results"
+outFolder = "/media/jon/Seagate_5TB/OPRAM_results/gisdata/"
+speciesFile = "userdefined_parameters.csv"
 githubFolder = "~/git_repos/OPRAM/data"
 years = c(1991:2024)
-speciesList = c("spodoptera_frugiperda","oulema_melanopus_model_2","oulema_melanopus_model_1","leptinotarsa_decemlineata","ips_sexdentatus","agrilus_anxius","ips_duplicatus","ips_cembrae","halyomorpha_halys")
+
+species2Import = "all"
+
+# speciesList = c("spodoptera_frugiperda","oulema_melanopus_model_2","oulema_melanopus_model_1","leptinotarsa_decemlineata","ips_sexdentatus","agrilus_anxius","ips_duplicatus","ips_cembrae","halyomorpha_halys")
+# dataFolder = "~/Google Drive/My Drive/Projects/DAFM_OPRAM/results/granite_output"
+# outFolder = "~/Google Drive/My Drive/Projects/DAFM_OPRAM/results/granite_output/gisdata/"
 
 # ===================================
 # Find and import data --------------
@@ -34,8 +40,24 @@ grid = read.csv(file.path(githubFolder,"IE_grid_locations.csv"))
 grid_hectad = read.csv(file.path(githubFolder,"IE_hectad_locations.csv"))
 counties = unique(granite[,c(4,5)])
 
-# Find data Folder for species
 
+# Check output folder exists
+if (!dir.exists(outFolder)) {
+  dir.create(outFolder)
+}
+
+
+# Import parameter list for all species
+species = read.csv(file.path(githubFolder,speciesFile))
+if (length(species2Import)==1 && species2Import=="all") {
+  speciesList = species$species
+}  else {
+  # Match species2Import against species in the file
+  idx = match(species2Import, species$species)
+  speciesList = species$species[idx]
+}
+
+# Loop through each species
 for (species in speciesList) {
   for (y in years) {
     # **************************************
