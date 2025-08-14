@@ -20,20 +20,36 @@ rm(list=ls())
 
 # Specify folder containing the CSV files
 dataFolder = "~/Google Drive/My Drive/Projects/DAFM_OPRAM/results/granite_output"
-outFolder = "~/Google Drive/My Drive/Projects/DAFM_OPRAM/results/granite_output/gisdata/"
+outFolder = "~/Desktop/gisdata/"
 githubFolder = "~/git_repos/OPRAM/data"
+speciesfile = "species_parameters.csv"
+
 years = c(1991:2024)
 speciesList = c("spodoptera_frugiperda","oulema_melanopus_model_2",
                 "oulema_melanopus_model_1","leptinotarsa_decemlineata",
                 "ips_sexdentatus","agrilus_anxius","ips_duplicatus",
                 "ips_cembrae","halyomorpha_halys")
-speciesList = c("agrilus_anxius")
+
+speciesList = c("oulema_melanopus_model_2",
+                "oulema_melanopus_model_1","leptinotarsa_decemlineata",
+                "ips_sexdentatus","agrilus_anxius","ips_duplicatus",
+                "ips_cembrae","halyomorpha_halys")
+
 
 zip_output = FALSE
+useSpeciesFile = FALSE
+
+
 
 # ===================================
 # Find and import data --------------
 
+# Import species names
+if (useSpeciesFile & file.exists(file.path(githubFolder, speciesfile))) {
+  species_info = read.csv(file.path(githubFolder, speciesfile))
+  
+  speciesList = species_info$species
+} 
 
 # Import grid data
 granite = read.csv(file.path(githubFolder,"granite_hectad_county_defs.csv"))
@@ -107,8 +123,8 @@ for (species in speciesList) {
     
     for (m in 1:length(starts)) {
       if (zip_output) {
-      fileout = file.path(outFolder,species,outPrefix,
-                          paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01.tif"))
+        fileout = file.path(outFolder,species,outPrefix,
+                            paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01.tif"))
       } else {
         fileout = file.path(outFolder,species,
                             paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01.tif"))
@@ -150,11 +166,14 @@ for (species in speciesList) {
       file.remove(removeFiles)
       # Remove directory
       file.remove(outPrefix)
-      
-      if (exists("d_final")) {
-        rm(list="d_final")
-      } 
     }
+    
+    if (exists("d_final")) {
+      rm(list="d_final")
+    } 
+    if (exists("d_rast")) {
+      rm(list=c("d_rast", "d_sub"))
+    } 
   }
 }
 
