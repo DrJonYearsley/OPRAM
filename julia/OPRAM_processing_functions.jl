@@ -18,58 +18,60 @@
 # =========================================================
 # ============= Defne functions ===========================
 
-function doy_results(years, speciesName, params, paths)
-  # Function to extract model results for specific days of year
-  # across multiple years
-  #
-  # Arguments:
-  #   dates              information about the spatial grid
-  #   years              results from the model on 1km grid
-  #   speciesName        name of the species
-  #   run_params         a tuple of runtime parameters
-  #  
-  #  Output:
-  #   a data frame with the following columns:
-  #       ID            unique ID for each spatial location
-  #       startDate     date when larval development begins
-  #       emergeDate    date of adult emergence
-  #       nGenerations  the number of generations within the year
-  #       
-  #       
-  ########################################################################
+
+# function doy_results(years, speciesName, params, paths)
+#   # This function is deprecated. Use read_OPRAM_JLD2 instead (defined in OPRAM_io_functions.jl)
+#   # Function to extract model results for specific days of year
+#   # across multiple years
+#   #
+#   # Arguments:
+#   #   dates              information about the spatial grid
+#   #   years              results from the model on 1km grid
+#   #   speciesName        name of the species
+#   #   run_params         a tuple of runtime parameters
+#   #  
+#   #  Output:
+#   #   a data frame with the following columns:
+#   #       ID            unique ID for each spatial location
+#   #       startDate     date when larval development begins
+#   #       emergeDate    date of adult emergence
+#   #       nGenerations  the number of generations within the year
+#   #       
+#   #       
+#   ########################################################################
 
 
-  dVec = Vector{DataFrame}(undef, length(years))
-  for y in eachindex(years)
-    @info "Importing data for year $(years[y])"
+#   dVec = Vector{DataFrame}(undef, length(years))
+#   for y in eachindex(years)
+#     @info "Importing data for year $(years[y])"
 
-    # Find the relevant file name and import the corresponding jld2 file
-    inFile = filter(x -> occursin(r"^" * speciesName * "_" * params.country * "_" * string(years[y]) * "_1km.jld2", x),
-      readdir(joinpath(paths.outDir, speciesName)))
+#     # Find the relevant file name and import the corresponding jld2 file
+#     inFile = filter(x -> occursin(r"^" * speciesName * "_" * params.country * "_" * string(years[y]) * "_1km.jld2", x),
+#       readdir(joinpath(paths.outDir, speciesName)))
 
-    if length(inFile) > 1
-      @error "More than one input file found"
-    end
-    # Load data on emergence dates
-    emerge = load_object(joinpath(paths.outDir, speciesName, inFile[1]))
+#     if length(inFile) > 1
+#       @error "More than one input file found"
+#     end
+#     # Load data on emergence dates
+#     emerge = load_object(joinpath(paths.outDir, speciesName, inFile[1]))
 
 
 
-    @info " ---- Generating output for specific starting dates"
-    # Starting dates for output in CSV files
-    # The first of every month
-    dates = [Date(years[y], m, 1) for m in 1:12]
+#     @info " ---- Generating output for specific starting dates"
+#     # Starting dates for output in CSV files
+#     # The first of every month
+#     dates = [Date(years[y], m, 1) for m in 1:12]
 
-    # Create output for specific days of year
-    dVec[y] = create_doy_results(dates, emerge)
+#     # Create output for specific days of year
+#     dVec[y] = create_doy_results(dates, emerge)
 
-    # Select columns to work with
-    select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
-  end
+#     # Select columns to work with
+#     select!(dVec[y], [:ID, :startDate, :emergeDOY, :nGenerations])
+#   end
 
-  # Put all the model results data together into one Matrix
-  return reduce(vcat, dVec)
-end
+#   # Put all the model results data together into one Matrix
+#   return reduce(vcat, dVec)
+# end
 
 
 
@@ -88,7 +90,7 @@ function extract_results(doy::Int32, result::DataFrame)
   #  then the emergeDOY and nGenerations is set to missing
   #
   #  Arguments:
-  #      doy    day of year when larval development begins
+  #      doy         day of year when larval development begins
   #      result data frame containing the results from the model
   #  
   #  Output:
@@ -114,8 +116,11 @@ function extract_results(doy::Int32, result::DataFrame)
     nGenerations=0.0,      # Must be Float because it can be fractional 
     emergeDOY=Vector{Union{Missing,Int32}}(missing, length(idx1)))
 
-  out_res.north_idx = mod.(out_res.ID, 1000)
-  out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
+  # # Add indices for eastings and northings
+  # # These are used to identify the spatial location in the grid
+  # # (these are not used in the model but are useful for plotting)
+  # out_res.north_idx = mod.(out_res.ID, 1000)
+  # out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
 
   allowmissing!(out_res, :nGenerations)
 
@@ -192,7 +197,7 @@ end
 
 
 
-function create_doy_results(dates::Vector{Date}, adult_emerge::DataFrame)
+function create_doy_results(dates::Vector{Date}, adult_emerge::DataFrame, grid::DataFrame)
   # Function to calculate number of generations per year, and first
   # day of adult emergence for specific starting days of year.
   # If emergence date exceeds simulation timeframe then set to missing
@@ -200,6 +205,7 @@ function create_doy_results(dates::Vector{Date}, adult_emerge::DataFrame)
   #   dates           a vector of dates when larval development begins
   #   run_params      a tuple of runtime parameters
   #   adult_emerge    data frame containing the results from the model
+  #   grid            a data frame containing the spatial grid
   #  
   #  Output:
   #   a data frame with the following columns:
@@ -213,23 +219,49 @@ function create_doy_results(dates::Vector{Date}, adult_emerge::DataFrame)
   #       north_idx     index for northings of the unique spatial location in result
   ########################################################################
 
-  out = DataFrame()    # Initialise dataframe for outputs
+  # Initialise dataframe for outputs
+  out = DataFrame(ID=Int32[], 
+                  startDOY=Int32[], 
+                  startDate = Date[],
+                  nGenerations=Vector{Union{Missing,Float64}}(missing, 0), 
+                  emergeDOY=Vector{Union{Missing,Int32}}(missing, 0))
+
+
+  # # Add indices for eastings and northings
+  # # These are used to identify the spatial location in the grid
+  # # (these are not used in the model but are useful for plotting)
+  # out_res.north_idx = mod.(out_res.ID, 1000)
+  # out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
 
 
   for d in eachindex(dates)
     # Produce results for a specific DOY
     result = extract_results(convert(Int32, dayofyear(dates[d])), adult_emerge)
 
-    # Add in a column with starting dates and emergence dates rather than DOY
+    # Add in a column with starting dates and emergence dates rather than DOY 
+    # (dates handle leap years when dealing with starting dates specified using months)
     result.startDate .= dates[d]
 
-    # Initialise column with missing values
-    result.emergeDate = Vector{Union{Missing,Date}}(missing, length(result.ID))
+    # Find spatial locations with no output and add them to the result as missing
+    # (these are locations where no emergence occurs within the simulation time frame)
+    missingIDs = setdiff(grid.ID, result.ID)
+    if !isempty(missingIDs)
+      append!(result, 
+             DataFrame(ID=missingIDs, 
+                startDOY=convert(Int32, dayofyear(dates[d])),
+                startDate = dates[d],
+                nGenerations=missing,
+                emergeDOY=missing))
+    end    
 
-    # Find results with a non-zero emergence DOY
-    idx = .!ismissing.(result.emergeDOY)
-    # Calculate date of emergence from day of year
-    result.emergeDate[idx] = Date(year(dates[d])) .+ Day.(result.emergeDOY[idx] .- 1)
+
+    # # Initialise column with missing values
+    # result.emergeDate = Vector{Union{Missing,Date}}(missing, length(result.ID))
+
+    # # Find results with a non-zero emergence DOY
+    # idx = .!ismissing.(result.emergeDOY)
+    # # Calculate date of emergence from day of year
+    # result.emergeDate[idx] = Date(year(dates[d])) .+ Day.(result.emergeDOY[idx] .- 1)
 
     # Add these results to the other outputs
     append!(out, result)
@@ -333,10 +365,7 @@ function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
   # These worst case scenarios are not affected by locations where no emergence occurred
   df_agg = combine(df_group,
     :nGenerations => (x -> quantile(x, 1.0)) => :nGenerations_max,
-    :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min)   # Max generations per hectad
-
-  # df_emergeDOY = combine(df_group,
-  #   :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min)         # Minimum emergence date
+    :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min)   # Max generations per hectad and minimum emergence DOY
 
   # Add in columns with start and emergence dates
   df_agg.emergeDate_min = Vector{Union{Missing,Date}}(missing, nrow(df_agg))
@@ -347,20 +376,13 @@ function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
   # Create a code that corresponds to hectad in the grid data frame
   h_idx = [findfirst(grid.hectad .== h) for h in unique(grid.hectad)]
   h_nGen_idx = [findfirst(df_agg.east_hectad[i] .== floor.(grid.east[h_idx] ./ 1e4) .* 1e4 .&& df_agg.north_hectad[i] .== floor.(grid.north[h_idx] ./ 1e4) .* 1e4) for i in 1:nrow(df_agg)]
-  # h_emergeDOY_idx = [findfirst(df_emergeDOY.east_hectad[i] .== floor.(grid.east[h_idx] ./ 1e4) .* 1e4 .&& df_emergeDOY.north_hectad[i] .== floor.(grid.north[h_idx] ./ 1e4) .* 1e4) for i in 1:nrow(df_emergeDOY)]
-
+  
   # Add hectad code into both data frames
   insertcols!(df_agg, 1, :hectad => grid.hectad[h_idx[h_nGen_idx]], after=false)
-  # insertcols!(df_emergeDOY, 1, :hectad => grid.hectad[h_idx[h_emergeDOY_idx]], after=false)
-
-
-  # Combine these results into one data frame and include grid info
-  # return innerjoin(df_nGen, df_emergeDOY,
-  # on=[:hectad, :east_hectad, :north_hectad, :startDOY, :startDate])
+  
 
   # Return final dataframe
   return df_agg
-
 end
 
 

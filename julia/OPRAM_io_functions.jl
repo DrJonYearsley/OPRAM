@@ -27,7 +27,7 @@ end
 # =========================================================
 # ============= Defne functions ===========================
 
-function import_parameters(tomlFile::String)
+function import_parameters(tomlFile::String, calculate_average::Bool=false)
   # Import parameters from a TOML file
   # The file should contain a section called "parameters" with the following fields:
   #   species_name, base_temperature, threshold, diapause_daylength, diapause_temperature
@@ -40,7 +40,7 @@ function import_parameters(tomlFile::String)
   nNodes = params["runtime"]["nNodes"]           # Number of compute nodes to use (if in interactive)
 
 
-  # Perform some checks on file anmes
+  # Perform some checks on file names
   # Check grid file exists
   if !isfile(params["inputData"]["gridFile"])
     @info "Can't find grid file!"
@@ -57,6 +57,14 @@ function import_parameters(tomlFile::String)
     end
   end
 
+  if calculate_average 
+    # An average across years is being calculated
+    yearVec = collect(params["model"]["thirty_years"][1]:params["model"]["thirty_years"][2])
+  else
+    # A single year is being calculated (maybe across several years)
+    yearVec = params["model"]["simYears"]
+  end
+
 
   # Put parameters into a named tuple
   if in("simYears", keys(params["model"]))
@@ -65,13 +73,17 @@ function import_parameters(tomlFile::String)
       TRANSLATE_future=false,
       saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
       save1year=params["runtime"]["save1year"],    # If true save only the first year's results
-      years=params["model"]["simYears"], # Years to run model
+      years=yearVec, # Years to run model
       maxYears=params["model"]["maxYears"], # Maximum number of years to complete insect development
       lastMeteoYear=params["model"]["lastMeteoYear"], # Maximum number of years to complete insect development
       country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-      gridFile=params["inputData"]["gridFile"])  # File containing a 1km grid of lats and longs over Ireland 
-  # (used for daylength calculations as well as importing and thining of meteo data)
+      gridFile=params["inputData"]["gridFile"],  # File containing a 1km grid of lats and longs over Ireland 
+      thirty_years=string(params["model"]["thirty_years"][1]) *
+                  "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
+  
+
+  # (gridfile used for daylength calculations as well as importing and thining of meteo data)
   elseif in("rcp", keys(params["model"]))
     # Run model on future data
     run_params = (
@@ -84,8 +96,10 @@ function import_parameters(tomlFile::String)
       maxYears=params["model"]["maxYears"],       # Maximum number of years to complete insect development
       country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-      gridFile=params["inputData"]["gridFile"])  # File containing a 1km grid of lats and longs over Ireland 
-  # (used for daylength calculations as well as importing and thining of meteo data)
+      gridFile=params["inputData"]["gridFile"],  # File containing a 1km grid of lats and longs over Ireland 
+      thirty_years=string(params["model"]["thirty_years"][1]) *
+                  "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
+  # (gridfile used for daylength calculations as well as importing and thining of meteo data)
   else
     error("parameter file doesn't contain simulation years")
   end
@@ -104,11 +118,26 @@ function import_parameters(tomlFile::String)
   # =========================================================
   # If the given paths for output and data do not exist, try to find alternative paths to the data
 
-  # Add on the home directory to the paths
-  params["paths"]["data"] = joinpath(homedir(), params["paths"]["data"])
-  params["paths"]["output"] = joinpath(homedir(), params["paths"]["output"])
-  params["paths"]["meteoIE"] = joinpath(homedir(), params["paths"]["meteoIE"])
-  params["paths"]["meteoNI"] = joinpath(homedir(), params["paths"]["meteoNI"])
+  # Add on the home directory to the paths if required
+  if !occursin(r"^/", params["paths"]["data"])
+    params["paths"]["data"] = joinpath(homedir(), params["paths"]["data"])
+  end
+
+  if !occursin(r"^/", params["paths"]["results"])
+    params["paths"]["results"] = joinpath(homedir(), params["paths"]["results"])
+  end
+
+  if !occursin(r"^/", params["paths"]["output"])
+    params["paths"]["output"] = joinpath(homedir(), params["paths"]["output"])
+  end
+
+  if !occursin(r"^/", params["paths"]["meteoIE"])
+    params["paths"]["meteoIE"] = joinpath(homedir(), params["paths"]["meteoIE"])
+  end
+
+  if !occursin(r"^/", params["paths"]["meteoNI"])
+    params["paths"]["meteoNI"] = joinpath(homedir(), params["paths"]["meteoNI"])
+  end
 
   # Check output dir exists
   if !isdir(params["paths"]["output"])
@@ -121,6 +150,22 @@ function import_parameters(tomlFile::String)
     elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"))  # Mac guess
       @info "        Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//results"
       params["paths"]["output"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results")
+    else
+      @error "No output directory found"
+    end
+  end
+
+# Check output dir exists
+  if !isdir(params["paths"]["results"])
+    @warn "Can't find model results directory!"
+
+    if isdir(joinpath(homedir(), "Desktop//OPRAM//results"))  # Linux guess
+      @info "      Setting output directory to Desktop//OPRAM//results"
+      params["paths"]["results"] = joinpath(homedir(), "Desktop//OPRAM//results")
+
+    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"))  # Mac guess
+      @info "        Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//results"
+      params["paths"]["results"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results")
     else
       @error "No output directory found"
     end
@@ -183,6 +228,7 @@ function import_parameters(tomlFile::String)
 
   # Put all the paths together
   paths = (outDir=joinpath(homedir(), params["paths"]["output"]),
+    resultsDir=joinpath(homedir(), params["paths"]["results"]),
     dataDir=joinpath(homedir(), params["paths"]["data"]),
     meteoDir_IE=params["paths"]["meteoIE"],
     meteoDir_NI=params["paths"]["meteoNI"])
@@ -202,8 +248,8 @@ function import_species(speciesFile::String, speciesStr::String)
   # that correspond to the speciesStr
 
   # Import set species parameters
-  params = CSV.read(speciesFile, DataFrame, missingstring="NA", 
-                     types = [String, Float32, Float32, String, Union{Float32, Missing}, Union{Float32, Missing}, String, String, String, String, String])
+  params = CSV.read(speciesFile, DataFrame, missingstring="NA",
+    types=[String, Float32, Float32, String, Union{Float32,Missing}, Union{Float32,Missing}, String, String, String, String, String])
 
   # Create a list of species names in lowercase
   spList = lowercase.(params.species)
@@ -751,87 +797,64 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function read_OPRAM_JLD2(resultPath::String, speciesName::String, years::Vector{Int}, country::String, grid::DataFrame)
-# A function to import the OPRAM results from JLD2 files (as written by the run_model function)
-# and create a single DataFrame with the results
-#
-#  The function checks to amke sure all the required spatial locations are included. 
-#  Missing spatial locations are add as missing data
-#
-# Arguments:
-#   resultPath  the path to the results directory
-#   speciesName the name of the species to import
-#   years       the years to import (as a vector of integers)
-#   country     the country to import the results for (as a string, e.g. "IE" or "NI")
-#   grid        the grid of locations to use (as a DataFrame)
-#
-# Output:
-#   A DataFrame with the results for the specified species and years  
-# *************************************************************
+function read_OPRAM_JLD2(inFiles::Vector{String}, years::Vector{Int}, grid::DataFrame)
+  # A function to import the OPRAM results from JLD2 files (as written by the run_model function)
+  # and create a single DataFrame with the results
+  #
+  #  The function creats results for specified starting dates (the first of every month)
+  #  The function checks to make sure all the required spatial locations are included. 
+  #  Missing spatial locations are added as missing data
+  #
+  # Arguments:
+  #   resultPath  the path to the results directory
+  #   speciesName the name of the species to import
+  #   years       the years to import (as a vector of integers)
+  #   grid        the grid of locations to use (as a DataFrame)
+  #
+  # Output:
+  #   A DataFrame with the results for the specified species and years  
+  # *************************************************************
 
-# Check if the resultPath exists
-  if !isdir(resultPath)
-    @error "Result path does not exist: $(resultPath)"
-  end
+  # # Check if the resultPath exists
+  #   if !isdir(resultPath)
+  #     @error "Result path does not exist: $(resultPath)"
+  #   end
 
 
-  dVec = Vector{DataFrame}(undef, length(years))
-  for y in eachindex(years)
+  # Initialise output DataFrame
+  # dVec = Vector{DataFrame}(undef, length(inFiles))
+  df_1km = DataFrame(ID=Int32[],
+    startDOY=Int32[],
+    startDate=Date[],
+    nGenerations=Vector{Union{Missing,Float64}}(missing, 0),
+    emergeDOY=Vector{Union{Missing,Int32}}(missing, 0))
 
-    @info "Importing data for year $(years[y])"
+  for y in eachindex(inFiles)
 
-    # Starting dates for output in CSV files
-    # The first of every month
-    dates = [Date(years[y], m, 01) for m in 1:12]
+    @info "Importing data for $(years[y])"
 
-    inFile = filter(x -> occursin(r"^" * speciesName * "_" * country * "_" * string(years[y]) * "_1km.jld2", x),
-      readdir(joinpath(resultPath, speciesName)))
+    adult_emerge = load_object(inFiles[y])
 
-    if length(inFile) > 1
-      @error "More than one input file found"
-    end
-    adult_emerge = load_object(joinpath(resultPath, speciesName, inFile[1]))
-
-    @info " ---- Generating output for specific starting dates"
+    # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     # Create output for specific days of year
-    dVec[y] = create_doy_results(dates, adult_emerge)
+    dates = [Date(years[y], m, 01) for m in 1:12]         # The first of every month
+    # dVec[y] = create_doy_results(dates, adult_emerge, grid)
 
-    # Select columns to work with
-    select!(dVec[y], [:ID, :startDate, :emergeDate, :nGenerations])
-
-    # Find spatial locations not included in the results
-    missingIDs = setdiff(grid.ID, dVec[y].ID)
-    # Add missing spatial locations as missing values
-    if length(missingIDs) > 0
-      @info " ---- Adding missing locations $(length(missingIDs))"
-      # Create a DataFrame with missing values for the missing IDs for each starting date
-      startDates = unique(dVec[y].startDate[.!ismissing.(dVec[y].startDate)])
-      missingData = DataFrame(ID=repeat(missingIDs,inner=length(startDates)), 
-                             startDate=repeat(startDates,outer=length(missingIDs)), 
-                             emergeDate=missing, 
-                             nGenerations=missing)
-
-      # Add the missing data to the results
-      dVec[y] = vcat(dVec[y], missingData)
-
-      # Sort the DataFrame by ID
-      sort!(dVec[y], :ID)
+    # If adult_emerge is a vector then it represents replicate runs
+    if isa(adult_emerge, Vector)
+      for r in eachindex(adult_emerge)
+        @info " ---- Generating output for specific starting dates for replicate " * string(r)
+        # Create output for specific days of year for each replicate
+        append!(df_1km, create_doy_results(dates, adult_emerge[r], grid))
+      end
     else
-      @info " ---- No missing locations found"
+      @info " ---- Generating output for specific starting dates"
+      append!(df_1km, create_doy_results(dates, adult_emerge, grid))
     end
   end
 
-  # Put all the data together into one Matrix
-  df_1km = reduce(vcat, dVec)
 
-
-
-  # Define DOY for emerge dates (and set as integer)
-  idx = .!ismissing.(df_1km.emergeDate)
-  df_1km.emergeDOY = Vector{Union{Missing,Int64}}(missing, nrow(df_1km))
-  df_1km.emergeDOY[idx] = Dates.value.(df_1km.emergeDate[idx] .- df_1km.startDate[idx]) .+
-                          Dates.dayofyear.(df_1km.startDate[idx])
-
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Define starting month for start dates (and set as integer)
   idx = .!ismissing.(df_1km.startDate)
   df_1km.startMonth = Vector{Union{Missing,Int}}(missing, nrow(df_1km))

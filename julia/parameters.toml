@@ -12,6 +12,7 @@ save1year = true     # if true save first year's results, otherwise
 
 [paths]   # All paths are relative to the user's home directory
 output =  "Desktop//OPRAM//results"      # Folder to save model output
+results = "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/results"      # Folder for importing model results
 data = "DATA//OPRAM"                     # Folder for other model data
 meteoIE = "DATA//OPRAM//Climate_JLD2"    # Folder containing meteo data for ROI
 meteoNI =  "nothing"                     # Folder containing meteo data for NI
@@ -44,6 +45,8 @@ speciesList = ["Agrilus anxius",
                "Ips typographus",
                "Oulema melanopus, model 1",
                "Oulema melanopus, model 2"]
+
+        
 
 # Predefined species are:
 #  :agrilus_anxius

@@ -10,9 +10,10 @@ save1year = true     # if true save first year's results, otherwise
 
 
 [paths]   # All paths are relative to the user's home directory
-output =  "Desktop//OPRAM//results"      # Folder to save model output
-data = "DATA//OPRAM"                     # Folder for other model data
-meteoIE = "DATA//OPRAM//Climate_JLD2"    # Folder containing meteo data for ROI
+output =  "Desktop/OPRAM/results"      # Folder to save model output
+results = "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/results"      # Folder for importing model results
+data = "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/results"                     # Folder for other model data
+meteoIE = "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/Data/Climate_JLD2"     # Folder containing meteo data for ROI
 meteoNI =  "nothing"                     # Folder containing meteo data for NI
 
 [inputData]   # Input data on the model grid and species params
@@ -21,17 +22,26 @@ gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 
 [model]     # Parameters to define the model
 nReps = 1          # Number of replicates to run for future climates
-futurePeriod = ["2021-2050"]  # Climate future period
-rcp = ["26"]                     # Climate future RCP
-#futurePeriod = ["2021-2050", "2041-2070"]  # Climate future period
-#rcp = ["26","45","85"]                     # Climate future RCP
+#futurePeriod = ["2021-2050"]  # Climate future period
+#rcp = ["26"]                     # Climate future RCP
+futurePeriod = ["2021-2050", "2041-2070"]  # Climate future period
+rcp = ["26","45","85"]                     # Climate future RCP
 maxYears = 4         # Maximum number of years to complete insect development
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-speciesList = ["agrilus"]
 thirty_years = [1991, 2020]  # 30yr period to average
+speciesList = ["Agrilus anxius", 
+                "Ips sexdentatus", 
+                "Ips duplicatus", 
+                "Spodoptera frugiperda", 
+                "Ips cembrae", 
+                "Leptinotarsa decemlineata", 
+                "Halyomorpha halys", 
+               "Ips typographus",
+               "Oulema melanopus, model 1",
+               "Oulema melanopus, model 2"]
+#speciesList = ["Agrilus anxius"]
 
-# speciesList = ["anxius","frugiperda", "duplicatus", "cembrae", "decemlineata", " halys", "typo"]
 
 # Predefined species are:
 #  :agrilus_anxius

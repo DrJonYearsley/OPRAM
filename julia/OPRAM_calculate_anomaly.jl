@@ -20,7 +20,6 @@
 # Load the required packages
 using CSV
 using DataFrames
-
 using Statistics
 using Dates
 using JLD2
@@ -28,52 +27,27 @@ using Distributed
 using SharedArrays
 using TOML
 
-# ==============================================================
-# Model parameters are stored in a TOML file https://toml.io/en/
-if length(ARGS) == 1
-    params = TOML.parsefile(ARGS[1])
 
-elseif length(ARGS) == 0 & isfile("parameters.toml")
-    params = TOML.parsefile("parameters_userdefined.toml")
+include("OPRAM_io_functions.jl");
+include("OPRAM_processing_functions.jl");
+
+
+# ============================================================================================
+# =============== Import parameter values =======================================================
+
+
+
+
+# Model parameters are stored in a TOML file https://toml.io/en/
+if length(ARGS)==1
+  nNodes, run_params, species_params, paths =  import_parameters(ARGS[1])
+
+elseif length(ARGS)==0 & isfile("parameters_future.toml")
+  nNodes, run_params, species_setup, paths =  import_parameters("parameters_future.toml")
 
 else
-    @error "No parameter file given"
+  @error "No parameter file given"
 end
-
-
-# Perform some checks on file names
-# Check grid file exists
-if !isfile(params["inputData"]["gridFile"])
-    @info "Can't find grid file!"
-
-    if isfile(joinpath(homedir(), "DATA", "OPRAM", params["inputData"]["gridFile"]))  # Guess 1
-        params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
-        @info "gridFile set to" * params["inputData"]["gridFile"]
-
-    elseif isfile(joinpath(homedir(), params["inputData"]["gridFile"]))  # Guess 2
-        params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
-        @info "gridFile set to" * params["inputData"]["gridFile"]
-    else
-        @error "No grid file found"
-    end
-end
-
-
-# =================================================================================
-# Set parameters for the visualisation
-# If more than one year then take average across years
-# "frugiperda", "duplicatus", "cembrae", "sexdentatus"
-
-run_params = (
-    speciesName=params["model"]["speciesList"],     # Name of the species
-    years=params["model"]["simYears"],              # Either a single year or collect(year1:year2)
-    maxYears=params["model"]["maxYears"],           # Maximum number of years to complete insect development (must correspond to simulation value)
-    country=params["model"]["country"],             # Can be "IE", "NI" or "AllIreland"
-    thinFactor=params["model"]["thinFactor"],       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-    gridFile=params["inputData"]["gridFile"],       # File containing a 1km grid of lats and longs over Ireland 
-    thirty_years=string(params["model"]["thirty_years"][1]) * "_" * string(params["model"]["thirty_years"][2]))
-# (used for daylength calculations as well as importing and thining of meteo data)
-
 
 # Files containing the ID system from Granite.ie
 # This info is used to package the output into separate files
@@ -82,46 +56,6 @@ granite_county_ID = "git_repos/OPRAM/data/granite_county_defs.csv"
 granite_hectad_county = "git_repos/OPRAM/data/granite_hectad_county_defs.csv"
 
 
-# =================================================================================
-# Specify directories for import and export of data
-
-if isdir("/media/jon/Seagate_5TB/OPRAM_results")       # Linux workstation
-    paths = (outDir="/media/jon/Seagate_5TB/OPRAM_results",
-            resultDir=joinpath(homedir(), "/media/jon/Seagate_5TB/OPRAM_results"),
-        dataDir="/home/jon/")
-
-elseif isdir(joinpath(homedir(), "DATA//OPRAM"))       # Linux workstation
-    paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//granite_output"),
-        resultDir=joinpath(homedir(), "Desktop//OPRAM//results"),
-        dataDir=joinpath(homedir(), "DATA//OPRAM"))
-
-elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
-    paths = (outDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results//granite_output"),
-        resultDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"),
-        dataDir=homedir())
-
-elseif isdir(joinpath(homedir(), "Desktop//OPRAM//"))
-    paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//granite_output"),
-        resultDir=joinpath(homedir(), "Desktop//OPRAM//results"),
-        dataDir=joinpath(homedir(), "Desktop//OPRAM"))
-end
-
-
-# Include function definitions
-include("OPRAM_io_functions.jl");
-include("OPRAM_processing_functions.jl");
-
-
-
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Import species info
-# Work out unique species to simulate (Remove obvious duplicates)
-speciesStr = Vector{String}(undef, 0)
-for s in eachindex(params["model"]["speciesList"])
-    global speciesStr = unique(vcat(speciesStr, params["model"]["speciesList"][s]))
-end
-species_setup = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFile"]),  # File containing species parameters
-    speciesStr=speciesStr)  # A vector of strings to uniquely identify a species name in the speciesFile
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Set species parameters from the parameter file (can be more than one species)
@@ -132,6 +66,122 @@ else
     @info "Importing species from the species file: " * string(species_setup.speciesStr)
     species_params = [import_species(species_setup.speciesFile, species_setup.speciesStr[s]) for s in eachindex(species_setup.speciesStr)]
 end
+
+
+# =============== End of parameter setup =====================================================
+# ============================================================================================
+
+
+
+
+# # ==============================================================
+# # Model parameters are stored in a TOML file https://toml.io/en/
+# if length(ARGS) == 1
+#     params = TOML.parsefile(ARGS[1])
+
+# elseif length(ARGS) == 0 & isfile("parameters.toml")
+#     params = TOML.parsefile("parameters.toml")
+
+# else
+#     @error "No parameter file given"
+# end
+
+
+# # Perform some checks on file names
+# # Check grid file exists
+# if !isfile(params["inputData"]["gridFile"])
+#     @info "Can't find grid file!"
+
+#     if isfile(joinpath(homedir(), "DATA", "OPRAM", params["inputData"]["gridFile"]))  # Guess 1
+#         params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
+#         @info "gridFile set to" * params["inputData"]["gridFile"]
+
+#     elseif isfile(joinpath(homedir(), params["inputData"]["gridFile"]))  # Guess 2
+#         params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
+#         @info "gridFile set to" * params["inputData"]["gridFile"]
+#     else
+#         @error "No grid file found"
+#     end
+# end
+
+
+# # =================================================================================
+# # Set parameters for the visualisation
+# # If more than one year then take average across years
+# # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
+
+# run_params = (
+#     speciesName=params["model"]["speciesList"],     # Name of the species
+#     years=params["model"]["simYears"],              # Either a single year or collect(year1:year2)
+#     maxYears=params["model"]["maxYears"],           # Maximum number of years to complete insect development (must correspond to simulation value)
+#     country=params["model"]["country"],             # Can be "IE", "NI" or "AllIreland"
+#     thinFactor=params["model"]["thinFactor"],       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+#     gridFile=params["inputData"]["gridFile"],       # File containing a 1km grid of lats and longs over Ireland 
+#     thirty_years=string(params["model"]["thirty_years"][1]) * "_" * string(params["model"]["thirty_years"][2]))
+# # (used for daylength calculations as well as importing and thining of meteo data)
+
+
+# # Files containing the ID system from Granite.ie
+# # This info is used to package the output into separate files
+# granite_hectad_ID = "git_repos/OPRAM/data/granite_hectad_defs.csv"
+# granite_county_ID = "git_repos/OPRAM/data/granite_county_defs.csv"
+# granite_hectad_county = "git_repos/OPRAM/data/granite_hectad_county_defs.csv"
+
+
+# # =================================================================================
+# # Specify directories for import and export of data
+
+# if isdir("/media/jon/Seagate_5TB/OPRAM_results")       # Linux workstation
+#     paths = (outDir="/media/jon/Seagate_5TB/OPRAM_results",
+#             resultDir=joinpath(homedir(), "/media/jon/Seagate_5TB/OPRAM_results"),
+#         dataDir="/home/jon/")
+
+# elseif isdir(joinpath(homedir(), "DATA//OPRAM"))       # Linux workstation
+#     paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//granite_output"),
+#         resultDir=joinpath(homedir(), "Desktop//OPRAM//results"),
+#         dataDir=joinpath(homedir(), "DATA//OPRAM"))
+
+# elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
+#     paths = (outDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results//granite_output"),
+#         resultDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"),
+#         dataDir=homedir())
+
+# elseif isdir(joinpath(homedir(), "Desktop//OPRAM//"))
+#     paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//granite_output"),
+#         resultDir=joinpath(homedir(), "Desktop//OPRAM//results"),
+#         dataDir=joinpath(homedir(), "Desktop//OPRAM"))
+# end
+
+
+# # Include function definitions
+# include("OPRAM_io_functions.jl");
+# include("OPRAM_processing_functions.jl");
+
+
+
+# # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# # Import species info
+# # Work out unique species to simulate (Remove obvious duplicates)
+# speciesStr = Vector{String}(undef, 0)
+# for s in eachindex(params["model"]["speciesList"])
+#     global speciesStr = unique(vcat(speciesStr, params["model"]["speciesList"][s]))
+# end
+# species_setup = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFile"]),  # File containing species parameters
+#     speciesStr=speciesStr)  # A vector of strings to uniquely identify a species name in the speciesFile
+
+
+
+
+
+# # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# # Set species parameters from the parameter file (can be more than one species)
+# if species_setup.speciesStr[1] == "all"
+#     @info "Importing all species from the species file" * string(species_setup.speciesStr)
+#     species_params = import_species(species_setup.speciesFile, species_setup.speciesStr[1])
+# else
+#     @info "Importing species from the species file: " * string(species_setup.speciesStr)
+#     species_params = [import_species(species_setup.speciesFile, species_setup.speciesStr[s]) for s in eachindex(species_setup.speciesStr)]
+# end
 
 
 
@@ -193,7 +243,25 @@ for s in eachindex(species_params)
     end
 
 
-    df_1km = read_OPRAM_JLD2(paths.resultDir, speciesName[1], run_params.years, "IE", grid)
+    # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    # Import the 1km results for the species and years
+
+    # Create vector of files to import
+    inFiles = Vector{String}(undef, length(run_params.years))
+    for y in eachindex(run_params.years)
+      inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
+            readdir(joinpath(paths.resultDir, speciesName[1])))
+
+        if length(inFile) > 1
+            @error "More than one input file found"
+        else
+            inFiles[y] = joinpath(paths.resultDir, speciesName[1], inFile[1])
+        end
+    end
+
+
+    # Import the data from the jld2 files
+    df_1km = read_OPRAM_JLD2(inFiles, run_params.years, grid)
 
 
 
@@ -236,25 +304,22 @@ for s in eachindex(species_params)
 
     @info "Writing 1km results to CSV files"
 
-    uniqueYears = unique(year.(df_1km.startDate))
-    uniqueCounty = sort(unique(grid.countyID))
-
     # Add year and countyID into df_1km
     df_1km.year = year.(df_1km.startDate)
     leftjoin!(df_1km, grid[:, [:ID, :countyID, :east, :north]], on=:ID)
+
+
+    uniqueYears = unique(df_1km.year)
+    uniqueCounty = sort(unique(grid.countyID))
+
 
     for c in uniqueCounty
         @info "Writing data for county " * string(c)
         for y in uniqueYears
 
-            # @info "Writing data for year " * string(y) * " and county " * string(c)
-
-            # Create subset to write to file
-            # out_1km = select(subset(df_1km, :countyID => x1 -> x1 .== c, :year => x2 -> x2 .== y),
-            #     Not([:startMonth, :emergeDate, :east, :north, :year, :countyID]))
            out_1km = select(subset(df_1km, :countyID => x1 -> x1 .== c, :year => x2 -> x2 .== y),
                 :ID, :east, :north, :startDate, 
-                Not([:startMonth, :emergeDate, :year, :countyID]))
+                Not([:startMonth, :year, :countyID]))
 
 
             # Round number of generations
@@ -294,13 +359,12 @@ for s in eachindex(species_params)
     @info "Aggregating data to 10km resolution"
 
     # Add bottom left eastings and northings of a hectad into df_1km
-    # leftjoin!(df_1km, grid[:, [:ID, :east, :north]], on=[:ID])
     df_1km.east_hectad = convert.(Int32, floor.(df_1km.east ./ 1e4) .* 1e4)
     df_1km.north_hectad = convert.(Int32, floor.(df_1km.north ./ 1e4) .* 1e4)
 
 
     # Set missing values to be extremes (e.g. generations are small and emergeDOY is large)
-    idx1 = ismissing.(df_1km.emergeDate)
+    idx1 = ismissing.(df_1km.emergeDOY)
     df_1km.emergeDOY[idx1] .= 9999
     df_1km.nGenerations[idx1] .= -9999
 
@@ -341,19 +405,6 @@ for s in eachindex(species_params)
     df_10km.emergeDOY_anomaly_min[abs.(df_10km.emergeDOY_anomaly_min).>5000] .= missing
     df_10km.emergeDOY_median_min[df_10km.emergeDOY_median_min.>5000] .= missing
 
-    # Add in columns with start and emergence dates where we have no missing data
-    df_10km.emergeDate_min = Vector{Union{Missing,Date}}(missing, nrow(df_10km))
-    df_10km.emergeDate_median_min = Vector{Union{Missing,Date}}(missing, nrow(df_10km))
-
-    idx1 = .!ismissing.(df_10km.emergeDOY_min)
-    df_10km.emergeDate_min[idx1] .= Date.(year.(df_10km.startDate[idx1])) .+ Day.(floor.(df_10km.emergeDOY_min[idx1]))
-
-    idx2 = .!ismissing.(df_10km.emergeDOY_median_min)
-    df_10km.emergeDate_median_min[idx2] .= Date.(year.(df_10km.startDate[idx2])) .+ Day.(floor.(df_10km.emergeDOY_median_min[idx2]))
-
-
-
-
 
 
 
@@ -387,7 +438,7 @@ for s in eachindex(species_params)
         rename!(out_10km, :nGenerations_max => "nGen",
             :nGenerations_median_max => "nGen_30yr",
             :nGenerations_anomaly_max => "nGen_anomaly",
-            :emergeDate_min => "emergeDate",
+            # :emergeDate_min => "emergeDate",
             :emergeDOY_min => "emergeDOY",
             :emergeDOY_median_min => "emergeDOY_30yr",
             :emergeDOY_anomaly_min => "emergeDOY_anomaly")

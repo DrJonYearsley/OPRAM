@@ -391,12 +391,13 @@ function calculate_GDD(Tavg::Matrix{Float32}, grid::DataFrame, DOY::Vector{Int16
   #
   # Arguments:
   #   Tavg        Temperature data
+  #   grid        a data frame containing the spatial grid
   #   DOY         Day of year corresponding to rows in Tavg
   #   params      parameters of the degree day model
   #
   # Output:
   #   GDDsh       shared array of growing degree days (only giving days when 
-  #               GDD are accumulated)
+  #               GDD are accumulated) [Float32]
   #   idx         row, column indices of TRUE elements in gdd_update (where GDD accumulates)
   #   locInd1     Start index in GDDsh for each spatial location
   #   locInd2     End index in GDDsh for each spatial location
