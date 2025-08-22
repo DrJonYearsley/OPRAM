@@ -131,11 +131,11 @@ for s in eachindex(species_params)
     @info "Calculating median values across years"
 
 
-    # Set missing DOY to be a large number and missing generations to be -9999
-    # This is just for the quantile calculations
-    idx = ismissing.(df_1km.emergeDOY)
-    df_1km.emergeDOY[idx] .= 9999
-    df_1km.nGenerations[idx] .= -9999
+    # # Set missing DOY to be a large number and missing generations to be -9999
+    # # This is just for the quantile calculations
+    # idx = ismissing.(df_1km.emergeDOY)
+    # df_1km.emergeDOY[idx] .= 9999
+    # df_1km.nGenerations[idx] .= -9999
 
     # Group data frame by location and then starting DOY/Date 
     df_group = groupby(df_1km, [:ID, :startMonth])
@@ -146,15 +146,15 @@ for s in eachindex(species_params)
     # ################# Median across the years ##############
     # Calculate the median of nGenerations and emergeDOY
     d_agg = combine(df_group,
-        :nGenerations => (x -> quantile(x, 0.5)) => :nGenerations_median,
-        :emergeDOY => (x -> quantile(x, 0.5)) => :emergeDOY_median,
-        :emergeDOY => (x -> sum(x .== 9999)) => :nMissing)
+        :nGenerations => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.5) else missing end) => :nGenerations_median,
+        :emergeDOY => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.5) else missing end) => :emergeDOY_median,
+        :emergeDOY => (x -> sum(ismissing.(x))) => :nMissing)
 
 
 
-    # Return nGenerations and emergeDOY to missing
-    df_1km.nGenerations[idx] .= missing
-    df_1km.emergeDOY[idx] .= missing
+    # # Return nGenerations and emergeDOY to missing
+    # df_1km.nGenerations[idx] .= missing
+    # df_1km.emergeDOY[idx] .= missing
 
     # If emergeDOY is greater than maximum possible DOY (366*maxYears) then set
     # nGenerations_median and emergeDOY_median to missing
