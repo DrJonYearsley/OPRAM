@@ -9,6 +9,7 @@ Filename  | Description
 OPRAM_main_program.jl | The main file to start running the model
 OPRAM_ddmodel_functions.jl | The underlying functions for running the degree daymodel
 OPRAM_io_functions.jl | Functions to import/export data (meteo, grid and species data)
+OPRAM_processing_functions.jl | Functions used to process the saved model data (e.g. calculate multi-year averages and anomalies)
 
 
 
@@ -19,7 +20,6 @@ These parameter files are used by
   + OPRAM_main_program.jl  
   + OPRAM_calculate_average.jl  
   + OPRAM_calculate_anomaly.jl  
-  + OPRAM_calculate_anomaly_future.jl   
 
 
 
@@ -48,8 +48,6 @@ Filename  | Description
 OPRAM_visualise.jl  | Create some visualisations of the model (Model visualisation is better done in R with OPRAM_visualisations.R)
 visualise_GDD_results.jl | Create maps of Ireland showing key model outputs (can also display averages across years)
 map_plot.jl  | Another program to plot maps of the results
-compare_to_R.jl | Compare output from Julia to the output from the model in R
-compare_meteo.jl| Compare two years of meteo data (both ROI and NI gridded data)
 matrix_model.jl | Create a metric model that iterates the model and viualises the long-term distribution of emergence dates
 calculate_daylength.jl   |  Calculate day length from latitude and day of year 
 
