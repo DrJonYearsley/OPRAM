@@ -6,6 +6,7 @@
 # function extract_results(doy::Int32, result::DataFrame)
 # function create_doy_results(dates::Vector{Date}, adult_emerge::DataFrame)
 # function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
+# function aggregate_to_hectad(df_1km::DataFrame)
 
 #
 # Jon Yearsley (jon.yearsley@ucd.ie)
@@ -220,11 +221,11 @@ function create_doy_results(dates::Vector{Date}, adult_emerge::DataFrame, grid::
   ########################################################################
 
   # Initialise dataframe for outputs
-  out = DataFrame(ID=Int32[], 
-                  startDOY=Int32[], 
-                  startDate = Date[],
-                  nGenerations=Vector{Union{Missing,Float64}}(missing, 0), 
-                  emergeDOY=Vector{Union{Missing,Int32}}(missing, 0))
+  out = DataFrame(ID=Int32[],
+    startDOY=Int32[],
+    startDate=Date[],
+    nGenerations=Vector{Union{Missing,Float64}}(missing, 0),
+    emergeDOY=Vector{Union{Missing,Int32}}(missing, 0))
 
 
   # # Add indices for eastings and northings
@@ -246,13 +247,13 @@ function create_doy_results(dates::Vector{Date}, adult_emerge::DataFrame, grid::
     # (these are locations where no emergence occurs within the simulation time frame)
     missingIDs = setdiff(grid.ID, result.ID)
     if !isempty(missingIDs)
-      append!(result, 
-             DataFrame(ID=missingIDs, 
-                startDOY=convert(Int32, dayofyear(dates[d])),
-                startDate = dates[d],
-                nGenerations=missing,
-                emergeDOY=missing))
-    end    
+      append!(result,
+        DataFrame(ID=missingIDs,
+          startDOY=convert(Int32, dayofyear(dates[d])),
+          startDate=dates[d],
+          nGenerations=missing,
+          emergeDOY=missing))
+    end
 
 
     # # Initialise column with missing values
@@ -376,20 +377,95 @@ function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
   # Create a code that corresponds to hectad in the grid data frame
   h_idx = [findfirst(grid.hectad .== h) for h in unique(grid.hectad)]
   h_nGen_idx = [findfirst(df_agg.east_hectad[i] .== floor.(grid.east[h_idx] ./ 1e4) .* 1e4 .&& df_agg.north_hectad[i] .== floor.(grid.north[h_idx] ./ 1e4) .* 1e4) for i in 1:nrow(df_agg)]
-  
+
   # Add hectad code into both data frames
   insertcols!(df_agg, 1, :hectad => grid.hectad[h_idx[h_nGen_idx]], after=false)
-  
+
 
   # Return final dataframe
   return df_agg
 end
 
 
+# ------------------------------------------------------------------------------------------
+
+
+function aggregate_to_hectad(df_1km::DataFrame)
+  # Function to take results on a 1km grid an aggregate them to a 10km grid
+  #
+  # Arguments:
+  #   df_1km                        results from the model on 1km grid
+  #  
+  #  Output:
+  #   a data frame with the following columns:
+  #       hectad                    unique hectad grid reference
+  #       east_hectad               easting of bottom left of hectad
+  #       north_hectad              northing of bottom left of hectad
+  #       startDate                 starting date for larval development  
+  #       nGenerations_max          maximum number of generations in a year in hectad
+  #       nGenerations_median_max   maximum across a hectad  of multi year median   
+  #       nGenerations_anomaly_max  maximum anomaly in number of generations in a year in hectad
+  #       emergeDOY_min             minimum across a hectad of adult emergence day of year
+  #       emergeDOY_median_min      minimum across a hectad of adult emergence day of year
+  #       emergeDOY_anomaly_min     minimum across a hectad of adult emergence day of year
+  #       nMissing                  number of locations with no emergence in a hectad
+  ########################################################################
+
+  # Add bottom left eastings and northings of a hectad into df_1km
+  df_1km.east_hectad = convert.(Int32, floor.(df_1km.east ./ 1e4) .* 1e4)
+  df_1km.north_hectad = convert.(Int32, floor.(df_1km.north ./ 1e4) .* 1e4)
+
+
+  # Set missing values to be extremes (e.g. generations are small and emergeDOY is large)
+  idx1 = ismissing.(df_1km.emergeDOY)
+  df_1km.emergeDOY[idx1] .= 9999
+  df_1km.nGenerations[idx1] .= -9999
+
+
+  idx2 = ismissing.(df_1km.emergeDOY_median)
+  df_1km.emergeDOY_median[idx2] .= 9999
+  df_1km.nGenerations_median[idx2] .= -9999
+
+  idx3 = ismissing.(df_1km.emergeDOY_anomaly)
+  df_1km.emergeDOY_anomaly[idx3] .= 9999
+  df_1km.nGenerations_anomaly[idx3] .= -9999
+
+
+  # Group data frame by location and then starting Date 
+  df_group = groupby(df_1km, [:east_hectad, :north_hectad, :startDate])
+
+
+
+  # Calculate worst case results within each hectad for nGenerations and emergeDOY
+  # for each starting date. 
+  # These worst case scenarios are not affected by locations where no emergence occurred
+  df_10km = combine(df_group,
+    :nGenerations => (x -> quantile(x, 1.0)) => :nGenerations_max,                  # Max generations per hectad
+    :nGenerations_median => (x -> quantile(x, 1.0)) => :nGenerations_median_max,
+    :nGenerations_anomaly => (x -> quantile(x, 1.0)) => :nGenerations_anomaly_max,
+    :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min,                         # Min emergence DOY
+    :emergeDOY_median => (x -> quantile(x, 0.0)) => :emergeDOY_median_min,
+    :emergeDOY_anomaly => (x -> quantile(x, 0.0)) => :emergeDOY_anomaly_min,
+    :nGenerations => (x -> sum(x .< 0)) => :nMissing)                              # Count number of no emergence events  
+
+  # Add in missing values where 10km worst case is out of bounds
+  # (i.e. nGenerations<0 or emergeDOY>5000)
+  allowmissing!(df_10km, [:nGenerations_max, :nGenerations_median_max, :nGenerations_anomaly_max, :emergeDOY_min, :emergeDOY_median_min, :emergeDOY_anomaly_min])
+  df_10km.nGenerations_max[df_10km.nGenerations_max.<0] .= missing
+  df_10km.nGenerations_anomaly_max[abs.(df_10km.nGenerations_anomaly_max).>5000] .= missing
+  df_10km.nGenerations_median_max[df_10km.nGenerations_median_max.<0] .= missing
+  df_10km.emergeDOY_min[df_10km.emergeDOY_min.>5000] .= missing
+  df_10km.emergeDOY_anomaly_min[abs.(df_10km.emergeDOY_anomaly_min).>5000] .= missing
+  df_10km.emergeDOY_median_min[df_10km.emergeDOY_median_min.>5000] .= missing
+
+  return df_10km
+
+end
+
+
+
+
 # ================ End of Function Definitions ======================
 # ===================================================================
-
-
-
 
 

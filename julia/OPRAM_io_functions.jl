@@ -57,17 +57,19 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
     end
   end
 
-  if calculate_average 
-    # An average across years is being calculated
-    yearVec = collect(params["model"]["thirty_years"][1]:params["model"]["thirty_years"][2])
-  else
-    # A single year is being calculated (maybe across several years)
-    yearVec = params["model"]["simYears"]
-  end
+
 
 
   # Put parameters into a named tuple
   if in("simYears", keys(params["model"]))
+    if calculate_average
+      # An average across years is being calculated
+      yearVec = collect(params["model"]["thirty_years"][1]:params["model"]["thirty_years"][2])
+    else
+      # A single year is being calculated (maybe across several years)
+      yearVec = params["model"]["simYears"]
+    end
+
     # Run model on past data
     run_params = (
       TRANSLATE_future=false,
@@ -80,8 +82,8 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
       gridFile=params["inputData"]["gridFile"],  # File containing a 1km grid of lats and longs over Ireland 
       thirty_years=string(params["model"]["thirty_years"][1]) *
-                  "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
-  
+                   "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
+
 
   # (gridfile used for daylength calculations as well as importing and thining of meteo data)
   elseif in("rcp", keys(params["model"]))
@@ -98,7 +100,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
       gridFile=params["inputData"]["gridFile"],  # File containing a 1km grid of lats and longs over Ireland 
       thirty_years=string(params["model"]["thirty_years"][1]) *
-                  "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
+                   "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
   # (gridfile used for daylength calculations as well as importing and thining of meteo data)
   else
     error("parameter file doesn't contain simulation years")
@@ -155,7 +157,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
     end
   end
 
-# Check output dir exists
+  # Check output dir exists
   if !isdir(params["paths"]["results"])
     @warn "Can't find model results directory!"
 
@@ -797,7 +799,7 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function read_OPRAM_JLD2(inFiles::Vector{String}, years::Vector{Int}, grid::DataFrame)
+function read_OPRAM_JLD2(inFiles::Union{String,Vector{String}}, years::Union{Int,Vector{Int}}, grid::DataFrame)
   # A function to import the OPRAM results from JLD2 files (as written by the run_model function)
   # and create a single DataFrame with the results
   #
@@ -820,9 +822,18 @@ function read_OPRAM_JLD2(inFiles::Vector{String}, years::Vector{Int}, grid::Data
   #     @error "Result path does not exist: $(resultPath)"
   #   end
 
+  if typeof(inFiles) == String
+    # If a single file is given, convert it to a vector
+    inFiles = [inFiles]
+  end
+
+  if typeof(years) == Int32
+    # If a single file is given, convert it to a vector
+    years = [years]
+  end
+
 
   # Initialise output DataFrame
-  # dVec = Vector{DataFrame}(undef, length(inFiles))
   df_1km = DataFrame(ID=Int32[],
     startDOY=Int32[],
     startDate=Date[],
@@ -831,7 +842,6 @@ function read_OPRAM_JLD2(inFiles::Vector{String}, years::Vector{Int}, grid::Data
 
   for y in eachindex(inFiles)
 
-    @info "Importing data for $(years[y])"
 
     adult_emerge = load_object(inFiles[y])
 
@@ -843,12 +853,12 @@ function read_OPRAM_JLD2(inFiles::Vector{String}, years::Vector{Int}, grid::Data
     # If adult_emerge is a vector then it represents replicate runs
     if isa(adult_emerge, Vector)
       for r in eachindex(adult_emerge)
-        @info " ---- Generating output for specific starting dates for replicate " * string(r)
+        @info "---- Generating output for specific starting dates for replicate " * string(r)
         # Create output for specific days of year for each replicate
         append!(df_1km, create_doy_results(dates, adult_emerge[r], grid))
       end
     else
-      @info " ---- Generating output for specific starting dates"
+      @info "---- Generating output for specific starting dates"
       append!(df_1km, create_doy_results(dates, adult_emerge, grid))
     end
   end
@@ -863,6 +873,177 @@ function read_OPRAM_JLD2(inFiles::Vector{String}, years::Vector{Int}, grid::Data
   return df_1km
 
 end
+
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
+
+function save_OPRAM_1km_CSV(df_1km::DataFrame, grid::DataFrame, species_name::String,
+  yearStr::String, paths::NamedTuple)
+  # A function to save the final OPRAM results (at 1km scale) in a CSV file
+  # The function is used in OPRAM_calculate_anomaly.jl
+  #
+  # Arguments:
+  #   filename    the name of the file to save data to (including the path)
+  #   df_1km      the DataFrame containing the results
+  #   grid        the grid of locations to use (as a DataFrame)
+  #   species_name the name of the species to save results for
+  #   yearStr     the year string to use in the filename
+  #   paths       a named tuple containing the paths to the output directories
+  #
+  # Output:
+  #   None
+  # *************************************************************
+
+  # Add year and countyID into df_1km
+  df_1km.year = year.(df_1km.startDate)
+  leftjoin!(df_1km, grid[:, [:ID, :countyID, :east, :north]], on=:ID)
+
+  # Find unique years and unique county names
+  uniqueYears = unique(df_1km.year)
+  uniqueCounty = sort(unique(grid.countyID))
+
+  if length(uniqueYears) != 1
+    @error "Data contains multiple years: $(uniqueYears)"
+  end
+
+  for c in uniqueCounty
+    # @info "Writing CSV file for county " * string(c)
+    # Extract data for the relevant county and year
+    out_1km = select(subset(df_1km, :countyID => x1 -> x1 .== c),
+      :ID, :east, :north, :startDate,
+      # Not([:startMonth, :startDOY, :year, :countyID]))
+      [:ID, :east, :north, :startDate,  
+      :emergeDOY, :emergeDOY_median, :emergeDOY_anomaly, 
+      :nGenerations, :nGenerations_median, :nGenerations_anomaly])
+
+
+    # Add in Dates for emergence
+    out_1km.emergeDate = Vector{Union{Missing,Date}}(missing  , nrow(out_1km))
+    idx = .!ismissing.(out_1km.startDate) .&& .!ismissing.(out_1km.emergeDOY)
+    out_1km.emergeDate[idx] = Date.(year.(out_1km.startDate[idx]),01,01) .+ Day.(out_1km.emergeDOY[idx] .- 1)
+
+    out_1km.emergeDate_30yr = Vector{Union{Missing,Date}}(missing  , nrow(out_1km))
+    idx = .!ismissing.(out_1km.startDate) .&& .!ismissing.(out_1km.emergeDOY_median)
+    out_1km.emergeDate_30yr[idx] = Date.(year.(out_1km.startDate[idx]),01,01) .+ Day.(round.(Int,out_1km.emergeDOY_median[idx]) .- 1)
+
+
+    # Round number of generations
+    out_1km.nGenerations = round.(out_1km.nGenerations, digits=2)
+    out_1km.nGenerations_median = round.(out_1km.nGenerations_median, digits=2)
+    out_1km.nGenerations_anomaly = round.(out_1km.nGenerations_anomaly, digits=2)
+
+    # Round median and anomaly emergence DOY to 1 decimal place
+    out_1km.emergeDOY_median = round.(out_1km.emergeDOY_median, digits=1)
+    out_1km.emergeDOY_anomaly = round.(out_1km.emergeDOY_anomaly, digits=1)
+
+
+    # Rename some columns
+    rename!(out_1km,
+      :east => "eastings",
+      :north => "northings",
+      :nGenerations => "nGen",
+      :nGenerations_median => "nGen_30yr",
+      :nGenerations_anomaly => "nGen_anomaly",
+      :emergeDOY_median => "emergeDOY_30yr")
+
+    # Create filename
+    fileout1 = joinpath(paths.outDir, species_name, species_name * "_1_" * string(c) * "_" * yearStr * ".csv")
+
+    CSV.write(fileout1, out_1km, missingstring="NA", dateformat="yyyy-mm-dd")
+
+  end
+end
+
+
+
+
+
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
+
+function save_OPRAM_10km_CSV(out_10km::DataFrame, grid::DataFrame, species_name::String,
+  yearStr::String, paths::NamedTuple)
+  # A function to save the final OPRAM results (at 1km scale) in a CSV file
+  # The function is used in OPRAM_calculate_anomaly.jl
+  #
+  # Arguments:
+  #   filename    the name of the file to save data to (including the path)
+  #   out_10km      the DataFrame containing the results
+  #   grid        the grid of locations to use (as a DataFrame)
+  #   species_name the name of the species to save results for
+  #   yearStr     the year string to use in the filename
+  #   paths       a named tuple containing the paths to the output directories
+  #
+  # Output:
+  #   None
+  # *************************************************************
+
+
+  # Add in hectad ID
+  leftjoin!(out_10km, unique(grid[:, [:hectad, :east_hectad, :north_hectad]]), on=[:east_hectad, :north_hectad])
+
+
+
+
+  # Add in Dates for emergence
+  out_10km.emergeDate_min = Vector{Union{Missing,Date}}(missing, nrow(out_10km))
+  idx = .!ismissing.(out_10km.startDate) .&& .!ismissing.(out_10km.emergeDOY_min)
+  out_10km.emergeDate_min[idx] = Date.(year.(out_10km.startDate[idx]), 01, 01) .+ Day.(out_10km.emergeDOY_min[idx] .- 1)
+
+  out_10km.emergeDate_median_min = Vector{Union{Missing,Date}}(missing, nrow(out_10km))
+  idx = .!ismissing.(out_10km.startDate) .&& .!ismissing.(out_10km.emergeDOY_median_min)
+  out_10km.emergeDate_median_min[idx] = Date.(year.(out_10km.startDate[idx]), 01, 01) .+ Day.(round.(Int, out_10km.emergeDOY_median_min[idx]) .- 1)
+
+
+  # Rename some columns
+  rename!(out_10km, :nGenerations_max => "nGen",
+    :nGenerations_median_max => "nGen_30yr",
+    :nGenerations_anomaly_max => "nGen_anomaly",
+    :emergeDate_min => "emergeDate",
+    :emergeDate_median_min => "emergeDate_30yr",
+    :emergeDOY_min => "emergeDOY",
+    :emergeDOY_median_min => "emergeDOY_30yr",
+    :emergeDOY_anomaly_min => "emergeDOY_anomaly")
+
+  # Select specific years
+  select!(out_10km, [:hectad, :startDate, 
+                    :emergeDOY, :emergeDOY_30yr, :emergeDOY_anomaly,
+                    :emergeDate, :emergeDate_30yr,
+                    :nGen, :nGen_30yr, :nGen_anomaly])
+
+
+  
+  # Round results for number of generations
+  out_10km.nGen = round.(out_10km.nGen, digits=2)
+  out_10km.nGen_30yr = round.(out_10km.nGen_30yr, digits=2)
+  out_10km.nGen_anomaly = round.(out_10km.nGen_anomaly, digits=2)
+
+  # Round emergence DOY to 1 decimal place
+  out_10km.emergeDOY_30yr = round.(out_10km.emergeDOY_30yr, digits=1)
+  out_10km.emergeDOY_anomaly = round.(out_10km.emergeDOY_anomaly, digits=1)
+
+
+  # Create filename
+  fileout3 = joinpath(paths.outDir, species_name, species_name * "_100_" * yearStr * ".csv")
+
+  # Write the data
+  CSV.write(fileout3, out_10km, missingstring="NA", dateformat="yyyy-mm-dd")
+
+end
+
+
 
 # ================ End of Function Definitions ======================
 # ===================================================================
