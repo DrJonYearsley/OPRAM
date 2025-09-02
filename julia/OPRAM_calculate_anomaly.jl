@@ -51,11 +51,11 @@ else
     @error "No parameter file given"
 end
 
-# Files containing the ID system from Granite.ie
-# This info is used to package the output into separate files
-granite_hectad_ID = "git_repos/OPRAM/data/granite_hectad_defs.csv"
-granite_county_ID = "git_repos/OPRAM/data/granite_county_defs.csv"
-granite_hectad_county = "git_repos/OPRAM/data/granite_hectad_county_defs.csv"
+# # Files containing the ID system from Granite.ie
+# # This info is used to package the output into separate files
+# granite_hectad_ID = "git_repos/OPRAM/data/granite_hectad_defs.csv"
+# granite_county_ID = "git_repos/OPRAM/data/granite_county_defs.csv"
+# granite_hectad_county = "git_repos/OPRAM/data/granite_hectad_county_defs.csv"
 
 
 
@@ -76,29 +76,29 @@ end
 
 
 
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Import granite files to organise hectads and counties
-# Read in the grid data from a file
-hectad_defs = CSV.read(joinpath([paths.dataDir, granite_hectad_ID]), DataFrame);
-county_defs = CSV.read(joinpath([paths.dataDir, granite_county_ID]), DataFrame);
-hectad_county_defs = CSV.read(joinpath([paths.dataDir, granite_hectad_county]), DataFrame);
+# # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# # Import granite files to organise hectads and counties
+# # Read in the grid data from a file
+# hectad_defs = CSV.read(joinpath([paths.dataDir, granite_hectad_ID]), DataFrame);
+# county_defs = CSV.read(joinpath([paths.dataDir, granite_county_ID]), DataFrame);
+# hectad_county_defs = CSV.read(joinpath([paths.dataDir, granite_hectad_county]), DataFrame);
 
-# Rename county ID column
-rename!(county_defs, :Id => :countyID)
+# # Rename county ID column
+# rename!(county_defs, :Id => :countyID)
 
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Import location data and thin it using thinFactor
 # (needed to add the hectad codes to the 10km output) 
-grid = read_grid(run_params.gridFile, run_params.thinFactor, run_params.country)
+grid = read_grid(run_params, paths.dataDir)
 
 # Create easting and northings of bottom left of a hectad
 grid.east_hectad = convert.(Int32, floor.(grid.east ./ 1e4) .* 1e4)
 grid.north_hectad = convert.(Int32, floor.(grid.north ./ 1e4) .* 1e4)
 
 
-# Add in column with county ID
-leftjoin!(grid, county_defs, on=:county => :County)
+# # Add in column with county ID
+# leftjoin!(grid, county_defs, on=:county => :County)
 
 
 # =========================================================

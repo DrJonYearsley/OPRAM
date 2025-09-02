@@ -57,7 +57,7 @@ function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::Na
 
   # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   # Import location data and thin it using thinFactor
-  grid = read_grid(run_params.gridFile, run_params.thinFactor, run_params.country)
+  grid = read_grid(run_params, paths.dataDir)
 
 
 

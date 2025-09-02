@@ -81,7 +81,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
       country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
       gridFile=params["inputData"]["gridFile"],  # File containing a 1km grid of lats and longs over Ireland 
-      countyFile = params["inputData"]["countyDefs"],  # File containing names and codes of counties
+      countyFile=params["inputData"]["countyDefs"],  # File containing names and codes of counties
       thirty_years=string(params["model"]["thirty_years"][1]) *
                    "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
 
@@ -100,7 +100,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
       country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
       gridFile=params["inputData"]["gridFile"],  # File containing a 1km grid of lats and longs over Ireland 
-      countyFile = params["inputData"]["countyDefs"],  # File containing names and codes of counties
+      countyFile=params["inputData"]["countyDefs"],  # File containing names and codes of counties
       thirty_years=string(params["model"]["thirty_years"][1]) *
                    "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
   # (gridfile used for daylength calculations as well as importing and thining of meteo data)
@@ -807,34 +807,42 @@ function read_grid(run_params::NamedTuple, data_path::String)
   # 
   # Arguments:
   #   run_params   A tuple containing data on:
-  #           gridFile    the file containing the grid data
-  #           countyFile  the name of the file containing the county definitions
-  #           grid_thin   the thinning factor to use (default=1_)
-  #           countryStr  one of "IE", "NI", "AllIreland" (default="IE")
-  #   data_path   the directory containing the grid files
+  #           gridFile     the file containing the grid data
+  #           countyFile   the name of the file containing the county definitions
+  #           thinFactor   the thinning factor to use (default=1_)
+  #           country      one of "IE", "NI", "AllIreland" (default="IE")
+  #   data_path   the directory containing the grid file
   #
   # Output:
   #   A DataFrame containing the grid of locations
   # *************************************************************
 
+  # Import county definitions
+  county_defs = CSV.read(joinpath([data_path, run_params.countyFile]), DataFrame)
+
+  # Rename county ID column
+  rename!(county_defs, :Id => :countyID)
+
   # Read in the grid data from a file
-  grid = CSV.read(gridFilePath, DataFrame, missingstring="NA")
+  grid = CSV.read(joinpath(data_path, run_params.gridFile), DataFrame, missingstring="NA")
 
   # Sort locations in order of IDs
   grid = grid[sortperm(grid.ID), :]
 
 
   # Keep only locations for the required country
-  if countryStr == "IE"
+  if run_params.country == "IE"
     subset!(grid, :country => c -> c .== "IE")
-  elseif countryStr == "NI"
+  elseif run_params.country == "NI"
     subset!(grid, :country => c -> c .== "NI")
   end
 
-  # Thin the locations  using the thinFactor
-  thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&&
-                    mod.(grid.north, (thinFactor * 1e3)) .< 1e-8)
+  # Add in column with county ID
+  leftjoin!(grid, county_defs, on=:county => :County)
 
+  # Thin the locations  using the thinFactor
+  thinInd = findall(mod.(grid.east, (run_params.thinFactor * 1e3)) .< 1e-8 .&&
+                    mod.(grid.north, (run_params.thinFactor * 1e3)) .< 1e-8)
 
   return grid[thinInd, :]
 end
@@ -965,19 +973,19 @@ function save_OPRAM_1km_CSV(df_1km::DataFrame, grid::DataFrame, species_name::St
     out_1km = select(subset(df_1km, :countyID => x1 -> x1 .== c),
       :ID, :east, :north, :startDate,
       # Not([:startMonth, :startDOY, :year, :countyID]))
-      [:ID, :east, :north, :startDate,  
-      :emergeDOY, :emergeDOY_median, :emergeDOY_anomaly, 
-      :nGenerations, :nGenerations_median, :nGenerations_anomaly])
+      [:ID, :east, :north, :startDate,
+        :emergeDOY, :emergeDOY_median, :emergeDOY_anomaly,
+        :nGenerations, :nGenerations_median, :nGenerations_anomaly])
 
 
     # Add in Dates for emergence
-    out_1km.emergeDate = Vector{Union{Missing,Date}}(missing  , nrow(out_1km))
+    out_1km.emergeDate = Vector{Union{Missing,Date}}(missing, nrow(out_1km))
     idx = .!ismissing.(out_1km.startDate) .&& .!ismissing.(out_1km.emergeDOY)
-    out_1km.emergeDate[idx] = Date.(year.(out_1km.startDate[idx]),01,01) .+ Day.(out_1km.emergeDOY[idx] .- 1)
+    out_1km.emergeDate[idx] = Date.(year.(out_1km.startDate[idx]), 01, 01) .+ Day.(out_1km.emergeDOY[idx] .- 1)
 
-    out_1km.emergeDate_30yr = Vector{Union{Missing,Date}}(missing  , nrow(out_1km))
+    out_1km.emergeDate_30yr = Vector{Union{Missing,Date}}(missing, nrow(out_1km))
     idx = .!ismissing.(out_1km.startDate) .&& .!ismissing.(out_1km.emergeDOY_median)
-    out_1km.emergeDate_30yr[idx] = Date.(year.(out_1km.startDate[idx]),01,01) .+ Day.(round.(Int,out_1km.emergeDOY_median[idx]) .- 1)
+    out_1km.emergeDate_30yr[idx] = Date.(year.(out_1km.startDate[idx]), 01, 01) .+ Day.(round.(Int, out_1km.emergeDOY_median[idx]) .- 1)
 
 
     # Round number of generations
@@ -1065,13 +1073,13 @@ function save_OPRAM_10km_CSV(out_10km::DataFrame, grid::DataFrame, species_name:
     :emergeDOY_anomaly_min => "emergeDOY_anomaly")
 
   # Select specific years
-  select!(out_10km, [:hectad, :startDate, 
-                    :emergeDOY, :emergeDOY_30yr, :emergeDOY_anomaly,
-                    :emergeDate, :emergeDate_30yr,
-                    :nGen, :nGen_30yr, :nGen_anomaly])
+  select!(out_10km, [:hectad, :startDate,
+    :emergeDOY, :emergeDOY_30yr, :emergeDOY_anomaly,
+    :emergeDate, :emergeDate_30yr,
+    :nGen, :nGen_30yr, :nGen_anomaly])
 
 
-  
+
   # Round results for number of generations
   out_10km.nGen = round.(out_10km.nGen, digits=2)
   out_10km.nGen_30yr = round.(out_10km.nGen_30yr, digits=2)
