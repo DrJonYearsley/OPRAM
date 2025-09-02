@@ -17,6 +17,7 @@ meteoNI =  "nothing"                     # Folder containing meteo data for NI
 [inputData]   # Input data on the model grid and species params
 speciesFile = "git_repos/OPRAM/data/userdefined_parameters.csv"
 gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
+countyDefs = "git_repos/OPRAM/data/granite_county_defs.csv"
 
 [model]     # Parameters to define the model
 nReps = 1  # Number of replicates to run

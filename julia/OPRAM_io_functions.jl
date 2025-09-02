@@ -81,6 +81,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
       country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
       gridFile=params["inputData"]["gridFile"],  # File containing a 1km grid of lats and longs over Ireland 
+      countyFile = params["inputData"]["countyDefs"],  # File containing names and codes of counties
       thirty_years=string(params["model"]["thirty_years"][1]) *
                    "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
 
@@ -99,6 +100,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
       country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
       gridFile=params["inputData"]["gridFile"],  # File containing a 1km grid of lats and longs over Ireland 
+      countyFile = params["inputData"]["countyDefs"],  # File containing names and codes of counties
       thirty_years=string(params["model"]["thirty_years"][1]) *
                    "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
   # (gridfile used for daylength calculations as well as importing and thining of meteo data)
@@ -765,6 +767,51 @@ function read_grid(gridFilePath::String, thinFactor::Int, countryStr::String="IE
   #   gridFile    the name of the file containing the grid data
   #   grid_thin   the thinning factor to use (default=1_)
   #   countryStr  one of "IE", "NI", "AllIreland" (default="IE")
+  #
+  # Output:
+  #   A DataFrame containing the grid of locations
+  # *************************************************************
+
+  # Read in the grid data from a file
+  grid = CSV.read(gridFilePath, DataFrame, missingstring="NA")
+
+  # Sort locations in order of IDs
+  grid = grid[sortperm(grid.ID), :]
+
+
+  # Keep only locations for the required country
+  if countryStr == "IE"
+    subset!(grid, :country => c -> c .== "IE")
+  elseif countryStr == "NI"
+    subset!(grid, :country => c -> c .== "NI")
+  end
+
+  # Thin the locations  using the thinFactor
+  thinInd = findall(mod.(grid.east, (thinFactor * 1e3)) .< 1e-8 .&&
+                    mod.(grid.north, (thinFactor * 1e3)) .< 1e-8)
+
+
+  return grid[thinInd, :]
+end
+
+
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
+function read_grid(run_params::NamedTuple, data_path::String)
+  # Import the grid of locations and thin it using a thinning factor and the country of interest
+  # 
+  # Arguments:
+  #   run_params   A tuple containing data on:
+  #           gridFile    the file containing the grid data
+  #           countyFile  the name of the file containing the county definitions
+  #           grid_thin   the thinning factor to use (default=1_)
+  #           countryStr  one of "IE", "NI", "AllIreland" (default="IE")
+  #   data_path   the directory containing the grid files
   #
   # Output:
   #   A DataFrame containing the grid of locations

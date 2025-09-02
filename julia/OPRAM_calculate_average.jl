@@ -40,7 +40,7 @@ include("OPRAM_processing_functions.jl");
 
 # Model parameters are stored in a TOML file https://toml.io/en/
 if length(ARGS) == 1
-    nNodes, run_params, species_params, paths = import_parameters(ARGS[1], true)
+    nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], true)
 
 elseif length(ARGS) == 0 & isfile("parameters.toml")
     nNodes, run_params, species_setup, paths = import_parameters("parameters.toml", true)
@@ -48,13 +48,6 @@ elseif length(ARGS) == 0 & isfile("parameters.toml")
 else
     @error "No parameter file given"
 end
-
-# Files containing the ID system from Granite.ie
-# This info is used to package the output into separate files
-granite_hectad_ID = "git_repos/OPRAM/data/granite_hectad_defs.csv"
-granite_county_ID = "git_repos/OPRAM/data/granite_county_defs.csv"
-granite_hectad_county = "git_repos/OPRAM/data/granite_hectad_county_defs.csv"
-
 
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
