@@ -1,4 +1,4 @@
-# Script to import meteo files and convert them to jld2 format 
+# Script to import UK Met Office meteo files and convert them to jld2 format 
 # for more efficient import
 
 using Distributed;
@@ -13,6 +13,10 @@ include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 years = collect(2023:2024)    # The years to import
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 
+
+# using CSV   
+
+# dataset = CSV.read(download("https://mywebsite.edu/ml/machine-learning-databases/my.data"))
 
 
 
