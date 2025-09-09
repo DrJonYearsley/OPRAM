@@ -32,6 +32,7 @@ maxYears = 4         # Maximum number of years to complete insect development
 lastMeteoYear = 2024  # The last year of meteo data
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+degreeday = "sine"   # degree-day algorithm ("sine","triangle","average")
 
 
 # List species to simulate. Species with several life stages are grouped together. 

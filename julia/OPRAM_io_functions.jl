@@ -496,8 +496,9 @@ end
 
 # ------------------------------------------------------------------------------------------
 
-function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
-  # Import multiple years of daily min and max temperature from a jld2 file 
+function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, 
+                          country::String)
+  # Import multiple years of daily average temperature from a jld2 file 
   # for Republic of Ireland and create the daily average temp, and 
   # the ID, eastings and northings of spatial locations
   #
@@ -567,6 +568,87 @@ function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{
 end
 
 # ------------------------------------------------------------------------------------------
+
+
+function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, 
+                          country::String)
+  # Import multiple years of daily min and max temperature from a jld2 file 
+  # and create the daily min/max temp, the ID, eastings and northings of spatial locations
+  #
+  # Arguments:
+  #   meteoDir    the directory containing the meteo data in JLD2 format 
+  #   years       years to be read
+  #   IDgrid      ID of locations in grid_thin
+  #   country     "IE" for Republic of Ireland, "NI" for Northern Ireland or "UK" for UK
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of minimum daily temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:    Matrix of maximum daily temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Third entry:     A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Fourth entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
+  #
+  # *************************************************************
+
+
+  # Create empty array of arrays to hold average temps 
+  TminVec = Vector{Array{Float32,2}}(undef, length(years))
+  TmaxVec = Vector{Array{Float32,2}}(undef, length(years))
+  DOYVec = Vector{Array{Int16,1}}(undef, length(years))
+  IDVec = Vector{Array{Int64,1}}(undef, length(years))
+
+  # CHeck to see if we're importing UK met office data or Met Eireann data
+  if any(occursin.("meteoUK_Tminmax_" * string(years[1]), readdir(meteoDir)))
+    countryStr = "UK"
+  else
+    countryStr = country
+  end
+
+  for y in eachindex(years)
+    # Get the correct filename
+
+    meteoFile = filter(x -> occursin("meteo" * countryStr * "_Tminmax_" * string(years[y]), x),
+      readdir(meteoDir))
+
+    # Import the data for Tmin and Tmax
+    f = jldopen(joinpath(meteoDir, meteoFile[1]), "r")
+    TminVec[y] = read(f, "Tmin")
+    TmaxVec[y] = read(f, "Tmax")
+    DOYVec[y] = read(f, "DOY")
+    IDVec[y] = read(f, "ID")
+    close(f)
+  end
+
+  # Check all ID's are equivalent if importing NI and IE data
+  if length(IDVec) > 1
+    if any(IDVec[1] .!= IDVec[2]) || any(IDVec[2] .!= IDVec[3])
+      @error "Locations in different meteo files are not the same"
+    end
+  end
+
+  # Find ID's that are in grid_thin
+  ID = intersect(IDgrid, IDVec[1])
+
+  # Put all the temperature data together into one Matrix
+  Tmin = reduce(vcat, TminVec)
+  Tmax = reduce(vcat, TmaxVec)
+  DOY = reduce(vcat, DOYVec)
+
+  # Put location ID's (columns of Tavg) in order of ID
+  # And leave out locations not in ID
+  idx = [findfirst(IDVec[1] .== id) for id in ID]
+  Tmin = Tmin[:, idx]
+  Tmax = Tmax[:, idx]
+  return Tmin, Tmax, DOY, ID
+end
+
+# ------------------------------------------------------------------------------------------
+
+
 
 function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
   # Import the TRANSLATE data for a given RCP and period from a jld2 file

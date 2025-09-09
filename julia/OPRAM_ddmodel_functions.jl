@@ -565,6 +565,70 @@ end
 
 # ------------------------------------------------------------------------------------------
 
+function average_degreeday(Tmin, Tmax, T_baseline)
+# Calculate degree day from daily max and min temperatures using the daily average method
+# This method tends to underestimate degree-days
+# 
+# Arguments:
+#   Tmin         minimum daily temperature
+#   Tmax         maximum daily temperature
+#   T_baseline   baseline temperature above which degree days start accumulating
+#
+# Output:
+#   DD           degree days
+#   DOY          the day of year corresponding to DD
+#
+#
+# ========================================================================================
+
+end
+
+
+# ------------------------------------------------------------------------------------------
+
+function triangle_degreeday(Tmin, Tmax, T_baseline)
+# Calculate degree day from daily max and min temperatures using the single traingle method
+# 
+# Arguments:
+#   Tmin         minimum daily temperature
+#   Tmax         maximum daily temperature
+#   T_baseline   baseline temperature above which degree days start accumulating
+#
+# Output:
+#   DD           degree days
+#   DOY          the day of year corresponding to DD
+#
+#
+# ========================================================================================
+
+end
+
+
+
+# ------------------------------------------------------------------------------------------
+
+function sine_degreeday(Tmin, Tmax, T_baseline)
+# Calculate degree day from daily max and min temperatures using the single sine method
+# 
+# Arguments:
+#   Tmin         minimum daily temperature
+#   Tmax         maximum daily temperature
+#   T_baseline   baseline temperature above which degree days start accumulating
+#
+# Output:
+#   DD           degree days
+#   DOY          the day of year corresponding to DD
+#
+#
+# ========================================================================================
+
+
+
+end
+
+
+# ------------------------------------------------------------------------------------------
+
 
 function photoperiod(latitude::Vector{Float64}, minDOY::Int64, threshold::Float32)
   # Calculate daylength in hours using the algorithm from the R package geosphere
