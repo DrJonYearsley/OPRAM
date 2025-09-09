@@ -2,12 +2,14 @@
 #
 # function import_parameters(tomlFile::String)
 # function import_species(speciesFile::String, speciesName::String)
-# function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame, maxYears::Int)
+# function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame, run_params::NamedTuple)
 # function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
 # function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+# function read_netCDF_meteoUK(meteoDir::String, grid::DataFrame, years)
 # function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years::Vector{Int64})
 # function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years::Vector{Int64})
-# function read_grid(gridFilePath::String, thinFactor::Int)
+# function read_grid(gridFilePath::String, thinFactor::Int, countryStr::String="IE")
+# function read_grid(run_params::NamedTuple)
 #
 # Jon Yearsley (jon.yearsley@ucd.ie)
 # 7th Aug 2024
@@ -40,24 +42,222 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
   nNodes = params["runtime"]["nNodes"]           # Number of compute nodes to use (if in interactive)
 
 
-  # Perform some checks on file names
+  # =========================================================
+  # =========================================================
+  # Check country name ======================================
+
+  # Perform check on country name
+  if params["model"]["country"] ∉ ["IE", "NI", "AllIreland", "UK", "EN", "SC", "WL"]
+    @error "Country must be one of IE, NI, AllIreland, UK, EN, SC or WL"
+  end
+
+
+
+
+
+  # =========================================================
+  # =========================================================
+  # Check paths =============================================
+  # If the given paths for output and data do not exist, try to find alternative paths to the data
+
+  # Add on the home directory to the paths if required
+  if !occursin(r"^/", params["paths"]["data"])
+    params["paths"]["data"] = joinpath(homedir(), params["paths"]["data"])
+  end
+
+  if !occursin(r"^/", params["paths"]["results"])
+    params["paths"]["results"] = joinpath(homedir(), params["paths"]["results"])
+  end
+
+  if !occursin(r"^/", params["paths"]["output"])
+    params["paths"]["output"] = joinpath(homedir(), params["paths"]["output"])
+  end
+
+  if !occursin(r"^/", params["paths"]["meteoIE"])
+    params["paths"]["meteoIE"] = joinpath(homedir(), params["paths"]["meteoIE"])
+  end
+
+  if !occursin(r"^/", params["paths"]["meteoNI"])
+    params["paths"]["meteoNI"] = joinpath(homedir(), params["paths"]["meteoNI"])
+  end
+
+  # Check output dir exists
+  if !isdir(params["paths"]["output"])
+    @warn "Can't find output directory!"
+
+    if isdir(joinpath(homedir(), params["paths"]["output"]))  # guess 1
+      params["paths"]["output"] = joinpath(homedir(), params["paths"]["output"])
+      @info "      Setting output directory to " * params["paths"]["output"]
+
+    elseif isdir(joinpath(homedir(), "Desktop//OPRAM//results"))  # Linux guess
+      params["paths"]["output"] = joinpath(homedir(), "Desktop//OPRAM//results")
+      @info "      Setting output directory to " * params["paths"]["output"]
+
+    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"))  # Mac guess
+      params["paths"]["output"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results")
+      @info "      Setting output directory to " * params["paths"]["output"]
+
+    else
+      @error "No output directory found"
+    end
+  end
+
+  # Check output dir exists
+  if !isdir(params["paths"]["results"])
+    @warn "Can't find model results directory!"
+
+    if isdir(joinpath(homedir(), params["paths"]["results"]))  # guess
+      params["paths"]["results"] = joinpath(homedir(), params["paths"]["results"])
+      @info "      Setting output directory to " * params["paths"]["results"]
+
+    elseif isdir(joinpath(homedir(), "Desktop//OPRAM//results"))  # Linux guess
+      params["paths"]["results"] = joinpath(homedir(), "Desktop//OPRAM//results")
+      @info "      Setting output directory to " * params["paths"]["results"]
+
+    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"))  # Mac guess
+      params["paths"]["results"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results")
+      @info "      Setting output directory to " * params["paths"]["results"]
+
+    else
+      @error "No results directory found"
+    end
+  end
+
+  # Check data dir exists
+  if !isdir(params["paths"]["data"])
+    @info "Can't find data directory!"
+    if isdir(joinpath(homedir(), params["paths"]["data"]))  # guess
+      params["paths"]["data"] = joinpath(homedir(), params["paths"]["data"])
+      @info "       Setting data directory to " * params["paths"]["data"]
+
+    elseif isdir(joinpath(homedir(), "DATA", "OPRAM", "Data"))  # Linux guess
+      params["paths"]["data"] = joinpath(homedir(), "DATA//OPRAM//Data")
+      @info "       Setting data directory to " * params["paths"]["data"]
+
+    elseif isdir(joinpath(homedir(), "git_repos/OPRAM/data"))  # Mac guess
+      @info "       Setting data directory to home directory"
+      params["paths"]["data"] = joinpath(homedir(), "git_repos/OPRAM/data")
+    else
+      @error "No data directory found"
+    end
+  end
+
+
+
+  # Check meteo dirs exist (if simulation needs the data)
+  if in(params["model"]["country"], ["IE", "AllIreland"]) &
+     !isdir(params["paths"]["meteoIE"])
+
+
+    @info "Can't find meteoIE directory!"
+    if isdir(joinpath(homedir(), "DATA", "OPRAM", "Data", "Climate_JLD2"))  # Linux guess
+      params["paths"]["meteoIE"] = joinpath(homedir(), "DATA//OPRAM//Data//Climate_JLD2")
+      @info "       Setting meteoIE directory to " * params["paths"]["meteoIE"]
+
+    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"))  # Mac guess
+      params["paths"]["meteoIE"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2")
+      @info "       Setting meteoIE directory to " * params["paths"]["meteoIE"]
+
+    else
+      @error "No meteoIE directory found"
+    end
+  end
+
+  if in(params["model"]["country"], ["NI", "AllIreland"]) & !isdir(params["paths"]["meteoNI"])
+    @info "Can't find meteoNI directory!"
+    if isdir(joinpath(homedir(), "DATA", "OPRAM", "Data", "Climate_JLD2"))  # Linux guess
+      params["paths"]["meteoNI"] = joinpath(homedir(), "DATA//OPRAM//Data//Climate_JLD2")
+      @info "       Setting meteoNI directory to " * params["paths"]["meteoNI"]
+
+    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"))  # Mac guess
+      params["paths"]["meteoNI"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2")
+      @info "       Setting meteoNI directory to " * params["paths"]["meteoNI"]
+
+    else
+      @error "No meteoNI directory found"
+    end
+  end
+
+
+
+
+  # Set folders to nothing if no data requried
+  if params["model"]["country"] == "IE"
+    params["paths"]["meteoNI"] = nothing
+  elseif in(params["model"]["country"], ["NI", "EN", "SC", "WL", "UK"])
+    params["paths"]["meteoIE"] = nothing
+  end
+
+
+  # Put all the paths together
+  paths = (outDir=joinpath(homedir(), params["paths"]["output"]),
+    resultsDir=joinpath(homedir(), params["paths"]["results"]),
+    dataDir=joinpath(homedir(), params["paths"]["data"]),
+    meteoDir_IE=params["paths"]["meteoIE"],
+    meteoDir_NI=params["paths"]["meteoNI"])
+
+
+
+
+
+  # ==================================================================  
+  # ==================================================================  
+  # Check filenames ==================================================
+
+
   # Check grid file exists
-  if !isfile(params["inputData"]["gridFile"])
+  if isfile(params["inputData"]["gridFile"])
+    # Do nothing
+  elseif isfile(joinpath(params["paths"]["data"], params["inputData"]["gridFile"]))
+    params["inputData"]["gridFile"] = joinpath(params["paths"]["data"], params["inputData"]["gridFile"])
+  else
     @info "Can't find grid file!"
 
-    if isfile(joinpath(homedir(), "DATA", "OPRAM", params["inputData"]["gridFile"]))  # Guess 1
+    if isfile(joinpath(homedir(), params["inputData"]["gridFile"]))  # Guess 1
       params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
       @info "gridFile set to" * params["inputData"]["gridFile"]
 
-    elseif isfile(joinpath(homedir(), params["inputData"]["gridFile"]))  # Guess 2
+    elseif isfile(joinpath(homedir(), "DATA", "OPRAM", params["inputData"]["gridFile"]))  # Guess 1
       params["inputData"]["gridFile"] = joinpath(homedir(), params["inputData"]["gridFile"])
       @info "gridFile set to" * params["inputData"]["gridFile"]
+
     else
       @error "No grid file found"
     end
   end
 
 
+
+  # Check grid file exists
+  if isfile(params["inputData"]["countyDefs"])
+    # Do nothing
+  elseif isfile(joinpath(homedir(), params["inputData"]["countyDefs"]))
+    params["inputData"]["countyDefs"] = joinpath(homedir(), params["inputData"]["countyDefs"])
+
+  elseif isfile(joinpath(params["paths"]["data"], params["inputData"]["countyDefs"]))
+    params["inputData"]["countyDefs"] = joinpath(params["paths"]["data"], params["inputData"]["countyDefs"])
+
+  else
+    @info "Can't find countyDefs file!"
+
+    if isfile(joinpath(homedir(), params["inputData"]["countyDefs"]))  # Guess 1
+      params["inputData"]["countyDefs"] = joinpath(homedir(), params["inputData"]["countyDefs"])
+      @info "countyDefs file set to" * params["inputData"]["countyDefs"]
+
+    elseif isfile(joinpath(homedir(), "DATA", "OPRAM", params["inputData"]["countyDefs"]))  # Guess 1
+      params["inputData"]["countyDefs"] = joinpath(homedir(), params["inputData"]["countyDefs"])
+      @info "countyDefs file set to" * params["inputData"]["countyDefs"]
+
+    else
+      @error "No country defs file found"
+    end
+  end
+
+
+
+  # =========================================================
+  # =========================================================
+  # Put all parameters in named tuple =======================
 
 
   # Put parameters into a named tuple
@@ -116,126 +316,6 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
   species_params = (speciesFile=joinpath(homedir(), params["inputData"]["speciesFile"]),  # File containing species parameters
     speciesStr=speciesStr)  # A vector of strings to uniquely identify a species name in the speciesFile
 
-
-
-  # =========================================================
-  # =========================================================
-  # If the given paths for output and data do not exist, try to find alternative paths to the data
-
-  # Add on the home directory to the paths if required
-  if !occursin(r"^/", params["paths"]["data"])
-    params["paths"]["data"] = joinpath(homedir(), params["paths"]["data"])
-  end
-
-  if !occursin(r"^/", params["paths"]["results"])
-    params["paths"]["results"] = joinpath(homedir(), params["paths"]["results"])
-  end
-
-  if !occursin(r"^/", params["paths"]["output"])
-    params["paths"]["output"] = joinpath(homedir(), params["paths"]["output"])
-  end
-
-  if !occursin(r"^/", params["paths"]["meteoIE"])
-    params["paths"]["meteoIE"] = joinpath(homedir(), params["paths"]["meteoIE"])
-  end
-
-  if !occursin(r"^/", params["paths"]["meteoNI"])
-    params["paths"]["meteoNI"] = joinpath(homedir(), params["paths"]["meteoNI"])
-  end
-
-  # Check output dir exists
-  if !isdir(params["paths"]["output"])
-    @warn "Can't find output directory!"
-
-    if isdir(joinpath(homedir(), "Desktop//OPRAM//results"))  # Linux guess
-      @info "      Setting output directory to Desktop//OPRAM//results"
-      params["paths"]["output"] = joinpath(homedir(), "Desktop//OPRAM//results")
-
-    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"))  # Mac guess
-      @info "        Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//results"
-      params["paths"]["output"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results")
-    else
-      @error "No output directory found"
-    end
-  end
-
-  # Check output dir exists
-  if !isdir(params["paths"]["results"])
-    @warn "Can't find model results directory!"
-
-    if isdir(joinpath(homedir(), "Desktop//OPRAM//results"))  # Linux guess
-      @info "      Setting output directory to Desktop//OPRAM//results"
-      params["paths"]["results"] = joinpath(homedir(), "Desktop//OPRAM//results")
-
-    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results"))  # Mac guess
-      @info "        Setting output directory to Google Drive//My Drive//Projects//DAFM_OPRAM//results"
-      params["paths"]["results"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results")
-    else
-      @error "No output directory found"
-    end
-  end
-
-  # Check data dir exists
-  if !isdir(params["paths"]["data"])
-    @info "Can't find data directory!"
-    if isdir(joinpath(homedir(), "DATA", "OPRAM", "Data"))  # Linux guess
-      @info "       Setting data directory to DATA//OPRAM//Data"
-      params["paths"]["data"] = joinpath(homedir(), "DATA//OPRAM//Data")
-
-    elseif isdir(joinpath(homedir(), "git_repos/OPRAM/data"))  # Mac guess
-      @info "       Setting data directory to home directory"
-      params["paths"]["data"] = homedir()
-    else
-      @error "No data directory found"
-    end
-  end
-
-  # Check meteo dirs exist (if simulation needs the data)
-  if in(params["model"]["country"], ["IE", "AllIreland"]) & !isdir(params["paths"]["meteoIE"])
-    @info "Can't find meteoIE directory!"
-    if isdir(joinpath(homedir(), "DATA", "OPRAM", "Data", "Climate_JLD2"))  # Linux guess
-      @info "       Setting meteoIE directory to DATA//OPRAM//Data//Climate_JLD2"
-      params["paths"]["meteoIE"] = joinpath(homedir(), "DATA//OPRAM//Data//Climate_JLD2")
-
-    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"))  # Mac guess
-      @info "       Setting meteoIE directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
-      params["paths"]["meteoIE"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2")
-    else
-      @error "No meteoIE directory found"
-    end
-  end
-
-  if in(params["model"]["country"], ["NI", "AllIreland"]) & !isdir(params["paths"]["meteoNI"])
-    @info "Can't find meteoNI directory!"
-    if isdir(joinpath(homedir(), "DATA", "OPRAM", "Data", "Climate_JLD2"))  # Linux guess
-      @info "       Setting meteoNI directory to DATA//OPRAM//Data//Climate_JLD2"
-      params["paths"]["meteoNI"] = joinpath(homedir(), "DATA//OPRAM//Data//Climate_JLD2")
-
-    elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"))  # Mac guess
-      @info "       Setting meteoNI directory to Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2"
-      params["paths"]["meteoNI"] = joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2")
-    else
-      @error "No meteoNI directory found"
-    end
-  end
-
-
-
-
-  # Set folders to nothing if no data requried
-  if params["model"]["country"] == "IE"
-    params["paths"]["meteoNI"] = nothing
-  elseif params["model"]["country"] == "NI"
-    params["paths"]["meteoIE"] = nothing
-  end
-
-
-  # Put all the paths together
-  paths = (outDir=joinpath(homedir(), params["paths"]["output"]),
-    resultsDir=joinpath(homedir(), params["paths"]["results"]),
-    dataDir=joinpath(homedir(), params["paths"]["data"]),
-    meteoDir_IE=params["paths"]["meteoIE"],
-    meteoDir_NI=params["paths"]["meteoNI"])
 
   return nNodes, run_params, species_params, paths
 end
@@ -301,9 +381,9 @@ end
 
 
 
-function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, maxYears::Int, lastMeteoYear::Int=2023)
+function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, run_params::NamedTuple)
   # Import multiple years of daily min and max temperature for Republic of Ireland and 
-  # Northern Ireland
+  # Northern Ireland (and maybe UK)
   # Then creates the daily average temp for each eastings and northings of spatial locations
   # Locations are also given a unique ID
   #
@@ -316,8 +396,10 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
   #                  (the daily maximum/minimum temps are assumed to be 
   #                   in folders NI_TX_daily_grid and NI_TN_daily_grid)
   #   grid_thin     the grid of locations to use
-  #   maxYears      the maximum number of years to be imported
-  #   lastMeteoYear the last year of meteo data available (default=2023)
+  #   run_params    parameters to define imported data. Use parameters are:
+  #                     maxYears      the maximum number of years to be imported
+  #                     lastMeteoYear the last year of meteo data available (default=2023)
+  #                     country       string defining the country to import
   #
   # Output:
   #   A list with three entries
@@ -333,9 +415,7 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
 
   # An array containing the years to be imported
   # Make sure it is no greater than maxMeteoYear
-  years = min.(collect(meteoYear:meteoYear+maxYears-1), lastMeteoYear)
-
-
+  years = min.(collect(meteoYear:meteoYear+run_params.maxYears-1), run_params.lastMeteoYear)
 
 
 
@@ -343,7 +423,7 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
   # Import the weather data
 
   # ROI data
-  if !isnothing(meteoDirs[1])
+  if in(run_params.country, ["IE", "AllIreland"]) & ! isnothing(meteoDirs[1])
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[1]))) > 0
       # Check for jld2 files and import them
       Tavg_IE, DOY_IE, ID_IE = read_JLD2_meteo(meteoDirs[1], years, grid_thin.ID, "IE")
@@ -353,15 +433,19 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, m
     end
   end
 
-
-  # Northern Ireland data
-  if !isnothing(meteoDirs[2])
+  # Northern Ireland or UK data
+  if in(run_params.country, ["NI", "AllIreland"]) & ! isnothing(meteoDirs[2])
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
       # Check for jld2 files and import them
       Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, "NI")
     else
       # Otherwise import csv files
       Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDirs[2], grid_thin, years)
+    end
+  elseif in(run_params.country, ["UK", "EN", "SC", "WL"]) & ! isnothing(meteoDirs[2])
+    if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
+      # Check for jld2 files and import them
+      Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, run_params.country)
     end
   end
 
@@ -421,6 +505,7 @@ function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{
   #   meteoDir    the directory containing the meteo data in JLD2 format 
   #   years       years to be read
   #   IDgrid      ID of locations in grid_thin
+  #   country     "IE" for Republic of Ireland, "NI" for Northern Ireland or "UK" for UK
   #
   # Output:
   #   A list with three entries
@@ -439,9 +524,17 @@ function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{
   DOYVec = Vector{Array{Int16,1}}(undef, length(years))
   IDVec = Vector{Array{Int64,1}}(undef, length(years))
 
+  # CHeck to see if we're importing UK met office data or Met Eireann data
+  if any(occursin.("meteoUK_Tavg_" * string(years[1]), readdir(meteoDir)))
+    countryStr = "UK"
+  else
+    countryStr = country
+  end
+
   for y in eachindex(years)
     # Get the correct filename
-    meteoFile = filter(x -> occursin("meteo" * country * "_Tavg_" * string(years[y]), x),
+
+    meteoFile = filter(x -> occursin("meteo" * countryStr * "_Tavg_" * string(years[y]), x),
       readdir(meteoDir))
 
     # Import the data for Tavg
@@ -452,7 +545,7 @@ function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{
     close(f)
   end
 
-  # Check all ID's are equivalent
+  # Check all ID's are equivalent if importing NI and IE data
   if length(IDVec) > 1
     if any(IDVec[1] .!= IDVec[2]) || any(IDVec[2] .!= IDVec[3])
       @error "Locations in different meteo files are not the same"
@@ -467,6 +560,7 @@ function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{
   DOY = reduce(vcat, DOYVec)
 
   # Put location ID's (columns of Tavg) in order of ID
+  # And leave out locations not in ID
   idx = [findfirst(IDVec[1] .== id) for id in ID]
   Tavg = Tavg[:, idx]
   return Tavg, DOY, ID
@@ -630,9 +724,9 @@ function read_CSV_meteoIE2(meteoDir_IE::String, grid_thin::DataFrame, years)
   #
   # Output:
   #   A list with three entries
-  #     First entry:     Matrix of daily max temperature for the period 
+  #     First entry:     Matrix of daily min temperature for the period 
   #                      (Columns are spatial locations, rows are days of year)
-  #     Second entry:     Matrix of daily min temperature for the period 
+  #     Second entry:     Matrix of daily max temperature for the period 
   #                      (Columns are spatial locations, rows are days of year)
   #     Third entry:   A vector of days of year (could span several years, length 
   #                      equals the number of rows of temp matrix)
@@ -683,8 +777,99 @@ function read_CSV_meteoIE2(meteoDir_IE::String, grid_thin::DataFrame, years)
   DOY = convert.(Int16, DOY)
 
   # Return mean daily temp, day of year and location ID
-  return Tmax, Tmin, DOY, grid_thin.ID[IDidx[idx]]
+  return Tmin, Tmax, DOY, grid_thin.ID[IDidx[idx]]
 end
+
+# ------------------------------------------------------------------------------------------
+
+
+
+function read_netCDF_meteoUK(meteoDir::String, grid::DataFrame, years)
+  # Import multiple years of daily min and max temperature from a netCDF file
+  # for the UK and place in a data frame with the ID, eastings and northings of spatial locations
+  #
+  # Arguments:
+  #   meteoDir   the directory containing the data for the UK 
+  #               (the daily maximum/minimum temps are assumed to be 
+  #                in folders maxtemp and mintemp)
+  #   grid       the grid of locations to use
+  #   years      years to be read (could be a vector or a scalar)
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of daily max temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:     Matrix of daily min temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Third entry:   A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Fourth entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
+  #
+  # *************************************************************
+
+
+  # Create empty array of arrays to hold daily max and min temps 
+  TmaxVec = Vector{Array{Float32,2}}(undef, length(years) * 12)
+  TminVec = Vector{Array{Float32,2}}(undef, length(years) * 12)
+
+  # Read one meteo file to find locations information and calculate a filter
+  ncFile = NCDataset(joinpath(meteoDir, "maxtemp", string(years[1]), "01", "01.nc"), "r")
+
+  east_list = ncFile["projection_x_coordinate"][:]
+  north_list = ncFile["projection_y_coordinate"][:]
+
+  # Find indices of data to extract
+  idx = [findfirst(grid.east[i] .== east_list) +
+         length(east_list) * (findfirst(grid.north[i] .== north_list) - 1) for i in eachindex(grid.ID)]
+
+  close(ncFile)
+
+  for y in eachindex(years)
+    for month in 1:12
+      # Import data for month and year (y)
+
+      # Get the correct filenames
+      meteoFileTX = filter(x -> occursin(".nc", x), readdir(joinpath(meteoDir, "maxtemp", string(years[y]), string(month, pad=2))))
+      meteoFileTN = filter(x -> occursin(".nc", x), readdir(joinpath(meteoDir, "mintemp", string(years[y]), string(month, pad=2))))
+
+      # Import the data for min and max daily temperature
+      for f in eachindex(meteoFileTX)
+        # Import maximum daily temps for one month
+        ncFileTX = NCDataset(joinpath(meteoDir, "maxtemp", string(years[y]), string(month, pad=2), meteoFileTX[f]), "r")
+        if f == 1
+          TmaxVec[(y-1)*12+month] = transpose(convert.(Float32, ncFileTX["daily_maxtemp"][idx]::Array{Float64,1}))
+        else
+          TmaxVec[(y-1)*12+month] = vcat(TmaxVec[(y-1)*12+month],
+            transpose(convert.(Float32, ncFileTX["daily_maxtemp"][idx]::Array{Float64,1})))
+        end
+        close(ncFileTX)
+
+        # Import minimum daily temps for one month
+        ncFileTN = NCDataset(joinpath(meteoDir, "mintemp", string(years[y]), string(month, pad=2), meteoFileTN[f]), "r")
+        if f == 1
+          TminVec[(y-1)*12+month] = transpose(convert.(Float32, ncFileTN["daily_mintemp"][idx]::Array{Float64,1}))
+        else
+          TminVec[(y-1)*12+month] = vcat(TminVec[(y-1)*12+month], transpose(convert.(Float32, ncFileTN["daily_mintemp"][idx]::Array{Float64,1})))
+        end
+        close(ncFileTN)
+      end
+    end
+  end
+
+  # Put all the temperature data together into one Matrix
+  Tmax = reduce(vcat, TmaxVec)
+  Tmin = reduce(vcat, TminVec)
+
+  # Calculate day of year (used for photoperiod calculations)
+  DOM = size.(TmaxVec, 1)      # Day of month
+  local DOY = reduce(vcat, [collect(1:sum(DOM[(1+12*(y-1)):12*y])) for y in 1:length(years)])  # Day of year
+  DOY = convert.(Int16, DOY)
+
+  # Return mean daily temp, day of year and location ID
+  return Tmax, Tmin, DOY, grid.ID
+end
+
 
 # ------------------------------------------------------------------------------------------
 
@@ -754,6 +939,79 @@ function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years)
 end
 
 
+# ------------------------------------------------------------------------------------------
+
+
+function read_CSV_meteoNI2(meteoDir_NI::String, grid_thin::DataFrame, years)
+  # Import multiple years of daily mean temperature for Northern Ireland
+  # create the daily min and max temp, and the ID, eastings and northings of spatial locations
+  #
+  # The data for the entire year are stored in one file
+  #
+  # Arguments:
+  #   meteoDir_NI the directory containing the data for Northern Ireland 
+  #               (the daily maximum/minimum temps are assumed to be 
+  #                in folders NI_TX_daily_grid and NI_TN_daily_grid)
+  #   grid_thin   the grid of locations to use
+  #   years       years to be read
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of daily minimum temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:    Matrix of daily maximum temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Third entry:     A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Fourth entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
+  # *************************************************************
+
+  # Create empty array of arrays to hold average temps 
+  TminVec = Vector{Array{Float32,2}}(undef, length(years))
+  TmaxVec = Vector{Array{Float32,2}}(undef, length(years))
+
+  # Read one meteo file to find locations information and calculate a filter
+  coordFileNI = filter(x -> occursin("TX_daily_grid_" * string(years[1]), x),
+    readdir(joinpath(meteoDir_NI, "NI_TX_daily_grid")))
+  meteoCoords = CSV.read(joinpath([meteoDir_NI, "NI_TX_daily_grid", coordFileNI[1]]), DataFrame, select=[1, 2], types=Int32)
+
+  # Find indices of meteo data to use
+  # (needed incase meteo file has missing grid points or different order compared to grid_thin)
+  IDidx = [findfirst(abs.(grid_thin.east .- meteoCoords.east[i]) .== 0 .&& abs.(grid_thin.north .- meteoCoords.north[i]) .== 0) for i in 1:nrow(meteoCoords)]
+  idx = findall(IDidx .!= nothing)
+
+
+  for y in eachindex(years)
+    # Import data for year (y)
+
+    # Get the correct filename
+    meteoFileTX = filter(x -> occursin("TX_daily_grid_" * string(years[y]), x), readdir(joinpath(meteoDir_NI, "NI_TX_daily_grid")))
+    meteoFileTN = filter(x -> occursin("TN_daily_grid_" * string(years[y]), x), readdir(joinpath(meteoDir_NI, "NI_TN_daily_grid")))
+
+    # Import the data for min and max daily temperature (removing first two coordinate columns)
+    meteoTX = CSV.read(joinpath([meteoDir_NI, "NI_TX_daily_grid", meteoFileTX[1]]), DataFrame, drop=[1, 2], types=Float32)
+    meteoTN = CSV.read(joinpath([meteoDir_NI, "NI_TN_daily_grid", meteoFileTN[1]]), DataFrame, drop=[1, 2], types=Float32)
+
+    # Calculate daily average temp with locations as columns, days as rows
+    TminVec[y] = permutedims(Array{Float32,2}(meteoTN[idx, :]))
+    TmaxVec[y] = permutedims(Array{Float32,2}(meteoTX[idx, :]))
+  end
+
+  # Put all the temperature data together into one Matrix
+  Tmin = reduce(vcat, TminVec)
+  Tmax = reduce(vcat, TmaxVec)
+
+
+  # Calculate day of year (used for photoperiod calculations) 
+  local DOY = reduce(vcat, [collect(1:size(TminVec[y], 1)) for y in 1:length(years)])
+  DOY = convert.(Int16, DOY)  # Day of year
+
+  # Return mean daily temp, day of year and location ID
+  return Tmin, Tmax, DOY, grid_thin.ID[IDidx[idx]]
+end
+
+
 
 # ------------------------------------------------------------------------------------------
 
@@ -802,7 +1060,7 @@ end
 
 
 
-function read_grid(run_params::NamedTuple, data_path::String)
+function read_grid(run_params::NamedTuple)
   # Import the grid of locations and thin it using a thinning factor and the country of interest
   # 
   # Arguments:
@@ -811,31 +1069,39 @@ function read_grid(run_params::NamedTuple, data_path::String)
   #           countyFile   the name of the file containing the county definitions
   #           thinFactor   the thinning factor to use (default=1_)
   #           country      one of "IE", "NI", "AllIreland" (default="IE")
-  #   data_path   the directory containing the grid file
   #
   # Output:
   #   A DataFrame containing the grid of locations
   # *************************************************************
 
   # Import county definitions
-  county_defs = CSV.read(joinpath([data_path, run_params.countyFile]), DataFrame)
+  county_defs = CSV.read(run_params.countyFile, DataFrame)
 
   # Rename county ID column
   rename!(county_defs, :Id => :countyID)
 
   # Read in the grid data from a file
-  grid = CSV.read(joinpath(data_path, run_params.gridFile), DataFrame, missingstring="NA")
+  grid = CSV.read(run_params.gridFile, DataFrame,
+    missingstring="NA",
+    types=Dict(:ID => Int64, :east => Int32, :north => Int32,
+      :hectad => String, :country => String, :county => String))
 
   # Sort locations in order of IDs
   grid = grid[sortperm(grid.ID), :]
 
 
   # Keep only locations for the required country
-  if run_params.country == "IE"
-    subset!(grid, :country => c -> c .== "IE")
-  elseif run_params.country == "NI"
-    subset!(grid, :country => c -> c .== "NI")
+  if run_params.country == "UK"
+    countryStr = ["NI", "EN", "SC", "WL"]
+  elseif run_params.country == "AllIreland"
+    countryStr = ["IE", "NI"]
+  else
+    countryStr = [run_params.country]
   end
+
+  filter!(:country => c -> issubset([c], countryStr), grid)
+
+
 
   # Add in column with county ID
   leftjoin!(grid, county_defs, on=:county => :County)
@@ -1102,4 +1368,3 @@ end
 
 # ================ End of Function Definitions ======================
 # ===================================================================
-

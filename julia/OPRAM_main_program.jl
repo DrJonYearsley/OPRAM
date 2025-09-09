@@ -46,14 +46,12 @@ include("OPRAM_io_functions.jl")
 # =============== Import parameter values =======================================================
 
 
-
-
 # Model parameters are stored in a TOML file https://toml.io/en/
 if length(ARGS)==1
   nNodes, run_params, species_params, paths =  import_parameters(ARGS[1])
 
 elseif length(ARGS)==0 & isfile("parameters.toml")
-  nNodes, run_params, species_params, paths =  import_parameters("parameters.toml")
+  nNodes, run_params, species_params, paths =  import_parameters("parameters_test.toml")
 
 else
   @error "No parameter file given"

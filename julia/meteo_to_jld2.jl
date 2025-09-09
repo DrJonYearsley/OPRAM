@@ -10,9 +10,12 @@ using SharedArrays;
 include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 
 
-years = collect(2023:2024)    # The years to import
+years = collect(1991:2024)    # The years to import
 gridFile = "IE_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
 
+type = "minmax"  # The type of data to save
+#            "minmax" is  daily minimum and maximum
+#            "avg" is daily average
 
 
 
@@ -68,22 +71,45 @@ for y in years
     # Import the IE data
     @info "Importing data for year " * string(y)
     if !isnothing(meteoDir_IE)
-        Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE(meteoDir_IE, grid, y)
+        if type == "avg"
+            Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE(meteoDir_IE, grid, y)
 
-        # Save this to a JLD2 file
+            # Save this to a JLD2 file
 
-        outfile = joinpath([outDir, "meteoIE_Tavg_" * string(y) * ".jld2"])
-        @info "Saving file " * outfile
-        jldsave(outfile; Tavg=Tavg_IE, DOY=DOY_IE, ID=ID_IE)
+            outfile = joinpath([outDir, "meteoIE_Tavg_" * string(y) * ".jld2"])
+            @info "Saving file " * outfile
+            jldsave(outfile; Tavg=Tavg_IE, DOY=DOY_IE, ID=ID_IE)
+        else
+            Tmin_IE, Tmax_IE, DOY_IE, ID_IE = read_CSV_meteoIE2(meteoDir_IE, grid, y)
+
+            # Save this to a JLD2 file
+
+            outfile = joinpath([outDir, "meteoIE_Tminmax_" * string(y) * ".jld2"])
+            @info "Saving file " * outfile
+            jldsave(outfile; Tmax=Tmax_IE, Tmin=Tmin_IE, DOY=DOY_IE, ID=ID_IE)
+        end
     end
+
+
     # +++++++++++++++++++++++++++++++++++++++++++++++++++
     # Import the IE data
     if !isnothing(meteoDir_NI)
-        Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDir_NI, grid, y)
+        if type == "avg"
 
-        # Save this to a JLD2 file
-        outfile = joinpath([outDir, "meteoNI_Tavg_" * string(y) * ".jld2"])
-        @info "Saving file " * outfile
-        jldsave(outfile; Tavg=Tavg_NI, DOY=DOY_NI, ID=ID_NI)
+            Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDir_NI, grid, y)
+
+            # Save this to a JLD2 file
+            outfile = joinpath([outDir, "meteoNI_Tavg_" * string(y) * ".jld2"])
+            @info "Saving file " * outfile
+            jldsave(outfile; Tavg=Tavg_NI, DOY=DOY_NI, ID=ID_NI)
+        else
+
+            Tmin_NI, Tmax_NI, DOY_NI, ID_NI = read_CSV_meteoNI2(meteoDir_NI, grid, y)
+
+            # Save this to a JLD2 file
+            outfile = joinpath([outDir, "meteoNI_Tminmax_" * string(y) * ".jld2"])
+            @info "Saving file " * outfile
+            jldsave(outfile; Tmin=Tmin_NI, Tmax=Tmax_NI, DOY=DOY_NI, ID=ID_NI)
+        end
     end
 end

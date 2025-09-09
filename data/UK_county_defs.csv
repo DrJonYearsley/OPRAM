@@ -1,0 +1,219 @@
+County,Id
+Hartlepool,1
+Middlesbrough,2
+Redcar and Cleveland,3
+Stockton-on-Tees,4
+Darlington,5
+Halton,6
+Warrington,7
+Blackburn with Darwen,8
+Blackpool,9
+Kingston upon Hull City of,10
+East Riding of Yorkshire,11
+North East Lincolnshire,12
+North Lincolnshire,13
+York,14
+Derby,15
+Leicester,16
+Rutland,17
+Nottingham,18
+Herefordshire County of,19
+Telford and Wrekin,20
+Stoke-on-Trent,21
+Bath and North East Somerset,22
+Bristol City of,23
+North Somerset,24
+South Gloucestershire,25
+Plymouth,26
+Torbay,27
+Swindon,28
+Peterborough,29
+Luton,30
+Southend-on-Sea,31
+Thurrock,32
+Medway,33
+Bracknell Forest,34
+West Berkshire,35
+Reading,36
+Slough,37
+Windsor and Maidenhead,38
+Wokingham,39
+Milton Keynes,40
+Brighton and Hove,41
+Portsmouth,42
+Southampton,43
+Isle of Wight,44
+County Durham,45
+Cheshire East,46
+Cheshire West and Chester,47
+Shropshire,48
+Cornwall,49
+Isles of Scilly,50
+Wiltshire,51
+Bedford,52
+Central Bedfordshire,53
+Northumberland,54
+Bournemouth Christchurch and Poole,55
+Dorset,56
+Buckinghamshire,57
+North Northamptonshire,58
+West Northamptonshire,59
+Cumberland,60
+Westmorland and Furness,61
+North Yorkshire,62
+Somerset,63
+Bolton,64
+Bury,65
+Manchester,66
+Oldham,67
+Rochdale,68
+Salford,69
+Stockport,70
+Tameside,71
+Trafford,72
+Wigan,73
+Knowsley,74
+Liverpool,75
+St. Helens,76
+Sefton,77
+Wirral,78
+Barnsley,79
+Doncaster,80
+Rotherham,81
+Sheffield,82
+Newcastle upon Tyne,83
+North Tyneside,84
+South Tyneside,85
+Sunderland,86
+Birmingham,87
+Coventry,88
+Dudley,89
+Sandwell,90
+Solihull,91
+Walsall,92
+Wolverhampton,93
+Bradford,94
+Calderdale,95
+Kirklees,96
+Leeds,97
+Wakefield,98
+Gateshead,99
+City of London,100
+Barking and Dagenham,101
+Barnet,102
+Bexley,103
+Brent,104
+Bromley,105
+Camden,106
+Croydon,107
+Ealing,108
+Enfield,109
+Greenwich,110
+Hackney,111
+Hammersmith and Fulham,112
+Haringey,113
+Harrow,114
+Havering,115
+Hillingdon,116
+Hounslow,117
+Islington,118
+Kensington and Chelsea,119
+Kingston upon Thames,120
+Lambeth,121
+Lewisham,122
+Merton,123
+Newham,124
+Redbridge,125
+Richmond upon Thames,126
+Southwark,127
+Sutton,128
+Tower Hamlets,129
+Waltham Forest,130
+Wandsworth,131
+Westminster,132
+Cambridgeshire,133
+Derbyshire,134
+Devon,135
+East Sussex,136
+Essex,137
+Gloucestershire,138
+Hampshire,139
+Hertfordshire,140
+Kent,141
+Lancashire,142
+Leicestershire,143
+Lincolnshire,144
+Norfolk,145
+Nottinghamshire,146
+Oxfordshire,147
+Staffordshire,148
+Suffolk,149
+Surrey,150
+Warwickshire,151
+West Sussex,152
+Worcestershire,153
+Antrim and Newtownabbey,154
+Armagh City Banbridge and Craigavon,155
+Belfast,156
+Causeway Coast and Glens,157
+Derry City and Strabane,158
+Fermanagh and Omagh,159
+Lisburn and Castlereagh,160
+Mid and East Antrim,161
+Mid Ulster,162
+Newry Mourne and Down,163
+Ards and North Down,164
+Clackmannanshire,165
+Dumfries and Galloway,166
+East Ayrshire,167
+East Lothian,168
+East Renfrewshire,169
+Na h-Eileanan Siar,170
+Falkirk,171
+Highland,172
+Inverclyde,173
+Midlothian,174
+Moray,175
+North Ayrshire,176
+Orkney Islands,177
+Scottish Borders,178
+Shetland Islands,179
+South Ayrshire,180
+South Lanarkshire,181
+Stirling,182
+Aberdeen City,183
+Aberdeenshire,184
+Argyll and Bute,185
+City of Edinburgh,186
+Renfrewshire,187
+West Dunbartonshire,188
+West Lothian,189
+Angus,190
+Dundee City,191
+East Dunbartonshire,192
+Fife,193
+Perth and Kinross,194
+Glasgow City,195
+North Lanarkshire,196
+Isle of Anglesey,197
+Gwynedd,198
+Conwy,199
+Denbighshire,200
+Flintshire,201
+Wrexham,202
+Ceredigion,203
+Pembrokeshire,204
+Carmarthenshire,205
+Swansea,206
+Neath Port Talbot,207
+Bridgend,208
+Vale of Glamorgan,209
+Cardiff,210
+Rhondda Cynon Taf,211
+Caerphilly,212
+Blaenau Gwent,213
+Torfaen,214
+Monmouthshire,215
+Newport,216
+Powys,217
+Merthyr Tydfil,218
