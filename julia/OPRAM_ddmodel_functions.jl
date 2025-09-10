@@ -198,7 +198,7 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
 
       Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.rcp[r], run_params.futurePeriod[p], grid.ID)
 
-      if run_params.nReps==1
+      if run_params.nReps == 1
         # If only one replicate then use the mean temperature
         Tavg_sd .= 0
       end
@@ -473,8 +473,8 @@ end
 
 
 
-function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataFrame, 
-                        DOY::Vector{Int16}, params::parameters)
+function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataFrame,
+  DOY::Vector{Int16}, params::parameters)
   # Function to calculate growing degree days from meteo data for a range of years
   # Several algorithms for calculating degree days can be used
   #
@@ -566,20 +566,28 @@ end
 # ------------------------------------------------------------------------------------------
 
 function average_degreeday(Tmin, Tmax, T_baseline)
-# Calculate degree day from daily max and min temperatures using the daily average method
-# This method tends to underestimate degree-days
-# 
-# Arguments:
-#   Tmin         minimum daily temperature
-#   Tmax         maximum daily temperature
-#   T_baseline   baseline temperature above which degree days start accumulating
-#
-# Output:
-#   DD           degree days
-#   DOY          the day of year corresponding to DD
-#
-#
-# ========================================================================================
+  # Calculate degree day from daily max and min temperatures using the daily average method
+  # This method tends to underestimate degree-days
+  # 
+  # Arguments:
+  #   Tmin         minimum daily temperature
+  #   Tmax         maximum daily temperature
+  #   T_baseline   baseline temperature above which degree days start accumulating
+  #
+  # Output:
+  #   DD           degree days
+  #   DOY          the day of year corresponding to DD
+  #
+  #
+  # ========================================================================================
+
+  # Calculate average temp minus base temp
+  DD = (Tmax .+ Tmin) ./ 2.0 - T_baseline
+
+  # Find temperatures which give a non-zero degree day
+  gdd_update = DD .> 0
+
+  return gddupdate, Tdiff[gdd_update]
 
 end
 
@@ -587,19 +595,19 @@ end
 # ------------------------------------------------------------------------------------------
 
 function triangle_degreeday(Tmin, Tmax, T_baseline)
-# Calculate degree day from daily max and min temperatures using the single traingle method
-# 
-# Arguments:
-#   Tmin         minimum daily temperature
-#   Tmax         maximum daily temperature
-#   T_baseline   baseline temperature above which degree days start accumulating
-#
-# Output:
-#   DD           degree days
-#   DOY          the day of year corresponding to DD
-#
-#
-# ========================================================================================
+  # Calculate degree day from daily max and min temperatures using the single traingle method
+  # 
+  # Arguments:
+  #   Tmin         minimum daily temperature
+  #   Tmax         maximum daily temperature
+  #   T_baseline   baseline temperature above which degree days start accumulating
+  #
+  # Output:
+  #   DD           degree days
+  #   DOY          the day of year corresponding to DD
+  #
+  #
+  # ========================================================================================
 
 end
 
@@ -608,19 +616,19 @@ end
 # ------------------------------------------------------------------------------------------
 
 function sine_degreeday(Tmin, Tmax, T_baseline)
-# Calculate degree day from daily max and min temperatures using the single sine method
-# 
-# Arguments:
-#   Tmin         minimum daily temperature
-#   Tmax         maximum daily temperature
-#   T_baseline   baseline temperature above which degree days start accumulating
-#
-# Output:
-#   DD           degree days
-#   DOY          the day of year corresponding to DD
-#
-#
-# ========================================================================================
+  # Calculate degree day from daily max and min temperatures using the single sine method
+  # 
+  # Arguments:
+  #   Tmin         minimum daily temperature
+  #   Tmax         maximum daily temperature
+  #   T_baseline   baseline temperature above which degree days start accumulating
+  #
+  # Output:
+  #   DD           degree days
+  #   DOY          the day of year corresponding to DD
+  #
+  #
+  # ========================================================================================
 
 
 
