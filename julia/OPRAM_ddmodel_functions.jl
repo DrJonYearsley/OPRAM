@@ -5,14 +5,20 @@
 # This file contains the following functions
 # function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
 # function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
+# function average_degreeday(Tmin, Tmax, T_baseline)
+# function triangle_degreeday(Tmin, Tmax, T_baseline)
+# function sine_degreeday(Tmin, Tmax, T_baseline)
+# function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32})
 # function location_loop(locInd1::Vector{Int64}, locInd2::Vector{Int64},idx::Vector{CartesianIndex{2}}, 
 #                        GDD::SharedVector{Float32}, threshold::Float32)
 # function emergence(cumGDD::Vector{Float32}, cumGDD_doy::Vector{Int16}, threshold::Float32)
 # function calculate_GDD(Tavg::Matrix{Float32}, grid::DataFrame, DOY::Vector{Int16}, params::parameters)
-# function photoperiod(latlonFile::String, DOY::Vector{Int16}, ID::Vector{Int32})
-# function extract_results(doy::Int32, result::DataFrame)
-# function create_doy_results(adult_emerge::DataFrame, DOY::Vector{Int32})
-# function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
+# function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataFrame, DOY::Vector{Int16}, params::parameters)
+# function save_to_csv(dates::Vector{Date}, adult_emerge::DataFrame, grid::DataFrame,
+#                        outPrefix::String, paths::NamedTuple, run_params::NamedTuple)
+# function cleanup_results(result::SharedMatrix{Int16}, idx::Vector{CartesianIndex{2}},
+#                           ID::Vector{Int64}, save1year::Bool)
+
 
 #
 # Jon Yearsley (jon.yearsley@ucd.ie)
@@ -73,7 +79,8 @@ function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::Na
     end
 
     @info "Importing " * string(run_params.maxYears) * " years of meteo data, starting at year " * string(run_params.years[y])
-    Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params)
+    # Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params)
+    Tmin, Tmax, DOY, ID = read_meteo2(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params)
 
     # Remove grid points not in the meteo data
     keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
@@ -88,7 +95,8 @@ function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::Na
 
 
         @info "        Calculate GDD"
-        GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
+        # GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
+        GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tmin, Tmax, grid_final, DOY, species_params[s], run_params.method)
 
         # Calculate model at each location
         @info "        Calculating adult emergence dates"
@@ -287,6 +295,156 @@ end
 
 
 
+# ------------------------------------------------------------------------------------------
+
+function average_degreeday(Tmin, Tmax, T_baseline)
+  # Calculate degree day from daily max and min temperatures using the daily average method
+  # This method tends to underestimate degree-days
+  # 
+  # Note: the method assumes that Tavg = (Tmin + Tmax)/2 > T_baseline
+  # so there will always be some non-zero degree-days
+  #
+  # Arguments:
+  #   Tmin         minimum daily temperature
+  #   Tmax         maximum daily temperature
+  #   T_baseline   baseline temperature above which degree days start accumulating
+  #
+  # Output:
+  #   DD           degree days
+  #
+  #
+  # ========================================================================================
+
+  # Calculate average temp minus base temp
+  return (Tmax .+ Tmin) ./ 2.0 .- T_baseline
+
+end
+
+
+# ------------------------------------------------------------------------------------------
+
+function triangle_degreeday(Tmin, Tmax, T_baseline)
+  # Calculate degree day from daily max and min temperatures using the single traingle method
+  # See https://ipm.ucanr.edu/WEATHER/ddconcepts.html for some background
+  # Or https://mint.ippc.orst.edu/CalcMethods.html
+  # 
+  # Code tested successfully against https://ipm.ucanr.edu/weather/degree-days/#gsc.tab=0
+  #
+  # 
+  # Note: the method assumes that Tmax > T_baseline, so there will always be some non-zero degree-days
+  #
+  # Arguments:
+  #   Tmin         minimum daily temperature
+  #   Tmax         maximum daily temperature
+  #   T_baseline   baseline temperature above which degree days start accumulating
+  #
+  # Output:
+  #   DD           degree days
+  #
+  #
+  # ========================================================================================
+
+  # Calculate degree days according to the single triangle method
+  DD = (Tmax .+ Tmin) / 2.0 .- T_baseline
+
+  # Adjust for cases where Tmin < T_baseline
+  idx = Tmin .< T_baseline
+  
+  if any(idx)
+    DD[idx] = ((Tmax[idx] .- T_baseline) .^ 2) ./ (2.0 .* (Tmax[idx] .- Tmin[idx]))
+  end
+
+
+  return DD
+
+end
+
+
+
+# ------------------------------------------------------------------------------------------
+
+function sine_degreeday(Tmin, Tmax, T_baseline)
+  # Calculate degree day from daily max and min temperatures using the single sine method
+  # 
+  # See https://ipm.ucanr.edu/WEATHER/ddconcepts.html for some background
+  # Or https://mint.ippc.orst.edu/CalcMethods.html
+  #
+  # Code tested successfully against https://ipm.ucanr.edu/weather/degree-days/#gsc.tab=0
+  #
+  # Arguments:
+  #   Tmin         minimum daily temperature
+  #   Tmax         maximum daily temperature
+  #   T_baseline   baseline temperature above which degree days start accumulating
+  #
+  # Output:
+  #   DD           degree days
+  #
+  #
+  # ========================================================================================
+
+  # Calculate degree days according to the single sine method
+
+  # This is result if T_baseline<Tmin
+  DD = (Tmax .+ Tmin) .* 0.5  .- T_baseline
+
+  # Adjust for cases where Tmax>T_baseline>Tmin
+  idx = Tmin .< T_baseline
+
+  # Calculate time temperature equals T_baseline
+  if any(idx)
+    deltaT = (Tmax[idx] .- Tmin[idx]).*0.5
+    t_baseline = acos.( -1.0 .* DD[idx] ./ deltaT) # this is 2*pi*time
+
+    DD[idx] =  (deltaT .* sin.(t_baseline) .+  t_baseline .* DD[idx]) ./ pi
+  end
+
+  return DD
+
+end
+
+
+# ------------------------------------------------------------------------------------------
+
+
+function photoperiod(latitude::Vector{Float64}, minDOY::Int64, threshold::Float32)
+  # Calculate daylength in hours using the algorithm from the R package geosphere
+  # This package uses the algorithm in 
+  # Forsythe, William C., Edward J. Rykiel Jr., Randal S. Stahl, Hsin-i Wu and 
+  # Robert M. Schoolfield, 1995. A model comparison for daylength as a function of 
+  # latitude and day of the year. Ecological Modeling 80:87-95.
+  #
+  # Output:
+  #   A vector giving the DOY on which daylength diapause threshold is reached for each latitude
+  #   in the input
+  #
+  # ========================================================================================
+
+
+
+  # overwinterBool is true if daylength allows diapause to happen 
+  # (other conditions may be needed to start diapause)
+  DOY = convert.(Float64, collect(minDOY:366))
+  overwinterBool = Array{Bool}(undef, (length(latitude), length(DOY)))  # True if overwintering 
+
+  for i in eachindex(DOY)
+    P = asin(0.39795 * cos(0.2163108 + 2 * atan(0.9671396 * tan(0.0086 * (DOY[i] - 186.0)))))
+
+    a = (sind.(0.8333) .+ sind.(latitude) .* sin(P)) ./ (cosd.(latitude) .* cos(P))
+    a = min.(max.(a, -1), 1)
+
+    # Overwintering if daylength less than threshold     
+    overwinterBool[:, i] = 24.0 .- (24.0 / pi) .* acos.(a) .< threshold
+  end
+
+  # Return DOY on which diapause can start for each latitude 
+  diapause_DOY = [findfirst(overwinterBool[i, :]) + minDOY - 1 for i in eachindex(latitude)]
+  # If diapause threshold cannot be met this will give diapause_DOY = 367 (meaning no diapause)
+
+  return diapause_DOY
+end
+
+
+
 
 
 # ------------------------------------------------------------------------------------------
@@ -473,9 +631,9 @@ end
 
 
 
-function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataFrame,
-  DOY::Vector{Int16}, params::parameters)
-  # Function to calculate growing degree days from meteo data for a range of years
+function calculate_GDD(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataFrame,
+  DOY::Vector{Int16}, params::parameters, method::String)
+  # Function to calculate growing degree days from Tmin and Tmax meteo data for a range of years
   # Several algorithms for calculating degree days can be used
   #
   # Arguments:
@@ -484,6 +642,7 @@ function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::Data
   #   grid        a data frame containing the spatial grid
   #   DOY         Day of year corresponding to rows in Tavg
   #   params      parameters of the degree day model
+  #   method      string specifying the degree-day method (average, single sine, single triangle)
   #
   # Output:
   #   GDDsh       shared array of growing degree days (only giving days when 
@@ -496,13 +655,13 @@ function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::Data
 
   # Calculate days where development updates (Tavg>baseline or Tmin>baseline)
   # And specify algorithm to calculate degree days
-  if params.degreeday == "average"
+  if method == "average"
     gdd_update = Tmin .+ Tmax .> 2 * params.base_temperature
     dd_calculate = average_degreeday
-  elseif params.degreeday == "sine"
+  elseif method == "sine"
     gdd_update = Tmin .> params.base_temperature
     dd_calculate = triangle_degreeday
-  elseif params.degreeday == "triangle"
+  elseif method == "triangle"
     gdd_update = Tmin .> params.base_temperature
     dd_calculate = sine_degreeday
   else
@@ -572,148 +731,6 @@ end
 
 
 
-
-
-
-# ------------------------------------------------------------------------------------------
-
-function average_degreeday(Tmin, Tmax, T_baseline)
-  # Calculate degree day from daily max and min temperatures using the daily average method
-  # This method tends to underestimate degree-days
-  # 
-  # Note: the method assumes that Tavg = (Tmin + Tmax)/2 > T_baseline
-  # so there will always be some non-zero degree-days
-  #
-  # Arguments:
-  #   Tmin         minimum daily temperature
-  #   Tmax         maximum daily temperature
-  #   T_baseline   baseline temperature above which degree days start accumulating
-  #
-  # Output:
-  #   DD           degree days
-  #
-  #
-  # ========================================================================================
-
-  # Calculate average temp minus base temp
-  return (Tmax .+ Tmin) ./ 2.0 - T_baseline
-
-end
-
-
-# ------------------------------------------------------------------------------------------
-
-function triangle_degreeday(Tmin, Tmax, T_baseline)
-  # Calculate degree day from daily max and min temperatures using the single traingle method
-  # See https://ipm.ucanr.edu/WEATHER/ddconcepts.html for some background
-  # Or https://mint.ippc.orst.edu/CalcMethods.html
-  # 
-  # 
-  # Note: the method assumes that Tmax > T_baseline, so there will always be some non-zero degree-days
-  #
-  # Arguments:
-  #   Tmin         minimum daily temperature
-  #   Tmax         maximum daily temperature
-  #   T_baseline   baseline temperature above which degree days start accumulating
-  #
-  # Output:
-  #   DD           degree days
-  #
-  #
-  # ========================================================================================
-
-  # Calculate degree days according to the single triangle method
-  DD = (Tmax .+ Tmin) / 2.0 - T_baseline
-
-  # Adjust for cases where Tmin < T_baseline
-  idx = Tmin .< T_baseline
-  DD[idx] = ((Tmax[idx] - T_baseline) .^ 2) ./ (2.0 * (Tmax[idx] - Tmin[idx]))
-
-  return DD
-
-end
-
-
-
-# ------------------------------------------------------------------------------------------
-
-function sine_degreeday(Tmin::Vector{Float32}, Tmax::Vector{Float32}, T_baseline::Float32)
-  # Calculate degree day from daily max and min temperatures using the single sine method
-  # 
-  # See https://ipm.ucanr.edu/WEATHER/ddconcepts.html for some background
-  # Or https://mint.ippc.orst.edu/CalcMethods.html
-  #
-  # Code tested against https://ipm.ucanr.edu/weather/degree-days/#gsc.tab=0
-  #
-  # Arguments:
-  #   Tmin         minimum daily temperature
-  #   Tmax         maximum daily temperature
-  #   T_baseline   baseline temperature above which degree days start accumulating
-  #
-  # Output:
-  #   DD           degree days
-  #
-  #
-  # ========================================================================================
-
-  # Calculate degree days according to the single sine method
-  DD = T_baseline .- (Tmax .+ Tmin) .* 0.5  
-
-  # Adjust for cases where Tmin < T_baseline
-  idx = Tmin .< T_baseline
-
-  # Calculate time temperature equals T_baseline
-  if any(idx)
-    deltaT = (Tmax[idx] .- Tmin[idx]).*0.5
-    t_baseline = acos.( DD[idx] ./ deltaT)
-
-    DD[idx] =  2.0 .* deltaT .* sin.(t_baseline) .-  t_baseline .* DD[idx] / pi
-  end
-
-  return DD
-
-end
-
-
-# ------------------------------------------------------------------------------------------
-
-
-function photoperiod(latitude::Vector{Float64}, minDOY::Int64, threshold::Float32)
-  # Calculate daylength in hours using the algorithm from the R package geosphere
-  # This package uses the algorithm in 
-  # Forsythe, William C., Edward J. Rykiel Jr., Randal S. Stahl, Hsin-i Wu and 
-  # Robert M. Schoolfield, 1995. A model comparison for daylength as a function of 
-  # latitude and day of the year. Ecological Modeling 80:87-95.
-  #
-  # Output:
-  #   A vector giving the DOY on which daylength diapause threshold is reached for each latitude
-  #   in the input
-  #
-  # ========================================================================================
-
-
-
-  # overwinterBool is true if daylength allows diapause to happen 
-  # (other conditions may be needed to start diapause)
-  DOY = convert.(Float64, collect(minDOY:366))
-  overwinterBool = Array{Bool}(undef, (length(latitude), length(DOY)))  # True if overwintering 
-
-  for i in eachindex(DOY)
-    P = asin(0.39795 * cos(0.2163108 + 2 * atan(0.9671396 * tan(0.0086 * (DOY[i] - 186.0)))))
-
-    a = (sind.(0.8333) .+ sind.(latitude) .* sin(P)) ./ (cosd.(latitude) .* cos(P))
-    a = min.(max.(a, -1), 1)
-
-    # Overwintering if daylength less than threshold     
-    overwinterBool[:, i] = 24.0 .- (24.0 / pi) .* acos.(a) .< threshold
-  end
-
-  # Return DOY on which diapause can start for each latitude 
-  diapause_DOY = [findfirst(overwinterBool[i, :]) + minDOY - 1 for i in eachindex(latitude)]
-  # If diapause threshold cannot be met this will give diapause_DOY = 367 (meaning no diapause)
-
-  return diapause_DOY
-end
 
 
 
@@ -821,233 +838,6 @@ end
 
 
 
-
-
-# ------------------------------------------------------------------------------------------
-
-
-
-
-# function extract_results(doy::Int32, result::DataFrame)
-#   # Function to calculate number of generations per year, and first
-#   # day of adult emergence based on a starting development on doy
-#   #
-#   #   If development doesn't complete by the end of the simulation (usually 3 years)
-#   #  then the emergeDOY and nGenerations is set to missing
-#   #
-#   #   doy    day of year when larval development begins
-#   #   result data frame containing the results from the model
-#   #  
-#   #  Output:
-#   #   a data frame with the following columns:
-#   #       ID            unique ID for each spatial location   
-#   #       startDOY      day of year to start development     
-#   #       nGenerations  the number of generations within the year
-#   #       emergeDOY     adult emergence day of year 
-#   #       east_idx      index for eastings of the unique spatial locations in result
-#   #       north_idx     index for northings of the unique spatial location in result
-#   ########################################################################
-
-#   # Find start and end indicies for each location
-#   #@time idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
-#   # @time idx2 = [searchsortedlast(result.ID, loc) for loc in unique(result.ID)]
-#   idx1 = indexin(unique(result.ID), result.ID)
-#   idx2 = vcat(idx1[2:end] .- 1, length(result.ID))
-
-
-#   # Create data frame to hold results
-#   out_res = DataFrame(ID=result.ID[idx1],
-#     startDOY=doy,
-#     nGenerations=0.0,      # Must be Float because it can be fractional 
-#     emergeDOY=Vector{Union{Missing,Int32}}(missing, length(idx1)))
-
-#   out_res.north_idx = mod.(out_res.ID, 1000)
-#   out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
-
-#   allowmissing!(out_res, :nGenerations)
-
-#   # Set up starting DOY for each location
-#   startDOY = zeros(Union{Missing,Int32}, length(idx1)) .+ doy  # Start DOY for each location
-#   first_pass = true                                            # True for the first generation
-
-#   # Set startDOY to zero for a location if no more generations can be completed in the year
-#   # when all startDOY are zero then stop
-#   while any(startDOY .> 0)
-#     # Find index of result output that corresponds to desired day of year (ie doy>=result.DOY)
-#     # this assumes results are ordered by DOY for each location
-#     idx3 = [searchsortedfirst(result.DOY[idx1[i]:idx2[i]], startDOY[i]) - 1 + idx1[i] for i in eachindex(idx1)]
-
-#     # Find out if end of current developmental generation is in the results (i.e. occurs before data on next location)
-#     # idx2[i] is the last index for the present location
-#     # idx2[i]+1 is the first index of the next location   = idx1[i+1]
-#     development_complete = startDOY .> 0 .&& idx2 .+ 1 .> idx3
-
-#     # Find out if development happens within the first year
-#     if (idx3[end] == nrow(result) + 1)
-#       # If final idx3 gives no developement (i.e. idx3[end] is nrow+1) then set its within_a_year to false
-#       within_a_year = result.emergeDOY[idx3[1:end-1]] .<= 365   # Is the generation complete within the year?
-#       push!(within_a_year, false)
-#     else
-#       # Work out all values of within_a_year
-#       within_a_year = result.emergeDOY[idx3] .<= 365   # Is the generation complete within the year?
-#     end
-
-#     # Create booleans that will increment generation count
-#     full_generation = development_complete .& within_a_year
-#     partial_generation = development_complete .& .!within_a_year
-
-#     # Add on one full generation
-#     out_res.nGenerations[full_generation] .+= 1
-
-#     # Calculate end of year fraction of time towards next generation
-#     out_res.nGenerations[partial_generation] .+= (365 .- startDOY[partial_generation]) ./
-#                                                  (result.emergeDOY[idx3[partial_generation]] - startDOY[partial_generation])
-
-#     # If this is the first time through the loop, record the emergance day
-#     if first_pass
-#       # Only update adult emergence DOY if emergence is complete (but could take multiple years)   
-#       out_res.emergeDOY[development_complete] .= result.emergeDOY[idx3[development_complete]]
-#       first_pass = false
-#     end
-
-#     # Reset starting DOY to zero
-#     startDOY = zeros(Int32, length(idx1))
-
-#     # If a full generation completed within the year, update starting doy to be the
-#     # day after generation completed
-#     startDOY[full_generation] .= result.emergeDOY[idx3[full_generation]] .+ 1
-
-#     # Remove startDOY >= 365
-#     startDOY[startDOY.>=365] .= 0
-#   end
-
-#   # Set nGenerations to missing if no emergence occurs within the simulation
-#   out_res.nGenerations[ismissing.(out_res.emergeDOY)] .= missing
-
-#   return (out_res)
-# end
-
-
-
-
-
-# # ------------------------------------------------------------------------------------------
-
-# function create_doy_results(dates::Vector{Date}, adult_emerge::DataFrame)
-#   # Function to calculate number of generations per year, and first
-#   # day of adult emergence for specific starting days of year.
-#   # If emergence date exceeds simulation timeframe then set to missing
-#   #
-#   #   dates           a vector of dates when larval development begins
-#   #   run_params      a tuple of runtime parameters
-#   #   adult_emerge    data frame containing the results from the model
-#   #  
-#   #  Output:
-#   #   a data frame with the following columns:
-#   #       ID            unique ID for each spatial location  
-#   #       startDOY      starting DOY for larval development  
-#   #       startDate     starting date for larval development  
-#   #       nGenerations  number of generations in a year    
-#   #       emergeDOY     adult emergence day of year 
-#   #       emergeDate    adult emergence date 
-#   #       east_idx      index for eastings of the unique spatial locations in result
-#   #       north_idx     index for northings of the unique spatial location in result
-#   ########################################################################
-
-#   out = DataFrame()    # Initialise dataframe for outputs
-
-
-#   for d in eachindex(dates)
-#     # Produce results for a specific DOY
-#     result = extract_results(convert(Int32, dayofyear(dates[d])), adult_emerge)
-
-#     # Add in a column with starting dates and emergence dates rather than DOY
-#     result.startDate .= dates[d]
-
-#     # Initialise column with missing values
-#     result.emergeDate = Vector{Union{Missing,Date}}(missing, length(result.ID))
-
-#     # Find results with a non-zero emergence DOY
-#     idx = .!ismissing.(result.emergeDOY)
-#     # Calculate date of emergence from day of year
-#     result.emergeDate[idx] = Date(year(dates[d])) .+ Day.(result.emergeDOY[idx] .- 1)
-
-#     # Add these results to the other outputs
-#     append!(out, result)
-#   end
-
-#   return out
-# end
-
-
-
-
-# # ------------------------------------------------------------------------------------------
-
-
-
-# function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
-#   # Function to take results on a 1km grid an aggregate them to a 10km grid
-#   #
-#   # Arguments:
-#   #   grid              information about the spatial grid
-#   #   result_1km        results from the model on 1km grid
-#   #  
-#   #  Output:
-#   #   a data frame with the following columns:
-#   #       hectad            unique hectad grid reference
-#   #       east              easting of bottom left of hectad
-#   #       north             northing of bottom left of hectad
-#   #       startDOY          starting DOY for larval development  
-#   #       startDate         starting date for larval development  
-#   #       nGenerations_max  maximum number of generations in a year in hectad
-#   #       emergeDOY_min     minimum adult emergence day of year in a hectad
-#   #       emergeDate_min    minimum adult emergence date in a hectad
-#   ########################################################################
-
-#   # Add bottom left eastings and northings of a hectad into result_1km
-#   eastList = sort(unique(grid.east))
-#   northList = sort(unique(grid.north))
-#   result_1km.east_hectad = convert.(Int32, floor.(eastList[result_1km.east_idx] ./ 1e4) .* 1e4)
-#   result_1km.north_hectad = convert.(Int32, floor.(northList[result_1km.north_idx] ./ 1e4) .* 1e4)
-
-#   # Group data frame by location and then starting DOY/Date 
-#   df_group = groupby(result_1km, [:east_hectad, :north_hectad, :startDOY, :startDate])
-
-#   # Calculate worst case results within each hectad for nGenerations and emergeDOY
-#   # for each starting DOY. 
-#   # These worst case scenarios are not affected by locations where no emergence occurred
-#   df_agg = combine(df_group,
-#     :nGenerations => (x -> quantile(x, 1.0)) => :nGenerations_max,
-#     :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min)   # Max generations per hectad
-
-#   # df_emergeDOY = combine(df_group,
-#   #   :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min)         # Minimum emergence date
-
-#   # Add in columns with start and emergence dates
-#   df_agg.emergeDate_min = Vector{Union{Missing,Date}}(missing, nrow(df_agg))
-#   idx = df_agg.emergeDOY_min .> 0
-#   df_agg.emergeDate_min[idx] .= Date.(year.(df_agg.startDate[idx])) .+ Day.(floor.(df_agg.emergeDOY_min[idx]))
-
-
-#   # Create a code that corresponds to hectad in the grid data frame
-#   h_idx = [findfirst(grid.hectad .== h) for h in unique(grid.hectad)]
-#   h_nGen_idx = [findfirst(df_agg.east_hectad[i] .== floor.(grid.east[h_idx] ./ 1e4) .* 1e4 .&& df_agg.north_hectad[i] .== floor.(grid.north[h_idx] ./ 1e4) .* 1e4) for i in 1:nrow(df_agg)]
-#   # h_emergeDOY_idx = [findfirst(df_emergeDOY.east_hectad[i] .== floor.(grid.east[h_idx] ./ 1e4) .* 1e4 .&& df_emergeDOY.north_hectad[i] .== floor.(grid.north[h_idx] ./ 1e4) .* 1e4) for i in 1:nrow(df_emergeDOY)]
-
-#   # Add hectad code into both data frames
-#   insertcols!(df_agg, 1, :hectad => grid.hectad[h_idx[h_nGen_idx]], after=false)
-#   # insertcols!(df_emergeDOY, 1, :hectad => grid.hectad[h_idx[h_emergeDOY_idx]], after=false)
-
-
-#   # Combine these results into one data frame and include grid info
-#   # return innerjoin(df_nGen, df_emergeDOY,
-#   # on=[:hectad, :east_hectad, :north_hectad, :startDOY, :startDate])
-
-#   # Return final dataframe
-#   return df_agg
-
-# end
 
 
 # ================ End of Function Definitions ======================

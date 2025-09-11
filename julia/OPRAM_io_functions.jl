@@ -273,15 +273,16 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
     # Run model on past data
     run_params = (
       TRANSLATE_future=false,
-      saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
+      method = params["model"]["method"],          # The degree-day algotrithm to use
+      saveJLDFile=params["runtime"]["save2file"],  # If true save the full result to a JLD2 file
       save1year=params["runtime"]["save1year"],    # If true save only the first year's results
-      years=yearVec, # Years to run model
-      maxYears=params["model"]["maxYears"], # Maximum number of years to complete insect development
+      years=yearVec,                               # Years to run model
+      maxYears=params["model"]["maxYears"],        # Maximum number of years to complete insect development
       lastMeteoYear=params["model"]["lastMeteoYear"], # Maximum number of years to complete insect development
-      country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
-      thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-      gridFile=params["inputData"]["gridFile"],  # File containing a 1km grid of lats and longs over Ireland 
-      countyFile=params["inputData"]["countyDefs"],  # File containing names and codes of counties
+      country=params["model"]["country"],          # Can be "IE", "NI" or "AllIreland"
+      thinFactor=params["model"]["thinFactor"],    # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+      gridFile=params["inputData"]["gridFile"],    # File containing a 1km grid of lats and longs over Ireland 
+      countyFile=params["inputData"]["countyDefs"],# File containing names and codes of counties
       thirty_years=string(params["model"]["thirty_years"][1]) *
                    "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
 
@@ -291,15 +292,16 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
     # Run model on future data
     run_params = (
       TRANSLATE_future=true,
+      method = params["model"]["method"],         # The degree-day algotrithm to use
       saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
-      save1year=params["runtime"]["save1year"],    # If true save only the first year's results
+      save1year=params["runtime"]["save1year"],   # If true save only the first year's results
       futurePeriod=params["model"]["futurePeriod"], # Years to run model
       rcp=params["model"]["rcp"],                 # Future RCP scenario
       nReps=params["model"]["nReps"],             # Number of replicate climate scenarios
       maxYears=params["model"]["maxYears"],       # Maximum number of years to complete insect development
       country=params["model"]["country"],         # Can be "IE", "NI" or "AllIreland"
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-      gridFile=params["inputData"]["gridFile"],  # File containing a 1km grid of lats and longs over Ireland 
+      gridFile=params["inputData"]["gridFile"],   # File containing a 1km grid of lats and longs over Ireland 
       countyFile=params["inputData"]["countyDefs"],  # File containing names and codes of counties
       thirty_years=string(params["model"]["thirty_years"][1]) *
                    "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
@@ -492,6 +494,127 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, r
     return Tavg[:, sort_idx], DOY_IE, ID[sort_idx]
   end
 end
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
+
+function read_meteo2(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, run_params::NamedTuple)
+  # Import multiple years of daily min and max temperature for Republic of Ireland and 
+  # Northern Ireland (and maybe UK)
+  #
+  # Arguments:
+  #   meteoYear     the starting year to be imported
+  #   meteoDirs[1]  the directory containing the data for the Republic of Ireland 
+  #                  (the daily maximum/minimum temps are assumed to be 
+  #                   in folders maxtemp_grids and mintemp_grids)
+  #   meteoDirs[2]  the directory containing the data for Northern Ireland 
+  #                  (the daily maximum/minimum temps are assumed to be 
+  #                   in folders NI_TX_daily_grid and NI_TN_daily_grid)
+  #   grid_thin     the grid of locations to use
+  #   run_params    parameters to define imported data. Use parameters are:
+  #                     maxYears      the maximum number of years to be imported
+  #                     lastMeteoYear the last year of meteo data available (default=2023)
+  #                     country       string defining the country to import
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of minimum daily temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:    Matrix of maximum daily temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Third entry:     A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Fourth entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
+  #
+  # *************************************************************
+
+
+  # An array containing the years to be imported
+  # Make sure it is no greater than maxMeteoYear
+  years = min.(collect(meteoYear:meteoYear+run_params.maxYears-1), run_params.lastMeteoYear)
+
+
+
+  # ====================================================================
+  # Import the weather data
+
+  # ROI data
+  if in(run_params.country, ["IE", "AllIreland"]) & ! isnothing(meteoDirs[1])
+    if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[1]))) > 0
+      # Check for jld2 files and import them
+      Tmin_IE, Tmax_IE, DOY_IE, ID_IE = read_JLD2_meteo2(meteoDirs[1], years, grid_thin.ID, "IE")
+    else
+      # Otherwise error
+      error("No JLD2 meteo files found for IE")
+    end
+  end
+
+  # Northern Ireland or UK data
+  if in(run_params.country, ["NI", "AllIreland"]) & ! isnothing(meteoDirs[2])
+    if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
+      # Check for jld2 files and import them
+      Tmin_NI, Tmax_NI, DOY_NI, ID_NI = read_JLD2_meteo2(meteoDirs[2], years, grid_thin.ID, "NI")
+    else
+      # Otherwise error
+      error("No JLD2 meteo files found for NI")
+    end
+  elseif in(run_params.country, ["UK", "EN", "SC", "WL"]) & ! isnothing(meteoDirs[2])
+    if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
+      # Check for jld2 files and import them
+      Tmin_NI, Tmax_NI, DOY_NI, ID_NI = read_JLD2_meteo2(meteoDirs[2], years, grid_thin.ID, run_params.country)
+    end
+  end
+
+
+  # =========================================================================================
+  # Sort and clean the data
+
+  if isnothing(meteoDirs[2])
+    # Order meteo data by location ID in grid_thin
+    sort_idx = sortperm(ID_IE)
+
+    # Return sorted data
+    return Tmin_IE[:, sort_idx], Tmax_IE[:, sort_idx], DOY_IE, ID_IE[sort_idx]
+
+  elseif isnothing(meteoDirs[1])
+    # Order meteo data by location ID in grid_thin
+    sort_idx = sortperm(ID_NI)
+
+    # Return sorted data
+    return Tmin_NI[:, sort_idx], Tmax_NI[:, sort_idx], DOY_NI, ID_NI[sort_idx]
+
+  elseif isnothing(meteoDirs[1]) & isnothing(meteoDirs[2])
+    @error "No meteo directories have been given"
+
+  else
+    # Find duplicate locations and remove NI data
+    NI_keep = [isdisjoint(ID_NI[i], ID_IE) for i in eachindex(ID_NI)]
+
+    # Combine meteo data from NI and IE
+    Tmin = hcat(Tmin_IE, Tmin_NI[:, NI_keep])
+    Tmax = hcat(Tmax_IE, Tmax_NI[:, NI_keep])
+
+    # Combine location data 
+    ID = vcat(ID_IE, ID_NI[NI_keep])
+
+    # Check days of year are the same for both data sets
+    if (DOY_IE != DOY_NI)
+      @error "IE and NI meteo files have different number of days!"
+    end
+
+    # Order meteo data by location ID in grid_thin
+    sort_idx = sortperm(ID)
+
+    # Return sorted data
+    return Tmin[:, sort_idx], Tmax[:, sort_idx], DOY_IE, ID[sort_idx]
+  end
+end
+
 
 
 # ------------------------------------------------------------------------------------------
@@ -898,8 +1021,9 @@ function read_netCDF_meteoUK(meteoDir::String, grid::DataFrame, years)
   # Read one meteo file to find locations information and calculate a filter
   ncFile = NCDataset(joinpath(meteoDir, "maxtemp", string(years[1]), "01", "01.nc"), "r")
 
-  east_list = ncFile["projection_x_coordinate"][:]
-  north_list = ncFile["projection_y_coordinate"][:]
+  # Extract coordinates (remove 500m to put coordinate in bottom left of square)
+  east_list = ncFile["projection_x_coordinate"][:] .- 500.0
+  north_list = ncFile["projection_y_coordinate"][:] .- 500.0
 
   # Find indices of data to extract
   idx = [findfirst(grid.east[i] .== east_list) +
