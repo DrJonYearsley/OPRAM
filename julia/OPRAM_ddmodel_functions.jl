@@ -494,9 +494,20 @@ function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::Data
   # *************************************************************
 
 
-  # Calculate days where development updates (Tavg>baseline)
-  gdd_update = Tavg .> params.base_temperature
-
+  # Calculate days where development updates (Tavg>baseline or Tmin>baseline)
+  # And specify algorithm to calculate degree days
+  if params.degreeday == "average"
+    gdd_update = Tmin .+ Tmax .> 2 * params.base_temperature
+    dd_calculate = average_degreeday
+  elseif params.degreeday == "sine"
+    gdd_update = Tmin .> params.base_temperature
+    dd_calculate = triangle_degreeday
+  elseif params.degreeday == "triangle"
+    gdd_update = Tmin .> params.base_temperature
+    dd_calculate = sine_degreeday
+  else
+    error("Degree day method not recognised. Use 'average', 'sine' or 'triangle'")
+  end
 
   # =========================================================
   # =========================================================
@@ -504,7 +515,7 @@ function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::Data
   if !ismissing(params.diapause_daylength)
     @info "        Diapause: Removing GDD for days when insect is in diapause"
     # Create overwinteringBool
-    overwinterBool = falses(size(Tavg))  # True if overwintering 
+    overwinterBool = falses(size(gdd_update))  # True if overwintering 
 
     # Calculate whether daylength allows diapause for each DOY and latitude
     # Returns a matrix where rows are unique latitudes and columns are days of year
@@ -524,13 +535,14 @@ function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::Data
         overwinterBool[DOYidx, locidx] .= true
       end
     else # diapause determined by photoperiod AND temp
+      Tavg2 = Tmin .+ Tmax
       for i in eachindex(uniqueDiapause)
         # Is DOY past the diapause threshold DOY?
         locidx = findall(x -> x == uniqueDiapause[i], diapauseDOY)
         DOYidx = findall(x -> x >= uniqueDiapause[i], DOY)
 
         # Is Tavg past the diapause threshold temperature?
-        overwinterBool[DOYidx, locidx] = Tavg[DOYidx, locidx] .<= params.diapause_temperature
+        overwinterBool[DOYidx, locidx] = Tavg2[DOYidx, locidx] .<= 2.0 * params.diapause_temperature
       end
     end
 
@@ -546,7 +558,7 @@ function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::Data
   idx = findall(gdd_update)    # Gives row, column coords of non-zero elements in gdd_update
 
   # Calculate GDD as a shared array
-  GDDsh = SharedArray{Float32,1}(Tavg[gdd_update] .- params.base_temperature)
+  GDDsh = SharedArray{Float32,1}(dd_calculate(Tmin[gdd_update], Tmax[gdd_update], params.base_temperature))
 
 
   # Find indices separatng different locations
@@ -569,6 +581,9 @@ function average_degreeday(Tmin, Tmax, T_baseline)
   # Calculate degree day from daily max and min temperatures using the daily average method
   # This method tends to underestimate degree-days
   # 
+  # Note: the method assumes that Tavg = (Tmin + Tmax)/2 > T_baseline
+  # so there will always be some non-zero degree-days
+  #
   # Arguments:
   #   Tmin         minimum daily temperature
   #   Tmax         maximum daily temperature
@@ -576,18 +591,12 @@ function average_degreeday(Tmin, Tmax, T_baseline)
   #
   # Output:
   #   DD           degree days
-  #   DOY          the day of year corresponding to DD
   #
   #
   # ========================================================================================
 
   # Calculate average temp minus base temp
-  DD = (Tmax .+ Tmin) ./ 2.0 - T_baseline
-
-  # Find temperatures which give a non-zero degree day
-  gdd_update = DD .> 0
-
-  return gddupdate, Tdiff[gdd_update]
+  return (Tmax .+ Tmin) ./ 2.0 - T_baseline
 
 end
 
@@ -596,7 +605,12 @@ end
 
 function triangle_degreeday(Tmin, Tmax, T_baseline)
   # Calculate degree day from daily max and min temperatures using the single traingle method
+  # See https://ipm.ucanr.edu/WEATHER/ddconcepts.html for some background
+  # Or https://mint.ippc.orst.edu/CalcMethods.html
   # 
+  # 
+  # Note: the method assumes that Tmax > T_baseline, so there will always be some non-zero degree-days
+  #
   # Arguments:
   #   Tmin         minimum daily temperature
   #   Tmax         maximum daily temperature
@@ -604,10 +618,18 @@ function triangle_degreeday(Tmin, Tmax, T_baseline)
   #
   # Output:
   #   DD           degree days
-  #   DOY          the day of year corresponding to DD
   #
   #
   # ========================================================================================
+
+  # Calculate degree days according to the single triangle method
+  DD = (Tmax .+ Tmin) / 2.0 - T_baseline
+
+  # Adjust for cases where Tmin < T_baseline
+  idx = Tmin .< T_baseline
+  DD[idx] = ((Tmax[idx] - T_baseline) .^ 2) ./ (2.0 * (Tmax[idx] - Tmin[idx]))
+
+  return DD
 
 end
 
@@ -615,9 +637,14 @@ end
 
 # ------------------------------------------------------------------------------------------
 
-function sine_degreeday(Tmin, Tmax, T_baseline)
+function sine_degreeday(Tmin::Vector{Float32}, Tmax::Vector{Float32}, T_baseline::Float32)
   # Calculate degree day from daily max and min temperatures using the single sine method
   # 
+  # See https://ipm.ucanr.edu/WEATHER/ddconcepts.html for some background
+  # Or https://mint.ippc.orst.edu/CalcMethods.html
+  #
+  # Code tested against https://ipm.ucanr.edu/weather/degree-days/#gsc.tab=0
+  #
   # Arguments:
   #   Tmin         minimum daily temperature
   #   Tmax         maximum daily temperature
@@ -625,12 +652,25 @@ function sine_degreeday(Tmin, Tmax, T_baseline)
   #
   # Output:
   #   DD           degree days
-  #   DOY          the day of year corresponding to DD
   #
   #
   # ========================================================================================
 
+  # Calculate degree days according to the single sine method
+  DD = T_baseline .- (Tmax .+ Tmin) .* 0.5  
 
+  # Adjust for cases where Tmin < T_baseline
+  idx = Tmin .< T_baseline
+
+  # Calculate time temperature equals T_baseline
+  if any(idx)
+    deltaT = (Tmax[idx] .- Tmin[idx]).*0.5
+    t_baseline = acos.( DD[idx] ./ deltaT)
+
+    DD[idx] =  2.0 .* deltaT .* sin.(t_baseline) .-  t_baseline .* DD[idx] / pi
+  end
+
+  return DD
 
 end
 
