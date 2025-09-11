@@ -10,8 +10,8 @@ using DataFrames;
 include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 
 
-years = collect(2024)    # The years to import
-gridFile = "/Users/jon/git_repos/OPRAM/data/UK_grid_locations.csv"  # File containing a 1km grid of lats and longs over Ireland 
+years = collect(2023:2024)    # The years to import
+gridFile = joinpath(homedir(), "git_repos/OPRAM/data/UK_grid_locations.csv")  # File containing a 1km grid of lats and longs over Ireland 
 
 
 # using CSV   
@@ -27,7 +27,7 @@ gridFile = "/Users/jon/git_repos/OPRAM/data/UK_grid_locations.csv"  # File conta
 if isdir("//home//jon//Desktop//OPRAM")
     outDir = "//home//jon//DATA//OPRAM//ClimateUK_JLD2//"
     dataDir = "//home//jon//DATA//OPRAM//"
-    meteoDir = "//home//jon//DATA//OPRAM//UKTemp2024//NCIC//"
+    meteoDir = "//home//jon//DATA//OPRAM//UKTemp2024//"
 
 elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM")
     outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//ClimateUK_JLD2//"
