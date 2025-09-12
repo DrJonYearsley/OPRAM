@@ -425,7 +425,7 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, r
   # Import the weather data
 
   # ROI data
-  if in(run_params.country, ["IE", "AllIreland"]) & ! isnothing(meteoDirs[1])
+  if in(run_params.country, ["IE", "AllIreland"]) & !isnothing(meteoDirs[1])
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[1]))) > 0
       # Check for jld2 files and import them
       Tavg_IE, DOY_IE, ID_IE = read_JLD2_meteo(meteoDirs[1], years, grid_thin.ID, "IE")
@@ -436,7 +436,7 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, r
   end
 
   # Northern Ireland or UK data
-  if in(run_params.country, ["NI", "AllIreland"]) & ! isnothing(meteoDirs[2])
+  if in(run_params.country, ["NI", "AllIreland"]) & !isnothing(meteoDirs[2])
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
       # Check for jld2 files and import them
       Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, "NI")
@@ -724,7 +724,7 @@ function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector
   DOYVec = Vector{Array{Int16,1}}(undef, length(years))
   IDVec = Vector{Array{Int64,1}}(undef, length(years))
 
-  # CHeck to see if we're importing UK met office data or Met Eireann data
+  # Check to see if we're importing UK met office data or Met Eireann data
   if any(occursin.("meteoUK_Tminmax_" * string(years[1]), readdir(meteoDir)))
     countryStr = "UK"
   else
@@ -748,8 +748,9 @@ function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector
 
   # Check all ID's are equivalent if importing NI and IE data
   if length(IDVec) > 1
-    if any(IDVec[1] .!= IDVec[2]) || any(IDVec[2] .!= IDVec[3])
+    if any(map(x -> !issetequal(IDVec[1],x), IDVec))
       @error "Locations in different meteo files are not the same"
+      println(map(x -> setdiff(IDVec[1],x), IDVec))
     end
   end
 

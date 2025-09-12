@@ -34,10 +34,10 @@ include("OPRAM_processing_functions.jl");
 
 # Model parameters are stored in a TOML file https://toml.io/en/
 if length(ARGS) == 1
-    nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], true)
+    nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], false)
 
 elseif length(ARGS) == 0 & isfile("parameters_test.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("parameters_test.toml", true)
+    nNodes, run_params, species_setup, paths = import_parameters("parameters_UK_test.toml", false)
 
 else
     @error "No parameter file given"
@@ -92,25 +92,26 @@ for s in eachindex(species_params)
         else
             inFiles[y] = joinpath(paths.resultsDir, speciesName[1], inFile[1])
         end
+
+        # Import the data from the jld2 files
+        df_1km = read_OPRAM_JLD2(inFiles[y], run_params.years, grid)
+
+        # Retain only start date of 1st Jan
+        filter!(row -> row.startDOY == 1, df_1km)
+
+        # =========================================================
+        # Write result to CSV file
+        @info "Writing 1km results to CSV files"
+        # Add eastings and northings into the 1km data frames (copy the data frames so we can round before saving)
+        out_1km = rightjoin(grid[:, [:ID, :east, :north]], df_1km, on=[:ID])
+
+
+        # Wrie CSV file
+        fileout2 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_" * "01_Jan" * "_" *
+                                                          string(run_params.years[y]) *
+                                                          "_" * string(run_params.thinFactor) * "km.csv")
+        CSV.write(fileout2, out_1km, missingstring="NA")
     end
-
-    # Import the data from the jld2 files
-    df_1km = read_OPRAM_JLD2(inFiles, run_params.years, grid)
-
-    # Retain only start date of 1st Jan
-    filter!(row -> row.startDOY == 1, df_1km)
-
-    # =========================================================
-    # Write result to CSV file
-    @info "Writing 1km results to CSV files"
-    # Add eastings and northings into the 1km data frames (copy the data frames so we can round before saving)
-    out_1km = rightjoin(grid[:, [:ID, :east, :north]], df_1km, on=[:ID])
-
-
-    # Wrie CSV file
-    fileout2 = joinpath(paths.outDir, speciesName[1], speciesName[1] * "_" * "01_Jan" * "_" *
-                                                      string(run_params.years[y]) *
-                                                      "_" * string(run_params.thinFactor) * "km.csv")
-    CSV.write(fileout2, out_1km, missingstring="NA")
 end
+
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
