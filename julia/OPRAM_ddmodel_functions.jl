@@ -13,7 +13,7 @@
 #                        GDD::SharedVector{Float32}, threshold::Float32)
 # function emergence(cumGDD::Vector{Float32}, cumGDD_doy::Vector{Int16}, threshold::Float32)
 # function calculate_GDD(Tavg::Matrix{Float32}, grid::DataFrame, DOY::Vector{Int16}, params::parameters)
-# function calculate_GDD2(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataFrame, DOY::Vector{Int16}, params::parameters)
+# function calculate_GDD(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataFrame, DOY::Vector{Int16}, params::parameters)
 # function save_to_csv(dates::Vector{Date}, adult_emerge::DataFrame, grid::DataFrame,
 #                        outPrefix::String, paths::NamedTuple, run_params::NamedTuple)
 # function cleanup_results(result::SharedMatrix{Int16}, idx::Vector{CartesianIndex{2}},
@@ -96,7 +96,7 @@ function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::Na
 
         @info "        Calculate GDD"
         # GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
-        GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tmin, Tmax, grid_final, DOY, species_params[s], run_params.method)
+        GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tmin, Tmax, grid_final, DOY, species_params[s], "average")
 
         # Calculate model at each location
         @info "        Calculating adult emergence dates"
@@ -315,8 +315,11 @@ function average_degreeday(Tmin, Tmax, T_baseline)
   #
   # ========================================================================================
 
+  DD = (Tmax .+ Tmin) ./ 2.0 .- T_baseline
+  DD[DD.<0] .= 0.0
+
   # Calculate average temp minus base temp
-  return (Tmax .+ Tmin) ./ 2.0 .- T_baseline
+  return DD
 
 end
 
@@ -345,7 +348,7 @@ function triangle_degreeday(Tmin, Tmax, T_baseline)
   # ========================================================================================
 
   # Calculate degree days according to the single triangle method
-  DD = (Tmax .+ Tmin) / 2.0 .- T_baseline
+  DD = (Tmax .+ Tmin) .* 0.5 .- T_baseline
 
   # Adjust for cases where Tmin < T_baseline
   idx = Tmin .< T_baseline
@@ -694,7 +697,7 @@ function calculate_GDD(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataF
         overwinterBool[DOYidx, locidx] .= true
       end
     else # diapause determined by photoperiod AND temp
-      Tavg2 = Tmin .+ Tmax
+      Tavg2 = Tmin .+ Tmax  # Twice the average daily temperature
       for i in eachindex(uniqueDiapause)
         # Is DOY past the diapause threshold DOY?
         locidx = findall(x -> x == uniqueDiapause[i], diapauseDOY)

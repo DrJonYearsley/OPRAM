@@ -37,7 +37,7 @@ if length(ARGS) == 1
     nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], false)
 
 elseif length(ARGS) == 0 & isfile("parameters_test.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("parameters_UK_test.toml", false)
+    nNodes, run_params, species_setup, paths = import_parameters("parameters_NI_test.toml", false)
 
 else
     @error "No parameter file given"

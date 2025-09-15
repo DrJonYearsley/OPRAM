@@ -1,7 +1,8 @@
 # Degree Day Model parameters in TOML format
 # This parameter file is used by OPRAM_main_program.jl
+# Run OPRAM code on Met Eireann data for NI
 
-title = "Compare OPRAM model with UK model results for NI"
+title = "Test of degree day model"
 
 [runtime]
 nNodes = 3           # Number of compute nodes to use
@@ -11,22 +12,22 @@ save1year = true     # if true save first year's results, otherwise
 
 
 [paths]   # All paths are relative to the user's home directory
-output =  "/users/jon/OPRAM//resultsUK_triangle"      # Folder to save model output
-results = "/users/jon/OPRAM//resultsUK_triangle"      # Folder for importing model results
-data = "/users/jon"                     # Folder for other model data
-meteoIE = "nothing"    # Folder containing meteo data for ROI
-meteoNI = "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/data/ClimateUK_JLD2"                     # Folder containing meteo data for NI
+output =  "/users/jon/OPRAM/resultsNI_triangle"      # Folder to save model output
+results = "/users/jon/OPRAM/resultsNI_triangle"      # Folder for importing model results
+data = "/Users/jon"            # Folder for other model data
+meteoIE = "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/data/Climate_JLD2"             # Folder containing meteo data for ROI
+meteoNI =  "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/data/Climate_JLD2"   # Folder containing meteo data for NI
 
 [inputData]   # Input data on the model grid and species params
 speciesFile = "git_repos/OPRAM/data/species_parameters.csv"
-gridFile = "git_repos/OPRAM/data/UK_grid_locations.csv"
+gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 countyDefs = "git_repos/OPRAM/data/granite_county_defs.csv"
 
 [model]     # Parameters to define the model
-simYears = [2023,2024]           # Years to run model
-thirty_years = [1991, 2020]                # 30yr period to average
+simYears = [2023]           # Years to run model
+thirty_years = [2023, 2023]                # 30yr period to average
 maxYears = 2         # Maximum number of years to complete insect development
-lastMeteoYear = 2024  # The last year of meteo data
+lastMeteoYear = 2023  # The last year of meteo data (max for NI is 2023)
 country = "NI"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
 method = "triangle"   # degree-day algorithm ("sine","triangle","average")
@@ -36,4 +37,3 @@ method = "triangle"   # degree-day algorithm ("sine","triangle","average")
 # This grouping only affects the programs OPRAM_calculate_average and OPRAM_calculate anomaly
 speciesList = ["Agrilus anxius"]
 
-        
