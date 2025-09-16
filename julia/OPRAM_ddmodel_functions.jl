@@ -96,7 +96,7 @@ function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::Na
 
         @info "        Calculate GDD"
         # GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
-        GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tmin, Tmax, grid_final, DOY, species_params[s], "average")
+        GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tmin, Tmax, grid_final, DOY, species_params[s], run_params.method)
 
         # Calculate model at each location
         @info "        Calculating adult emergence dates"
@@ -304,6 +304,8 @@ function average_degreeday(Tmin, Tmax, T_baseline)
   # Note: the method assumes that Tavg = (Tmin + Tmax)/2 > T_baseline
   # so there will always be some non-zero degree-days
   #
+  # Code tested successfully against https://uspest.org/cgi-bin/ddmodel.us
+  #
   # Arguments:
   #   Tmin         minimum daily temperature
   #   Tmax         maximum daily temperature
@@ -332,6 +334,7 @@ function triangle_degreeday(Tmin, Tmax, T_baseline)
   # Or https://mint.ippc.orst.edu/CalcMethods.html
   # 
   # Code tested successfully against https://ipm.ucanr.edu/weather/degree-days/#gsc.tab=0
+  # and https://uspest.org/cgi-bin/ddmodel.us
   #
   # 
   # Note: the method assumes that Tmax > T_baseline, so there will always be some non-zero degree-days
@@ -349,6 +352,7 @@ function triangle_degreeday(Tmin, Tmax, T_baseline)
 
   # Calculate degree days according to the single triangle method
   DD = (Tmax .+ Tmin) .* 0.5 .- T_baseline
+
 
   # Adjust for cases where Tmin < T_baseline
   idx = Tmin .< T_baseline
@@ -373,6 +377,7 @@ function sine_degreeday(Tmin, Tmax, T_baseline)
   # Or https://mint.ippc.orst.edu/CalcMethods.html
   #
   # Code tested successfully against https://ipm.ucanr.edu/weather/degree-days/#gsc.tab=0
+  # and https://uspest.org/cgi-bin/ddmodel.us
   #
   # Arguments:
   #   Tmin         minimum daily temperature
@@ -396,9 +401,13 @@ function sine_degreeday(Tmin, Tmax, T_baseline)
   # Calculate time temperature equals T_baseline
   if any(idx)
     deltaT = (Tmax[idx] .- Tmin[idx]).*0.5
-    t_baseline = acos.( -1.0 .* DD[idx] ./ deltaT) # this is 2*pi*time
+    x = -DD[idx] ./ deltaT
+    # t_baseline = acos.( x) # this is 2*pi*time
 
-    DD[idx] =  (deltaT .* sin.(t_baseline) .+  t_baseline .* DD[idx]) ./ pi
+    # DD[idx] =  (deltaT .* sin.(t_baseline) .+  t_baseline .* DD[idx]) ./ pi
+
+    DD[idx] =  ((deltaT.^2.0 - DD[idx].^2.0).^0.5 .+  acos.(x) .* DD[idx]) ./ pi
+
   end
 
   return DD
@@ -659,13 +668,16 @@ function calculate_GDD(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataF
   # Calculate days where development updates (Tavg>baseline or Tmin>baseline)
   # And specify algorithm to calculate degree days
   if method == "average"
+    @info "        Using average method"
     gdd_update = Tmin .+ Tmax .> 2 * params.base_temperature
     dd_calculate = average_degreeday
   elseif method == "sine"
-    gdd_update = Tmin .> params.base_temperature
+    @info "        Using single sine method"
+    gdd_update = Tmax .> params.base_temperature
     dd_calculate = triangle_degreeday
   elseif method == "triangle"
-    gdd_update = Tmin .> params.base_temperature
+    @info "        Using single triangle method"
+    gdd_update = Tmax .> params.base_temperature
     dd_calculate = sine_degreeday
   else
     error("Degree day method not recognised. Use 'average', 'sine' or 'triangle'")

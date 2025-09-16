@@ -1,3 +1,5 @@
+#!//opt/homebrew/bin/julia -p 3
+#
 # Use OPRAM model results to calculate dat of emergence with start date of 1st Jan
 
 
@@ -36,8 +38,8 @@ include("OPRAM_processing_functions.jl");
 if length(ARGS) == 1
     nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], false)
 
-elseif length(ARGS) == 0 & isfile("parameters_test.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("parameters_NI_test.toml", false)
+elseif length(ARGS) == 0 & isfile("parameters.toml")
+    nNodes, run_params, species_setup, paths = import_parameters("parameters.toml", false)
 
 else
     @error "No parameter file given"
