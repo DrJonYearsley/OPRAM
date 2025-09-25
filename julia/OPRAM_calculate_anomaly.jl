@@ -160,7 +160,7 @@ for s in eachindex(species_params)
 
             for i in eachindex(run_params.rcp)
                 filename = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country *
-                                                "_rcp" * run_params.rcp[i] * "_" * run_params.futurePeriod[j] * "_1km.jld2", x),
+                                                "_rcp" * run_params.rcp[i] * "_" * run_params.futurePeriod[j] * "_1km_" * run_params.method * ".jld2", x),
                     readdir(joinpath(paths.resultsDir, speciesName[1])))
 
                 if length(filename) > 1
@@ -176,7 +176,7 @@ for s in eachindex(species_params)
 
         # Create vector of files to import for past climates
         for y in eachindex(run_params.years)
-            filename = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
+            filename = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km_" * run_params.method * ".jld2", x),
                 readdir(joinpath(paths.resultsDir, speciesName[1])))
 
             if length(filename) > 1
@@ -194,7 +194,7 @@ for s in eachindex(species_params)
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     # Import the averaged data
     aggFile = joinpath(paths.resultsDir, speciesName[1], "average_" * speciesName[1] * "_" *
-                                                         run_params.thirty_years * "_1km.csv")
+                                                         run_params.thirty_years * "_1km_" * run_params.method * ".csv")
     d_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
 
 
@@ -220,8 +220,8 @@ for s in eachindex(species_params)
 
             # Calculate average over all replicates
             df_1km = combine(df_group,
-                :nGenerations => (x -> mean(x)) => :nGenerations,          # Mean generations
-                :emergeDOY => (x -> mean(x)) => :emergeDOY)                # Mean emergence DOY
+                :nGenerations => (x -> if sum(.!isa.(x,Missing))>0 mean(skipmissing(x)) else missing end) => :nGenerations, # Mean generations
+                :emergeDOY => (x -> if sum(.!isa.(x,Missing))>0 mean(skipmissing(x)) else missing end) => :emergeDOY)                # Mean emergence DOY
 
             df_1km.startDate = Date.(yearVec[f], df_1km.startMonth, 1)
 

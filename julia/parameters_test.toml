@@ -14,7 +14,7 @@ save1year = true     # if true save first year's results, otherwise
 output =  "OPRAM//results_test"      # Folder to save model output
 results = "OPRAM//results_test"      # Folder for importing model results
 data = "/Users/jon"            # Folder for other model data
-meteoIE = "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/data/Climate_JLD2"             # Folder containing meteo data for ROI
+meteoIE = "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/data/Climate_JLD2"    # Folder containing meteo data for ROI
 meteoNI =  "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/data/Climate_JLD2"   # Folder containing meteo data for NI
 
 [inputData]   # Input data on the model grid and species params
@@ -23,15 +23,18 @@ gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 countyDefs = "git_repos/OPRAM/data/granite_county_defs.csv"
 
 [model]     # Parameters to define the model
-simYears = [2023]           # Years to run model
-thirty_years = [2023, 2023]                # 30yr period to average
+simYears = [1991,1992,1993,1994,1995,1996,1997,1998,1999,2000,
+            2001,2002,2003,2004,2005,2006,2007,2008,2009,2010,
+            2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,
+            2021,2022,2023,2024]           # Years to run model
+thirty_years = [1991, 2020]                # 30yr period to average
 maxYears = 4         # Maximum number of years to complete insect development
-lastMeteoYear = 2023  # The last year of meteo data (max for NI is 2023)
-country = "AllIreland"       # Can be "IE", "NI" or "AllIreland"
+lastMeteoYear = 2024  # The last year of meteo data (max for NI is 2023)
+country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-
+method = "triangle"   # degree-day algorithm ("sine","triangle","average")
 
 # List species to simulate. Species with several life stages are grouped together. 
 # This grouping only affects the programs OPRAM_calculate_average and OPRAM_calculate anomaly
-speciesList = ["Agrilus anxius"]
+speciesList = ["halyomorpha"]
 

@@ -273,7 +273,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
     # Run model on past data
     run_params = (
       TRANSLATE_future=false,
-      method = params["model"]["method"],          # The degree-day algotrithm to use
+      method=params["model"]["method"],          # The degree-day algotrithm to use
       saveJLDFile=params["runtime"]["save2file"],  # If true save the full result to a JLD2 file
       save1year=params["runtime"]["save1year"],    # If true save only the first year's results
       years=yearVec,                               # Years to run model
@@ -292,7 +292,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
     # Run model on future data
     run_params = (
       TRANSLATE_future=true,
-      method = params["model"]["method"],         # The degree-day algotrithm to use
+      method=params["model"]["method"],         # The degree-day algotrithm to use
       saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
       save1year=params["runtime"]["save1year"],   # If true save only the first year's results
       futurePeriod=params["model"]["futurePeriod"], # Years to run model
@@ -444,7 +444,7 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, r
       # Otherwise import csv files
       Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDirs[2], grid_thin, years)
     end
-  elseif in(run_params.country, ["UK", "EN", "SC", "WL"]) & ! isnothing(meteoDirs[2])
+  elseif in(run_params.country, ["UK", "EN", "SC", "WL"]) & !isnothing(meteoDirs[2])
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
       # Check for jld2 files and import them
       Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, run_params.country)
@@ -544,7 +544,7 @@ function read_meteo2(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, 
   # Import the weather data
 
   # ROI data
-  if in(run_params.country, ["IE", "AllIreland"]) & ! isnothing(meteoDirs[1])
+  if in(run_params.country, ["IE", "AllIreland"]) & !isnothing(meteoDirs[1])
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[1]))) > 0
       # Check for jld2 files and import them
       Tmin_IE, Tmax_IE, DOY_IE, ID_IE = read_JLD2_meteo2(meteoDirs[1], years, grid_thin.ID, "IE")
@@ -555,7 +555,7 @@ function read_meteo2(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, 
   end
 
   # Northern Ireland or UK data
-  if in(run_params.country, ["NI", "AllIreland"]) & ! isnothing(meteoDirs[2])
+  if in(run_params.country, ["NI", "AllIreland"]) & !isnothing(meteoDirs[2])
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
       # Check for jld2 files and import them
       Tmin_NI, Tmax_NI, DOY_NI, ID_NI = read_JLD2_meteo2(meteoDirs[2], years, grid_thin.ID, "NI")
@@ -563,7 +563,7 @@ function read_meteo2(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, 
       # Otherwise error
       error("No JLD2 meteo files found for NI")
     end
-  elseif in(run_params.country, ["UK", "EN", "SC", "WL"]) & ! isnothing(meteoDirs[2])
+  elseif in(run_params.country, ["UK", "EN", "SC", "WL"]) & !isnothing(meteoDirs[2])
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
       # Check for jld2 files and import them
       Tmin_NI, Tmax_NI, DOY_NI, ID_NI = read_JLD2_meteo2(meteoDirs[2], years, grid_thin.ID, run_params.country)
@@ -619,8 +619,8 @@ end
 
 # ------------------------------------------------------------------------------------------
 
-function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, 
-                          country::String)
+function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64},
+  country::String)
   # Import multiple years of daily average temperature from a jld2 file 
   # for Republic of Ireland and create the daily average temp, and 
   # the ID, eastings and northings of spatial locations
@@ -693,8 +693,8 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, 
-                          country::String)
+function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64},
+  country::String)
   # Import multiple years of daily min and max temperature from a jld2 file 
   # and create the daily min/max temp, the ID, eastings and northings of spatial locations
   #
@@ -748,9 +748,9 @@ function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector
 
   # Check all ID's are equivalent if importing NI and IE data
   if length(IDVec) > 1
-    if any(map(x -> !issetequal(IDVec[1],x), IDVec))
+    if any(map(x -> !issetequal(IDVec[1], x), IDVec))
       @error "Locations in different meteo files are not the same"
-      println(map(x -> setdiff(IDVec[1],x), IDVec))
+      println(map(x -> setdiff(IDVec[1], x), IDVec))
     end
   end
 
@@ -1412,7 +1412,7 @@ end
 
 
 function save_OPRAM_1km_CSV(df_1km::DataFrame, grid::DataFrame, species_name::String,
-  yearStr::String, paths::NamedTuple)
+  yearStr::String, paths::NamedTuple, saveDates::Bool=false)
   # A function to save the final OPRAM results (at 1km scale) in a CSV file
   # The function is used in OPRAM_calculate_anomaly.jl
   #
@@ -1451,15 +1451,16 @@ function save_OPRAM_1km_CSV(df_1km::DataFrame, grid::DataFrame, species_name::St
         :nGenerations, :nGenerations_median, :nGenerations_anomaly])
 
 
-    # Add in Dates for emergence
-    out_1km.emergeDate = Vector{Union{Missing,Date}}(missing, nrow(out_1km))
-    idx = .!ismissing.(out_1km.startDate) .&& .!ismissing.(out_1km.emergeDOY)
-    out_1km.emergeDate[idx] = Date.(year.(out_1km.startDate[idx]), 01, 01) .+ Day.(out_1km.emergeDOY[idx] .- 1)
+    if saveDates
+      # Add in Dates for emergence
+      out_1km.emergeDate = Vector{Union{Missing,Date}}(missing, nrow(out_1km))
+      idx = .!ismissing.(out_1km.startDate) .&& .!ismissing.(out_1km.emergeDOY)
+      out_1km.emergeDate[idx] = Date.(year.(out_1km.startDate[idx]), 01, 01) .+ Day.(out_1km.emergeDOY[idx] .- 1)
 
-    out_1km.emergeDate_30yr = Vector{Union{Missing,Date}}(missing, nrow(out_1km))
-    idx = .!ismissing.(out_1km.startDate) .&& .!ismissing.(out_1km.emergeDOY_median)
-    out_1km.emergeDate_30yr[idx] = Date.(year.(out_1km.startDate[idx]), 01, 01) .+ Day.(round.(Int, out_1km.emergeDOY_median[idx]) .- 1)
-
+      out_1km.emergeDate_30yr = Vector{Union{Missing,Date}}(missing, nrow(out_1km))
+      idx = .!ismissing.(out_1km.startDate) .&& .!ismissing.(out_1km.emergeDOY_median)
+      out_1km.emergeDate_30yr[idx] = Date.(year.(out_1km.startDate[idx]), 01, 01) .+ Day.(round.(Int, out_1km.emergeDOY_median[idx]) .- 1)
+    end
 
     # Round number of generations
     out_1km.nGenerations = round.(out_1km.nGenerations, digits=2)
@@ -1502,7 +1503,7 @@ end
 
 
 function save_OPRAM_10km_CSV(out_10km::DataFrame, grid::DataFrame, species_name::String,
-  yearStr::String, paths::NamedTuple)
+  yearStr::String, paths::NamedTuple, saveDates::Bool=false)
   # A function to save the final OPRAM results (at 1km scale) in a CSV file
   # The function is used in OPRAM_calculate_anomaly.jl
   #
@@ -1524,33 +1525,47 @@ function save_OPRAM_10km_CSV(out_10km::DataFrame, grid::DataFrame, species_name:
 
 
 
+  if saveDates
+    # Add in Dates for emergence
+    out_10km.emergeDate_min = Vector{Union{Missing,Date}}(missing, nrow(out_10km))
+    idx = .!ismissing.(out_10km.startDate) .&& .!ismissing.(out_10km.emergeDOY_min)
+    out_10km.emergeDate_min[idx] = Date.(year.(out_10km.startDate[idx]), 01, 01) .+ Day.(out_10km.emergeDOY_min[idx] .- 1)
 
-  # Add in Dates for emergence
-  out_10km.emergeDate_min = Vector{Union{Missing,Date}}(missing, nrow(out_10km))
-  idx = .!ismissing.(out_10km.startDate) .&& .!ismissing.(out_10km.emergeDOY_min)
-  out_10km.emergeDate_min[idx] = Date.(year.(out_10km.startDate[idx]), 01, 01) .+ Day.(out_10km.emergeDOY_min[idx] .- 1)
+    out_10km.emergeDate_median_min = Vector{Union{Missing,Date}}(missing, nrow(out_10km))
+    idx = .!ismissing.(out_10km.startDate) .&& .!ismissing.(out_10km.emergeDOY_median_min)
+    out_10km.emergeDate_median_min[idx] = Date.(year.(out_10km.startDate[idx]), 01, 01) .+ Day.(round.(Int, out_10km.emergeDOY_median_min[idx]) .- 1)
 
-  out_10km.emergeDate_median_min = Vector{Union{Missing,Date}}(missing, nrow(out_10km))
-  idx = .!ismissing.(out_10km.startDate) .&& .!ismissing.(out_10km.emergeDOY_median_min)
-  out_10km.emergeDate_median_min[idx] = Date.(year.(out_10km.startDate[idx]), 01, 01) .+ Day.(round.(Int, out_10km.emergeDOY_median_min[idx]) .- 1)
+    # Rename some columns
+    rename!(out_10km, :nGenerations_max => "nGen",
+      :nGenerations_median_max => "nGen_30yr",
+      :nGenerations_anomaly_max => "nGen_anomaly",
+      :emergeDate_min => "emergeDate",
+      :emergeDate_median_min => "emergeDate_30yr",
+      :emergeDOY_min => "emergeDOY",
+      :emergeDOY_median_min => "emergeDOY_30yr",
+      :emergeDOY_anomaly_min => "emergeDOY_anomaly")
 
+    # Select specific years
+    select!(out_10km, [:hectad, :startDate,
+      :emergeDOY, :emergeDOY_30yr, :emergeDOY_anomaly,
+      :emergeDate, :emergeDate_30yr,
+      :nGen, :nGen_30yr, :nGen_anomaly])
 
-  # Rename some columns
-  rename!(out_10km, :nGenerations_max => "nGen",
-    :nGenerations_median_max => "nGen_30yr",
-    :nGenerations_anomaly_max => "nGen_anomaly",
-    :emergeDate_min => "emergeDate",
-    :emergeDate_median_min => "emergeDate_30yr",
-    :emergeDOY_min => "emergeDOY",
-    :emergeDOY_median_min => "emergeDOY_30yr",
-    :emergeDOY_anomaly_min => "emergeDOY_anomaly")
+  else
 
-  # Select specific years
-  select!(out_10km, [:hectad, :startDate,
-    :emergeDOY, :emergeDOY_30yr, :emergeDOY_anomaly,
-    :emergeDate, :emergeDate_30yr,
-    :nGen, :nGen_30yr, :nGen_anomaly])
+    # Rename some columns
+    rename!(out_10km, :nGenerations_max => "nGen",
+      :nGenerations_median_max => "nGen_30yr",
+      :nGenerations_anomaly_max => "nGen_anomaly",
+      :emergeDOY_min => "emergeDOY",
+      :emergeDOY_median_min => "emergeDOY_30yr",
+      :emergeDOY_anomaly_min => "emergeDOY_anomaly")
 
+    # Select specific years
+    select!(out_10km, [:hectad, :startDate,
+      :emergeDOY, :emergeDOY_30yr, :emergeDOY_anomaly,
+      :nGen, :nGen_30yr, :nGen_anomaly])
+  end
 
 
   # Round results for number of generations
@@ -1568,7 +1583,6 @@ function save_OPRAM_10km_CSV(out_10km::DataFrame, grid::DataFrame, species_name:
 
   # Write the data
   CSV.write(fileout3, out_10km, missingstring="NA", dateformat="yyyy-mm-dd")
-
 end
 
 

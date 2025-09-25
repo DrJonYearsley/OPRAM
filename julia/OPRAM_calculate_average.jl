@@ -43,7 +43,7 @@ if length(ARGS) == 1
     nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], true)
 
 elseif length(ARGS) == 0 & isfile("parameters.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("parameters.toml", true)
+    nNodes, run_params, species_setup, paths = import_parameters("parameters_test.toml", true)
 
 else
     @error "No parameter file given"
@@ -103,7 +103,7 @@ for s in eachindex(species_params)
     # Create vector of files to import (one file for each year)
     inFiles = Vector{String}(undef, length(run_params.years))
     for y in eachindex(run_params.years)
-        inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km.jld2", x),
+        inFile = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km_" * run_params.method * ".jld2", x),
             readdir(joinpath(paths.resultsDir, speciesName[1])))
 
         if length(inFile) > 1
@@ -151,11 +151,12 @@ for s in eachindex(species_params)
 
     # If emergeDOY is greater than maximum possible DOY (366*maxYears) then set
     # nGenerations_median and emergeDOY_median to missing
-    idx_agg = d_agg.emergeDOY_median .> 366 * run_params.maxYears
-    allowmissing!(d_agg, [:nGenerations_median, :emergeDOY_median])
-    d_agg.nGenerations_median[idx_agg] .= missing
-    d_agg.emergeDOY_median[idx_agg] .= missing
-
+    idx_agg = ismissing.(d_agg.emergeDOY_median) .|| d_agg.emergeDOY_median .> 366 * run_params.maxYears
+    # allowmissing!(d_agg, [:nGenerations_median, :emergeDOY_median])
+    if any(idx_agg)
+        d_agg.nGenerations_median[idx_agg] .= 0.0
+        d_agg.emergeDOY_median[idx_agg] .= missing
+    end
 
 
 
@@ -180,7 +181,7 @@ for s in eachindex(species_params)
     # Write out the average across years data frame
     fileout2 = joinpath(paths.outDir, speciesName[1], "average_" * speciesName[1] * "_" *
                                                       string(minimum(run_params.years)) * "_" * string(maximum(run_params.years)) *
-                                                      "_" * string(run_params.thinFactor) * "km.csv")
+                                                      "_" * string(run_params.thinFactor) * "km_" * run_params.method * ".csv")
     CSV.write(fileout2, out_agg1km, missingstring="NA")
 
     # Clear variables before moving on to next species

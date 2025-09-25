@@ -123,7 +123,8 @@ function extract_results(doy::Int32, result::DataFrame)
   # out_res.north_idx = mod.(out_res.ID, 1000)
   # out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
 
-  allowmissing!(out_res, :nGenerations)
+  # Comment this out because no emergence will correspond to zero generations
+  # allowmissing!(out_res, :nGenerations)
 
   # Set up starting DOY for each location
   startDOY = zeros(Union{Missing,Int32}, length(idx1)) .+ doy  # Start DOY for each location
@@ -183,8 +184,8 @@ function extract_results(doy::Int32, result::DataFrame)
     startDOY[startDOY.>=365] .= 0
   end
 
-  # Set nGenerations to missing if no emergence occurs within the simulation
-  out_res.nGenerations[ismissing.(out_res.emergeDOY)] .= missing
+  # Set nGenerations to zero if no emergence occurs within the simulation
+  out_res.nGenerations[ismissing.(out_res.emergeDOY)] .= 0.0
 
   return (out_res)
 end
@@ -251,7 +252,7 @@ function create_doy_results(dates::Vector{Date}, adult_emerge::DataFrame, grid::
         DataFrame(ID=missingIDs,
           startDOY=convert(Int32, dayofyear(dates[d])),
           startDate=dates[d],
-          nGenerations=missing,
+          nGenerations=0.0,
           emergeDOY=missing))
     end
 
@@ -440,12 +441,13 @@ function aggregate_to_hectad(df_1km::DataFrame)
   # for each starting date. 
   # These worst case scenarios are not affected by locations where no emergence occurred
   df_10km = combine(df_group,
-    :nGenerations => (x -> quantile(x, 1.0)) => :nGenerations_max,                  # Max generations per hectad
-    :nGenerations_median => (x -> quantile(x, 1.0)) => :nGenerations_median_max,
-    :nGenerations_anomaly => (x -> quantile(x, 1.0)) => :nGenerations_anomaly_max,
-    :emergeDOY => (x -> quantile(x, 0.0)) => :emergeDOY_min,                         # Min emergence DOY
-    :emergeDOY_median => (x -> quantile(x, 0.0)) => :emergeDOY_median_min,
-    :emergeDOY_anomaly => (x -> quantile(x, 0.0)) => :emergeDOY_anomaly_min,
+  
+    :nGenerations => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 1.0) else missing end)  => :nGenerations_max,                  # Max generations per hectad
+    :nGenerations_median => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 1.0) else missing end)  => :nGenerations_median_max,
+    :nGenerations_anomaly => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 1.0) else missing end)  => :nGenerations_anomaly_max,
+    :emergeDOY => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.0) else missing end)  => :emergeDOY_min,                         # Min emergence DOY
+    :emergeDOY_median => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.0) else missing end)  => :emergeDOY_median_min,
+    :emergeDOY_anomaly => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.0) else missing end)  => :emergeDOY_anomaly_min,
     :nGenerations => (x -> sum(x .< 0)) => :nMissing)                              # Count number of no emergence events  
 
   # Add in missing values where 10km worst case is out of bounds

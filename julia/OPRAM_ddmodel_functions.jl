@@ -120,7 +120,7 @@ function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::Na
 
           # Save using jld2 format
           outFile = joinpath([paths.outDir, outPrefix,
-            outPrefix * "_" * run_params.country * "_" * string(run_params.years[y]) * "_" * string(run_params.thinFactor) * "km.jld2"])
+            outPrefix * "_" * run_params.country * "_" * string(run_params.years[y]) * "_" * string(run_params.thinFactor) * "km_" * run_params.method * ".jld2"])
           save_object(outFile, adult_emerge)
         end
 
@@ -278,7 +278,7 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
             # Save using jld2 format
             outFile = joinpath([paths.outDir, outPrefix,
               outPrefix * "_" * run_params.country * "_rcp" * run_params.rcp[r] * "_" *
-              run_params.futurePeriod[p] * "_" * string(run_params.thinFactor) * "km.jld2"])
+              run_params.futurePeriod[p] * "_" * string(run_params.thinFactor) * "km_" * run_params.method * ".jld2"])
             save_object(outFile, adult_emerge)
           end
 
