@@ -76,17 +76,6 @@ end
 
 
 
-# # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# # Import granite files to organise hectads and counties
-# # Read in the grid data from a file
-# hectad_defs = CSV.read(joinpath([paths.dataDir, granite_hectad_ID]), DataFrame);
-# county_defs = CSV.read(joinpath([paths.dataDir, granite_county_ID]), DataFrame);
-# hectad_county_defs = CSV.read(joinpath([paths.dataDir, granite_hectad_county]), DataFrame);
-
-# # Rename county ID column
-# rename!(county_defs, :Id => :countyID)
-
-
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Import location data and thin it using thinFactor
 # (needed to add the hectad codes to the 10km output) 
@@ -95,10 +84,6 @@ grid = read_grid(run_params)
 # Create easting and northings of bottom left of a hectad
 grid.east_hectad = convert.(Int32, floor.(grid.east ./ 1e4) .* 1e4)
 grid.north_hectad = convert.(Int32, floor.(grid.north ./ 1e4) .* 1e4)
-
-
-# # Add in column with county ID
-# leftjoin!(grid, county_defs, on=:county => :County)
 
 
 # =========================================================
@@ -198,6 +183,12 @@ for s in eachindex(species_params)
     d_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
 
 
+    # If spatial locations are missing from d_gg then fill them in with missing values (or 0 for nGenerations)
+    if length(unique(d_agg.ID)) < nrow(grid)
+        @info  "Some spatial location data missing in d_agg"
+    end
+    # =========================================================
+
 
 
     # =========================================================
@@ -220,7 +211,7 @@ for s in eachindex(species_params)
 
             # Calculate average over all replicates
             df_1km = combine(df_group,
-                :nGenerations => (x -> if sum(.!isa.(x,Missing))>0 mean(skipmissing(x)) else missing end) => :nGenerations, # Mean generations
+                :nGenerations => (x -> if sum(.!isa.(x,Missing))>0 mean(skipmissing(x)) else missing end) => :nGenerations,          # Mean generations
                 :emergeDOY => (x -> if sum(.!isa.(x,Missing))>0 mean(skipmissing(x)) else missing end) => :emergeDOY)                # Mean emergence DOY
 
             df_1km.startDate = Date.(yearVec[f], df_1km.startMonth, 1)
@@ -234,6 +225,22 @@ for s in eachindex(species_params)
         df_tmp = nothing  # Remove df_tmp
 
 
+    # If spatial locations are missing from d_gg then fill them in with missing values (or 0 for nGenerations)
+    # for d in eachindex(grid.ID)
+    #     if !any(df_1km.ID .== grid.ID[d])
+    #         push!(df_1km, (ID=grid.ID[d], east=grid.east[d], north=grid.north[d],
+    #                         startMonth=missing, startDate=missing,
+    #                         nGenerations=missing, emergeDOY=missing))
+    #     end
+    # end
+
+    startDOY = unique(df_1km.startMonth)
+    for m in eachindex(startMonth)
+        idx = findall(df_1km.startMonth .== startDOY[m])
+        if length(idx) < nrow(grid)
+          @info  "Some spatial location data missing in df_1km"
+        end
+    end
 
 
 
