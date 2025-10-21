@@ -80,45 +80,63 @@ interpolation_model = InterpolateNeighbors(domain(grid_gt),
                    model=NN(),
                    maxneighbors=10) 
 
+
+function(X, lat, lon, interpolation_model) 
+    # Function to interpolate data onto the Met Eireann 1km grid
+
+    # Create geotable of mean daily temperature standard deviation
+    df = georef((lon=lon,
+            lat=lat,
+            X=X),
+        ("lon", "lat"),
+        crs=EPSG{4326})
+
+    # Interpolate the temperature data onto the 1km grid
+    tmp = df |> interpolation_model
+
+    return(tmp)
+end
+
 # =========================================================
 # =========================================================
 # Import the data for each RCP and period and save in a JLD2 file
 
-# Check size of data to be imported and create arrays to hold the results
+# Check size of data to be imported (using Tmax) and create arrays to hold the results
 
 # Find correct directory and file
-files_max = filter(x -> occursin(string(rcpList[1]) * "_" * string(periodList[1]) * "_ens50", x), readdir(translateDir_max))
-files_min = filter(x -> occursin(string(rcpList[1]) * "_" * string(periodList[1]) * "_ens50", x), readdir(translateDir_min))
+files = filter(x -> occursin(string(rcpList[1]) * "_" * string(periodList[1]) * "_ens50", x), readdir(translateDir_max))
 
 # Import one file of the TRANSLATE data 
-Tmax = ncread(joinpath(translateDir, rcpDir[1], files[1]), "tmax");
-Tmin = ncread(joinpath(translateDir, rcpDir[1], files[1]), "tmin");
-lat = ncread(joinpath(translateDir, rcpDir[1], files[1]), "lat");
-lon = ncread(joinpath(translateDir, rcpDir[1], files[1]), "lon");
+Tmax = ncread(joinpath(translateDir, files[1]), "tmax");
+lat = ncread(joinpath(translateDir, files[1]), "lat");
+lon = ncread(joinpath(translateDir, files[1]), "lon");
 
 # Calculate some dimensions
-TavgSize = size(Tavg)
-nDays = TavgSize[3];
+TSize = size(Tmax)
+nDays = TSize[3];
 
 # Reshape arrays in place
-Tavg_long = reshape(Tavg,:,nDays);
+Tmax_long = reshape(Tmax,:,nDays);
 
 lon_2D = reshape([lon[i] for i in eachindex(lon), j in eachindex(lat)],:);
 lat_2D = reshape([lat[j] for i in eachindex(lon), j in eachindex(lat)], :);
 
 # Find data the is non-zero temps
-nonzero_idx = dropdims(abs.(sum(Tavg_long, dims=2)) .> 0, dims=2);
+nonzero_idx = dropdims(abs.(sum(Tmax_long, dims=2)) .> 0, dims=2);
 
 # Keep only lats and longs with non-zero temps
 lon_2D = lon_2D[nonzero_idx];
 lat_2D = lat_2D[nonzero_idx];
 
 # Array to hold temperature data for the quantiles
-Tavg_quantiles = Array{Float32,3}(undef, sum(nonzero_idx), nDays, length(quantiles));
+Tmax_quantiles = Array{Float32,3}(undef, sum(nonzeromax_idx), nDays, length(quantiles));
+Tmin_quantiles = Array{Float32,3}(undef, sum(nonzeromin_idx), nDays, length(quantiles));
 
 # Array to hold interpolated temperature data (mean and tandard deviation)
-Tmean_interp = Array{Float32,2}(undef, nDays, length(grid.ID));
-Tsd_interp = Array{Float32,2}(undef, nDays, length(grid.ID));
+Tmax_interp = Array{Float32,2}(undef, nDays, length(grid.ID));
+Tmaxsd_interp = Array{Float32,2}(undef, nDays, length(grid.ID));
+Tmin_interp = Array{Float32,2}(undef, nDays, length(grid.ID));
+Tminsd_interp = Array{Float32,2}(undef, nDays, length(grid.ID));
 
 # Create array for days of year
 DOY = collect(1:nDays);
@@ -139,35 +157,42 @@ for r in eachindex(rcpList)
 
 
         # Find the three files for a specific RCP and time period
-        rcpDir = filter(x -> occursin(string(rcpList[r]), x), readdir(joinpath(translateDir)))
-        files = filter(x -> occursin(r"_" * string(periodList[p]) * "_ens", x), readdir(joinpath(translateDir, rcpDir[1])))
+        # rcpDir = filter(x -> occursin(string(rcpList[r]), x), readdir(joinpath(translateDir)))
+        # files_max = filter(x -> occursin(r"_" * string(periodList[p]) * "_ens", x), readdir(joinpath(translateDir, rcpDir[1])))
+        files_max = filter(x -> occursin(string(rcpList[1]) * "_" * string(periodList[1]) * "_ens50", x), readdir(translateDir_max))
+        files_min = filter(x -> occursin(string(rcpList[1]) * "_" * string(periodList[1]) * "_ens50", x), readdir(translateDir_min))
 
         for q in eachindex(quantiles)
             @info "Processing quantile " * string(quantiles[q])
-            # Read the Tavg data and reshape into a 2D matrix
-            fileIn = filter(x -> occursin("ens" * quantiles[q], x), files)
-            Tavg = reshape(ncread(joinpath(translateDir, rcpDir[1], fileIn[1]), "tmean"), : , nDays)
+            # Read the Tmax and Tmin data and reshape into a 2D matrix
+            fileIn = filter(x -> occursin("ens" * quantiles[q], x), files_max)
+            Tmax = reshape(ncread(translateDir_max, filesIn[1], "tmax"), : , nDays)
+
+            fileIn = filter(x -> occursin("ens" * quantiles[q], x), files_min)
+            Tmin = reshape(ncread(translateDir_min, filesIn[1], "tmin"), : , nDays)
 
             # Save non-zero temp data
-            Tavg_quantiles[:, :, q] .= Tavg[nonzero_idx, :];
+            Tmax_quantiles[:, :, q] .= Tmax[nonzero_idx, :];
+            Tmin_quantiles[:, :, q] .= Tmin[nonzero_idx, :];
         end
 
         # Calculate standard deviation from 10th and 90th quantiles
-        Tsd = (Tavg_quantiles[:,:,3] .- Tavg_quantiles[:,:,1]) ./ sd_estimator;
+        Tmaxsd = (Tmax_quantiles[:,:,3] .- Tmax_quantiles[:,:,1]) ./ sd_estimator;
+        Tminsd = (Tmin_quantiles[:,:,3] .- Tmin_quantiles[:,:,1]) ./ sd_estimator;
 
         # Interpolate the median and standard deviations onto the 1km grid
         for doy in eachindex(DOY)
             # Create geotable of mean daily temperature data
             df_median = georef((lon=lon_2D,
                     lat=lat_2D,
-                    temp_median=Tavg_quantiles[:, doy, 2]),
+                    temp_median=Tmax_quantiles[:, doy, 2]),
                 ("lon", "lat"),
                 crs=EPSG{4326})
 
                 # Create geotable of mean daily temperature standard deviation
             df_sd = georef((lon=lon_2D,
                     lat=lat_2D,
-                    temp_sd=Tsd[:, doy]),
+                    temp_sd=Tmaxsd[:, doy]),
                 ("lon", "lat"),
                 crs=EPSG{4326})
 
