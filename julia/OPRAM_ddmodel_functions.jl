@@ -125,19 +125,6 @@ function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::Na
         end
 
 
-        # # =========================================================
-        # # =========================================================
-        # # Create summary outputs
-        # if run_params.saveSummaryCSV
-        #   @info "        Creating 1km CSV summary for specific starting dates"
-        #   # Starting dates for output in CSV files
-        #   # The first of every month
-        #   dates = [Date(run_params.years[y], m, 01) for m in 1:12]
-
-
-        #   save_to_csv(dates, adult_emerge, grid_final, outPrefix, paths, run_params)
-        # end
-
         # Clear memory of model results before starting next species
         # NOTE: Don't clear the CLimate data because it will be reused
         adult_emerge = nothing
@@ -204,11 +191,15 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
     for p in eachindex(run_params.futurePeriod)
       @info "======Running model for future period " * run_params.futurePeriod[p] * "============="
 
-      Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.rcp[r], run_params.futurePeriod[p], grid.ID)
+      # Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.rcp[r], run_params.futurePeriod[p], grid.ID)
+      Tmax_mean, Tmax_sd, Tmin_mean, Tmin_sd, DOY, ID = read_JLD2_translate2(paths.meteoDir_IE, run_params.rcp[r], run_params.futurePeriod[p], grid.ID)
+
 
       if run_params.nReps == 1
         # If only one replicate then use the mean temperature
-        Tavg_sd .= 0
+        # Tavg_sd .= 0
+        Tmax_sd .= 0
+        Tmin_sd .= 0
       end
 
       # Remove grid points not in the meteo data
@@ -229,31 +220,50 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
           # Initialise data frame
           adult_emerge = Vector{DataFrame}(undef, run_params.nReps)
 
-          for r in 1:run_params.nReps
+          for x in 1:run_params.nReps
             @info "====== Replicate " * string(r) * " ==========="
 
             # Generate daily temperature for maxYears
             @info "        Generating climate data"
-            TavgVec = Vector{Array{Float32,2}}(undef, run_params.maxYears)
+            TmaxVec = Vector{Array{Float32,2}}(undef, run_params.maxYears)
+            TminVec = Vector{Array{Float32,2}}(undef, run_params.maxYears)
             for y in 1:run_params.maxYears
-              TavgVec[y] = Tavg_mean .+ Tavg_sd .* rand(Normal(0, 1), size(Tavg_sd))
+              if run_params.nReps == 1
+                TmaxVec[y] = Tmax_mean
+                TminVec[y] = Tmin_mean
+              else
+                invalid_temps = true
+                while invalid_temps
+                  TmaxVec[y] = Tmax_mean .+ Tmax_sd .* rand(Normal(0, 1), size(Tmin_sd))
+                  TminVec[y] = Tmin_mean .+ Tmin_sd .* rand(Normal(0, 1), size(Tmin_sd))
+
+                  # Check Tmax>=Tmin
+                  invalid_temps = any(TminVec[y] .> TmaxVec[y])
+                end
+              end
             end
-            Tavg = reduce(vcat, TavgVec)
-            DOY = convert.(Int16, collect(1:size(Tavg, 1)))
+            Tmax = reduce(vcat, TmaxVec)
+            Tmin = reduce(vcat, TminVec)
+            DOY = convert.(Int16, collect(1:size(Tmax, 1)))
+
+            # Clear memory
+            TmaxVec = nothing
+            TminVec = nothing
 
             @info "        Calculate GDD"
-            GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
+            # GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tavg, grid_final, DOY, species_params[s])
+            GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tmin, Tmax, grid_final, DOY, species_params[s], run_params.method)
 
             # Calculate model at each location
             @info "        Calculating adult emergence dates"
             result = location_loop(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
 
             # Simplify the results and put them in a DataFrame
-            adult_emerge[r] = cleanup_results(result, idx, grid_final.ID, run_params.save1year)
+            adult_emerge[x] = cleanup_results(result, idx, grid_final.ID, run_params.save1year)
 
 
             # Add in a column for the replicate number
-            insertcols!(adult_emerge[r], 1, :rep => Int8(r))
+            insertcols!(adult_emerge[x], 1, :rep => Int8(r))
 
             result = nothing
             @everywhere GDDsh = nothing   # Make sure the shared array is cleared everywhere

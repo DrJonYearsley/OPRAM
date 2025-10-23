@@ -847,6 +847,90 @@ end
 
 
 
+function read_JLD2_translate2(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+  # Import the max and min daily temperatures for the TRANSLATE data 
+  # for a given RCP and period from a jld2 file
+  # and subset to the locations in IDgrid
+  #
+  # Arguments:
+  #   meteoDir    the directory containing the meteo data in JLD2 format 
+  #   rcp         the RCP (26, 45, 85)
+  #   period      the 30 yr period (2021-2040, 2041-2070)
+  #   IDgrid      ID of locations in grid_thin
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of max daily temperature (mean)
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:    Matrix of max daily temperature (standard deviation)
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Third entry:     Matrix of min daily temperature (mean)
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Fourth entry:    Matrix of min daily temperature (standard deviation)
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Fifth entry:     A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Sixth entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
+  #
+  # *************************************************************
+
+
+  # Check RCP and period Arguments
+  if isnothing(indexin(rcp, ["26", "45", "85"]))
+    @error "RCP must be one of: '2.6', '4.5' or '8.5'"
+  end
+
+  if isnothing(indexin(period, ["2021-2055", "2041-2070"]))
+    @error "Period must be one of: '2021-2055', '2041-2070'"
+  end
+
+
+
+
+  # Get the correct filename
+  if !isnothing(meteoDir)
+    if length(filter(x -> occursin(".jld2", x), readdir(meteoDir))) > 0
+      meteoFile = filter(x -> occursin("TRANSLATE_Tmaxmin_rcp" * rcp * "_" * period, x),
+        readdir(meteoDir))
+    end
+  end
+
+  if length(meteoFile) == 0
+    @error "No file found for RCP " * rcp * " and period " * period
+  end
+
+  # Import the TRANSLATE data
+  f = jldopen(joinpath(meteoDir, meteoFile[1]), "r")
+  Tmax_mean = read(f, "Tmax_mean")
+  Tmax_sd = read(f, "Tmax_sd")
+  Tmin_mean = read(f, "Tmin_mean")
+  Tmin_sd = read(f, "Tmin_sd")
+  DOY = read(f, "DOY")
+  ID = read(f, "ID")
+  close(f)
+
+
+  # Find ID's that are in grid_thin
+  ID = sort(intersect(IDgrid, ID))
+
+  # Put location ID's (columns of Tavg) in order of ID
+  idx = [findfirst(ID .== id) for id in IDgrid]
+
+  Tmax_mean = Tmax_mean[:, idx]
+  Tmax_sd = Tmax_sd[:, idx]
+  Tmin_mean = Tmin_mean[:, idx]
+  Tmin_sd = Tmin_sd[:, idx]
+
+  return Tmax_mean, Tmax_sd, Tmin_mean, Tmin_sd, DOY, ID
+end
+
+
+
+# ------------------------------------------------------------------------------------------
+
+
+
 function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years)
   # Import multiple years of daily min and max temperature from a CSV file
   # for Republic of Ireland and create the daily average temp, and 

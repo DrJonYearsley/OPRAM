@@ -27,4 +27,5 @@ maxYears = 4         # Maximum number of years to complete insect development
 thirty_years = [1991, 2020]             # 30yr period to average
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+method = "triangle"   # degree-day algorithm ("sine","triangle","average")
 speciesList = ["all"]

@@ -23,6 +23,7 @@ using DataFrames;
 using GeoStats;
 using NetCDF;
 using SpecialFunctions;
+using Distributed;
 
 include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 
@@ -142,9 +143,10 @@ for r in eachindex(rcpList)
             @info "Processing quantile " * string(quantiles[q])
             # Read the Tavg data and reshape into a 2D matrix
             fileIn = filter(x -> occursin("ens" * quantiles[q], x), files)
-            Tavg = reshape(ncread(joinpath(translateDir, rcpDir[r], fileIn[1]), "tmean"), : , nDays)
+            Tavg = reshape(ncread(joinpath(translateDir, rcpDir[1], fileIn[1]), "tmean"), : , nDays)
 
             # Save non-zero temp data
+            
             Tavg_quantiles[:, :, q] .= Tavg[nonzero_idx, :];
         end
 

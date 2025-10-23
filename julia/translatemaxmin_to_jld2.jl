@@ -127,7 +127,7 @@ lon_2D = reshape([lon[i] for i in eachindex(lon), j in eachindex(lat)],:);
 lat_2D = reshape([lat[j] for i in eachindex(lon), j in eachindex(lat)], :);
 
 # Find data that has unrealsitic max temps
-nonzero_idx = dropdims(all(Tmax_long.<2-73, dims=2), dims=2);
+nonzero_idx = dropdims(all(Tmax_long.>-273, dims=2), dims=2);
 
 # Keep only lats and longs with non-zero temps
 lon_2D = lon_2D[nonzero_idx];
