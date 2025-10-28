@@ -87,12 +87,12 @@ function extract_results(doy::Int32, result::DataFrame)
   # Function to calculate number of generations per year, and first
   # day of adult emergence based on a starting development on doy
   #
-  #  If development doesn't complete by the end of the simulation (usually 3 years)
-  #  then the emergeDOY and nGenerations is set to missing
+  #  If development doesn't complete by the end of the simulation (usually 4 years)
+  #  then the emergeDOY is set to missing and nGenerations is set to 0
   #
   #  Arguments:
   #      doy         day of year when larval development begins
-  #      result data frame containing the results from the model
+  #      result      data frame containing the results from the model
   #  
   #  Output:
   #   a data frame with the following columns:
@@ -100,13 +100,9 @@ function extract_results(doy::Int32, result::DataFrame)
   #       startDOY      day of year to start development     
   #       nGenerations  the number of generations within the year
   #       emergeDOY     adult emergence day of year 
-  #       east_idx      index for eastings of the unique spatial locations in result
-  #       north_idx     index for northings of the unique spatial location in result
   ########################################################################
 
   # Find start and end indicies for each location
-  # @time idx1 = [searchsortedfirst(result.ID, loc) for loc in unique(result.ID)]
-  # @time idx2 = [searchsortedlast(result.ID, loc) for loc in unique(result.ID)]
   idx1 = indexin(unique(result.ID), result.ID)
   idx2 = vcat(idx1[2:end] .- 1, length(result.ID))
 
@@ -117,14 +113,6 @@ function extract_results(doy::Int32, result::DataFrame)
     nGenerations=0.0,      # Must be Float because it can be fractional 
     emergeDOY=Vector{Union{Missing,Int32}}(missing, length(idx1)))
 
-  # # Add indices for eastings and northings
-  # # These are used to identify the spatial location in the grid
-  # # (these are not used in the model but are useful for plotting)
-  # out_res.north_idx = mod.(out_res.ID, 1000)
-  # out_res.east_idx = div.((out_res.ID .- out_res.north_idx), 1000)
-
-  # Comment this out because no emergence will correspond to zero generations
-  # allowmissing!(out_res, :nGenerations)
 
   # Set up starting DOY for each location
   startDOY = zeros(Union{Missing,Int32}, length(idx1)) .+ doy  # Start DOY for each location
@@ -335,6 +323,7 @@ end
 
 
 function aggregate_to_hectad(result_1km::DataFrame, grid::DataFrame)
+  # Deprecated
   # Function to take results on a 1km grid an aggregate them to a 10km grid
   #
   # Arguments:
@@ -393,6 +382,7 @@ end
 
 function aggregate_to_hectad(df_1km::DataFrame)
   # Function to take results on a 1km grid an aggregate them to a 10km grid
+  # This is the latest function that is used in OPRAM_calculate_anaomaly.jl
   #
   # Arguments:
   #   df_1km                        results from the model on 1km grid

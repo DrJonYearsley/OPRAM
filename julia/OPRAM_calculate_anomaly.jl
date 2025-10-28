@@ -51,12 +51,6 @@ else
     @error "No parameter file given"
 end
 
-# # Files containing the ID system from Granite.ie
-# # This info is used to package the output into separate files
-# granite_hectad_ID = "git_repos/OPRAM/data/granite_hectad_defs.csv"
-# granite_county_ID = "git_repos/OPRAM/data/granite_county_defs.csv"
-# granite_hectad_county = "git_repos/OPRAM/data/granite_hectad_county_defs.csv"
-
 
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
