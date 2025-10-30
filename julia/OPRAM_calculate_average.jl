@@ -13,6 +13,8 @@
 # Author: Jon Yearsley  (jon.yearsley@ucd.ie)
 # Date: March 2025
 #
+#
+# Functions checked by JY: 30th Oct 2025
 # =============================================================================
 # =============================================================================
 
@@ -113,7 +115,8 @@ for s in eachindex(species_params)
         end
     end
 
-    # Import the data from the jld2 files
+    # Import the data from the jld2 files. 
+    # This will set locations with no emergence as having emergeDOY=missing and nGenerations=0
     df_1km = read_OPRAM_JLD2(inFiles, run_params.years, grid)
 
 
@@ -123,16 +126,8 @@ for s in eachindex(species_params)
 
     @info "Calculating median values across years"
 
-
-    # # Set missing DOY to be a large number and missing generations to be -9999
-    # # This is just for the quantile calculations
-    # idx = ismissing.(df_1km.emergeDOY)
-    # df_1km.emergeDOY[idx] .= 9999
-    # df_1km.nGenerations[idx] .= -9999
-
     # Group data frame by location and then starting DOY/Date 
     df_group = groupby(df_1km, [:ID, :startMonth])
-
 
 
     # =========================================================
@@ -144,15 +139,10 @@ for s in eachindex(species_params)
         :emergeDOY => (x -> sum(ismissing.(x))) => :nMissing)
 
 
-
-    # # Return nGenerations and emergeDOY to missing
-    # df_1km.nGenerations[idx] .= missing
-    # df_1km.emergeDOY[idx] .= missing
-
     # If emergeDOY is greater than maximum possible DOY (366*maxYears) then set
-    # nGenerations_median and emergeDOY_median to missing
+    # nGenerations_median = 0 and emergeDOY_median = missing
     idx_agg = ismissing.(d_agg.emergeDOY_median) .|| d_agg.emergeDOY_median .> 366 * run_params.maxYears
-    # allowmissing!(d_agg, [:nGenerations_median, :emergeDOY_median])
+
     if any(idx_agg)
         d_agg.nGenerations_median[idx_agg] .= 0.0
         d_agg.emergeDOY_median[idx_agg] .= missing
@@ -162,11 +152,9 @@ for s in eachindex(species_params)
 
     # =========================================================
     # =========================================================
-    # Export the anomaly and multi year average
+    # Export the  multi year average to the resultsDir
 
     @info "Writing 1km results to CSV files"
-
-
 
     # Add eastings and northings into the 1km data frames (copy the data frames so we can round before saving)
     out_agg1km = rightjoin(grid[:, [:ID, :east, :north]], d_agg, on=[:ID])
@@ -179,7 +167,7 @@ for s in eachindex(species_params)
     select!(out_agg1km, Not(:nMissing))
 
     # Write out the average across years data frame
-    fileout2 = joinpath(paths.outDir, speciesName[1], "average_" * speciesName[1] * "_" *
+    fileout2 = joinpath(paths.resultsDir, speciesName[1], "average_" * speciesName[1] * "_" *
                                                       string(minimum(run_params.years)) * "_" * string(maximum(run_params.years)) *
                                                       "_" * string(run_params.thinFactor) * "km_" * run_params.method * ".csv")
     CSV.write(fileout2, out_agg1km, missingstring="NA")

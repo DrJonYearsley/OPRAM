@@ -1415,18 +1415,23 @@ function read_OPRAM_JLD2(inFiles::Union{String,Vector{String}}, years::Union{Int
   # A function to import the OPRAM results from JLD2 files (as written by the run_model function)
   # and create a single DataFrame with the results
   #
-  #  The function creats results for specified starting dates (the first of every month)
+  #  The function creates results for specified starting dates (usually the first of every month)
   #  The function checks to make sure all the required spatial locations are included. 
   #  Missing spatial locations are added as missing data
   #
   # Arguments:
-  #   resultPath  the path to the results directory
-  #   speciesName the name of the species to import
+  #   inFiles     the path to the results files
   #   years       the years to import (as a vector of integers)
   #   grid        the grid of locations to use (as a DataFrame)
   #
   # Output:
-  #   A DataFrame with the results for the specified species and years  
+  #   A DataFrame with the results for the specified species and years
+  #   Columns are:
+  #        ID            ID for spatial location
+  #        startDOY      starting day of year
+  #        nGenerations  number of generations
+  #        emergeDOY     day of year development is complete
+  #        startMonth    the month development started
   # *************************************************************
 
   # # Check if the resultPath exists
@@ -1454,13 +1459,13 @@ function read_OPRAM_JLD2(inFiles::Union{String,Vector{String}}, years::Union{Int
 
   for y in eachindex(inFiles)
 
-
+    # Import results
     adult_emerge = load_object(inFiles[y])
 
     # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     # Create output for specific days of year
     dates = [Date(years[y], m, 01) for m in 1:12]         # The first of every month
-    # dVec[y] = create_doy_results(dates, adult_emerge, grid)
+
 
     # If adult_emerge is a vector then it represents replicate runs
     if isa(adult_emerge, Vector)
