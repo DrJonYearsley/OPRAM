@@ -179,7 +179,7 @@ for s in eachindex(species_params)
 
     # If spatial locations are missing from d_gg then fill them in with missing values (or 0 for nGenerations)
     if length(unique(d_agg.ID)) < nrow(grid)
-        @info  "Some spatial location data missing in d_agg"
+        @info "Some spatial location data missing in d_agg"
     end
     # =========================================================
 
@@ -193,7 +193,7 @@ for s in eachindex(species_params)
 
         # Import the data from the jld2 files
         println("  ")
-        @info "Importing data for " * yearStrVec[f] 
+        @info "Importing data for " * yearStrVec[f]
         df_tmp = read_OPRAM_JLD2(inFiles[f], yearVec[f], grid)
 
         # df_1km = DataFrame()
@@ -205,8 +205,16 @@ for s in eachindex(species_params)
 
             # Calculate average over all replicates
             df_1km = combine(df_group,
-                :nGenerations => (x -> if sum(.!isa.(x,Missing))>0 mean(skipmissing(x)) else missing end) => :nGenerations,          # Mean generations
-                :emergeDOY => (x -> if sum(.!isa.(x,Missing))>0 mean(skipmissing(x)) else missing end) => :emergeDOY)                # Mean emergence DOY
+                :nGenerations => (x -> if sum(.!isa.(x, Missing)) > 0
+                    mean(skipmissing(x))
+                else
+                    missing
+                end) => :nGenerations,          # Mean generations
+                :emergeDOY => (x -> if sum(.!isa.(x, Missing)) > 0
+                    mean(skipmissing(x))
+                else
+                    missing
+                end) => :emergeDOY)                # Mean emergence DOY
 
             df_1km.startDate = Date.(yearVec[f], df_1km.startMonth, 1)
 
@@ -219,22 +227,15 @@ for s in eachindex(species_params)
         df_tmp = nothing  # Remove df_tmp
 
 
-    # If spatial locations are missing from d_gg then fill them in with missing values (or 0 for nGenerations)
-    # for d in eachindex(grid.ID)
-    #     if !any(df_1km.ID .== grid.ID[d])
-    #         push!(df_1km, (ID=grid.ID[d], east=grid.east[d], north=grid.north[d],
-    #                         startMonth=missing, startDate=missing,
-    #                         nGenerations=missing, emergeDOY=missing))
-    #     end
-    # end
 
-    startDOY = unique(df_1km.startMonth)
-    for m in eachindex(startMonth)
-        idx = findall(df_1km.startMonth .== startDOY[m])
-        if length(idx) < nrow(grid)
-          @info  "Some spatial location data missing in df_1km"
+        # Check that all spatial locations are present in df_1km
+        startMonth = unique(df_1km.startMonth)
+        for m in eachindex(startMonth)
+            idx = findall(df_1km.startMonth .== startMonth[m])
+            if length(idx) < nrow(grid)
+                @info "Some spatial location data missing in df_1km"
+            end
         end
-    end
 
 
 
