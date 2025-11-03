@@ -255,12 +255,16 @@ for s in eachindex(species_params)
         transform!(df_1km, [:emergeDOY, :emergeDOY_median] => ((a, b) -> a .- b) => :emergeDOY_anomaly)
 
 
+        # Add year and countyID into df_1km
+        df_1km.year = year.(df_1km.startDate)
+        leftjoin!(df_1km, grid[:, [:ID, :countyID, :east, :north]], on=:ID)
+
         # =========================================================
         # =========================================================
         # Export the anomaly and multi year average using a separate file for every year and every county
 
         @info "---- Writing 1km results to CSV files"
-        save_OPRAM_1km_CSV(df_1km, grid, speciesName[1], yearStrVec[f], paths)
+        save_OPRAM_1km_CSV(df_1km, speciesName[1], yearStrVec[f], paths)
 
 
 
@@ -269,8 +273,10 @@ for s in eachindex(species_params)
         # Create 10km summary ---------
 
         @info "---- Aggregating data to 10km resolution"
-        df_10km = aggregate_to_hectad(df_1km)
-
+       df_10km = aggregate_to_hectad(df_1km)
+ 
+        # Add in hectad ID
+        leftjoin!(df_10km, unique(grid[:, [:hectad, :east_hectad, :north_hectad]]), on=[:east_hectad, :north_hectad])
 
 
 
@@ -278,12 +284,11 @@ for s in eachindex(species_params)
         # =========================================================
         # Export 10km summary for the anomaly and multi year average
         @info "---- Writing 10km data for year " * yearStrVec[f]
-        save_OPRAM_10km_CSV(df_10km, grid, speciesName[1], yearStrVec[f], paths)
+        save_OPRAM_10km_CSV(df_10km, speciesName[1], yearStrVec[f], paths)
     end
 
 
     # Clear data for this species
-    # out_10km = nothing
     df_10km = nothing
     df_group = nothing
     df_1km = nothing

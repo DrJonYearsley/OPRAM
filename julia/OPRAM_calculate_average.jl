@@ -134,7 +134,7 @@ for s in eachindex(species_params)
     # ################# Median across the years ##############
     # Calculate the median of nGenerations and emergeDOY
     d_agg = combine(df_group,
-        :nGenerations => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.5) else missing end) => :nGenerations_median,
+        :nGenerations => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.5) else 0.0 end) => :nGenerations_median,
         :emergeDOY => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.5) else missing end) => :emergeDOY_median,
         :emergeDOY => (x -> sum(ismissing.(x))) => :nMissing)
 

@@ -346,10 +346,10 @@ function aggregate_to_hectad(df_1km::DataFrame)
   #       startDate                 starting date for larval development  
   #       nGenerations_max          maximum number of generations in a year in the hectad
   #       nGenerations_median_max   maximum across a hectad  of multi year median   
-  #       nGenerations_anomaly_max  maximum anomaly in number of generations in a year in the hectad
+  #       nGenerations_anomaly_median  median anomaly in number of generations in a year in the hectad
   #       emergeDOY_min             minimum across a hectad of adult emergence day of year
   #       emergeDOY_median_min      minimum across a hectad of adult emergence day of year
-  #       emergeDOY_anomaly_min     minimum across a hectad of adult emergence day of year
+  #       emergeDOY_anomaly_median  median across a hectad of adult emergence day of year
   #       nMissing                  number of locations with no emergence in the hectad
   #
   # Checked JY: 30th Oct 2025
@@ -362,18 +362,26 @@ function aggregate_to_hectad(df_1km::DataFrame)
 
   # Set missing values to be extremes (e.g. generations are small and emergeDOY is large)
   # nGenerations should have no missing data because no emergence corresponds to nGenerations = 0.0
+  typeidx = findfirst(!isequal(Missing), typeof.(df_1km.emergeDOY))
+  missing_DOY = convert(typeof(df_1km.emergeDOY[typeidx]),99999)
+
+  typeidx = findfirst(!isequal(Missing), typeof.(df_1km.nGenerations))
+  missing_nGenerations = convert(typeof(df_1km.nGenerations[typeidx]),-99999)
+
+
   idx1 = ismissing.(df_1km.emergeDOY)
-  df_1km.emergeDOY[idx1] .= 9999
-  df_1km.nGenerations[idx1] .= -9999.0
+  
+  df_1km.emergeDOY[idx1] .= missing_DOY
+  df_1km.nGenerations[idx1] .= missing_nGenerations 
 
 
   idx2 = ismissing.(df_1km.emergeDOY_median)
-  df_1km.emergeDOY_median[idx2] .= 9999
-  df_1km.nGenerations_median[idx2] .= -9999.0
+  df_1km.emergeDOY_median[idx2] .= missing_DOY
+  df_1km.nGenerations_median[idx2] .= missing_nGenerations
 
   idx3 = ismissing.(df_1km.emergeDOY_anomaly)
-  df_1km.emergeDOY_anomaly[idx3] .= 9999
-  df_1km.nGenerations_anomaly[idx3] .= 9999.0
+  df_1km.emergeDOY_anomaly[idx3] .= missing_DOY
+  df_1km.nGenerations_anomaly[idx3] .= -missing_nGenerations
 
 
   # Group data frame by location and then starting Date 
@@ -386,21 +394,22 @@ function aggregate_to_hectad(df_1km::DataFrame)
   df_10km = combine(df_group,  
     :nGenerations => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 1.0) else missing end)  => :nGenerations_max,       # Max generations per hectad
     :nGenerations_median => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 1.0) else missing end)  => :nGenerations_median_max,
-    :nGenerations_anomaly => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 1.0) else missing end)  => :nGenerations_anomaly_max,
+    :nGenerations_anomaly => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.5) else missing end)  => :nGenerations_anomaly_median,
     :emergeDOY => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.0) else missing end)  => :emergeDOY_min,                         # Min emergence DOY
     :emergeDOY_median => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.0) else missing end)  => :emergeDOY_median_min,
-    :emergeDOY_anomaly => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.0) else missing end)  => :emergeDOY_anomaly_min,
-    :emergeDOY => (x -> sum(x.==-9999) => :nMissing)  )                            # Count number of no emergence events  
+    :emergeDOY_anomaly => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.5) else missing end)  => :emergeDOY_anomaly_median,
+    :emergeDOY => (x -> sum(x.==missing_DOY)) => :nMissing  )                            # Count number of no emergence events  
 
-  # Add in missing values where 10km worst case is out of bounds
+  # Add in missing values for emergeDOY and zero for nGEnerations where 10km worst case is out of bounds
   # (i.e. nGenerations<0 or emergeDOY>5000)
-  allowmissing!(df_10km, [:nGenerations_max, :nGenerations_median_max, :nGenerations_anomaly_max, :emergeDOY_min, :emergeDOY_median_min, :emergeDOY_anomaly_min])
-  df_10km.nGenerations_max[df_10km.nGenerations_max.<0] .= missing
-  df_10km.nGenerations_anomaly_max[abs.(df_10km.nGenerations_anomaly_max).<5000] .= missing
-  df_10km.nGenerations_median_max[df_10km.nGenerations_median_max.<0] .= missing
+  # Note nGeneration_anomaly will be zero in place of missing
+  allowmissing!(df_10km, [:nGenerations_max, :nGenerations_median_max, :nGenerations_anomaly_median, :emergeDOY_min, :emergeDOY_median_min, :emergeDOY_anomaly_median])
+  df_10km.nGenerations_max[df_10km.nGenerations_max.<0] .= 0.0
+  df_10km.nGenerations_anomaly_median[abs.(df_10km.nGenerations_anomaly_median).>5000] .= 0.0
+  df_10km.nGenerations_median_max[df_10km.nGenerations_median_max.<0] .= 0.0
 
   df_10km.emergeDOY_min[df_10km.emergeDOY_min.>5000] .= missing
-  df_10km.emergeDOY_anomaly_min[abs.(df_10km.emergeDOY_anomaly_min).>5000] .= missing
+  df_10km.emergeDOY_anomaly_median[abs.(df_10km.emergeDOY_anomaly_median).>5000] .= missing
   df_10km.emergeDOY_median_min[df_10km.emergeDOY_median_min.>5000] .= missing
 
   return df_10km

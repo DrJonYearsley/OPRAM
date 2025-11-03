@@ -3,13 +3,20 @@
 # function import_parameters(tomlFile::String)
 # function import_species(speciesFile::String, speciesName::String)
 # function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame, run_params::NamedTuple)
+# function read_meteo2(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, run_params::NamedTuple)
 # function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
+# function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64},
 # function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+# function read_JLD2_translate2(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
 # function read_netCDF_meteoUK(meteoDir::String, grid::DataFrame, years)
 # function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years::Vector{Int64})
+# function read_CSV_meteoIE2(meteoDir_IE::String, grid_thin::DataFrame, years)
 # function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years::Vector{Int64})
 # function read_grid(gridFilePath::String, thinFactor::Int, countryStr::String="IE")
 # function read_grid(run_params::NamedTuple)
+# function read_OPRAM_JLD2(inFiles::Union{String,Vector{String}}, years::Union{Int,Vector{Int}}, grid::DataFrame)
+# function save_OPRAM_1km_CSV(df_1km::DataFrame, species_name::String, yearStr::String, paths::NamedTuple, saveDates::Bool=false)
+# function save_OPRAM_10km_CSV(out_10km::DataFrame, species_name::String, yearStr::String, paths::NamedTuple, saveDates::Bool=false)
 #
 # Jon Yearsley (jon.yearsley@ucd.ie)
 # 7th Aug 2024
@@ -1500,7 +1507,7 @@ end
 
 
 
-function save_OPRAM_1km_CSV(df_1km::DataFrame, grid::DataFrame, species_name::String,
+function save_OPRAM_1km_CSV(df_1km::DataFrame, species_name::String,
   yearStr::String, paths::NamedTuple, saveDates::Bool=false)
   # A function to save the final OPRAM results (at 1km scale) in a CSV file
   # The function is used in OPRAM_calculate_anomaly.jl
@@ -1508,7 +1515,6 @@ function save_OPRAM_1km_CSV(df_1km::DataFrame, grid::DataFrame, species_name::St
   # Arguments:
   #   filename    the name of the file to save data to (including the path)
   #   df_1km      the DataFrame containing the results
-  #   grid        the grid of locations to use (as a DataFrame)
   #   species_name the name of the species to save results for
   #   yearStr     the year string to use in the filename
   #   paths       a named tuple containing the paths to the output directories
@@ -1517,13 +1523,10 @@ function save_OPRAM_1km_CSV(df_1km::DataFrame, grid::DataFrame, species_name::St
   #   None
   # *************************************************************
 
-  # Add year and countyID into df_1km
-  df_1km.year = year.(df_1km.startDate)
-  leftjoin!(df_1km, grid[:, [:ID, :countyID, :east, :north]], on=:ID)
 
   # Find unique years and unique county names
   uniqueYears = unique(df_1km.year)
-  uniqueCounty = sort(unique(grid.countyID))
+  uniqueCounty = sort(unique(df_1km.countyID))
 
   if length(uniqueYears) != 1
     @error "Data contains multiple years: $(uniqueYears)"
@@ -1576,6 +1579,8 @@ function save_OPRAM_1km_CSV(df_1km::DataFrame, grid::DataFrame, species_name::St
     CSV.write(fileout1, out_1km, missingstring="NA", dateformat="yyyy-mm-dd")
 
   end
+
+  return nothing
 end
 
 
@@ -1591,26 +1596,23 @@ end
 
 
 
-function save_OPRAM_10km_CSV(out_10km::DataFrame, grid::DataFrame, species_name::String,
+function save_OPRAM_10km_CSV(out_10km::DataFrame, species_name::String,
   yearStr::String, paths::NamedTuple, saveDates::Bool=false)
   # A function to save the final OPRAM results (at 1km scale) in a CSV file
   # The function is used in OPRAM_calculate_anomaly.jl
   #
   # Arguments:
-  #   filename    the name of the file to save data to (including the path)
   #   out_10km      the DataFrame containing the results
-  #   grid        the grid of locations to use (as a DataFrame)
   #   species_name the name of the species to save results for
   #   yearStr     the year string to use in the filename
   #   paths       a named tuple containing the paths to the output directories
+  #   saveDates   whether to save emergence dates (true/false)
   #
   # Output:
   #   None
   # *************************************************************
 
 
-  # Add in hectad ID
-  leftjoin!(out_10km, unique(grid[:, [:hectad, :east_hectad, :north_hectad]]), on=[:east_hectad, :north_hectad])
 
 
 
@@ -1627,12 +1629,12 @@ function save_OPRAM_10km_CSV(out_10km::DataFrame, grid::DataFrame, species_name:
     # Rename some columns
     rename!(out_10km, :nGenerations_max => "nGen",
       :nGenerations_median_max => "nGen_30yr",
-      :nGenerations_anomaly_max => "nGen_anomaly",
+      :nGenerations_anomaly_median => "nGen_anomaly",
       :emergeDate_min => "emergeDate",
       :emergeDate_median_min => "emergeDate_30yr",
       :emergeDOY_min => "emergeDOY",
       :emergeDOY_median_min => "emergeDOY_30yr",
-      :emergeDOY_anomaly_min => "emergeDOY_anomaly")
+      :emergeDOY_anomaly_median => "emergeDOY_anomaly")
 
     # Select specific years
     select!(out_10km, [:hectad, :startDate,
@@ -1645,10 +1647,10 @@ function save_OPRAM_10km_CSV(out_10km::DataFrame, grid::DataFrame, species_name:
     # Rename some columns
     rename!(out_10km, :nGenerations_max => "nGen",
       :nGenerations_median_max => "nGen_30yr",
-      :nGenerations_anomaly_max => "nGen_anomaly",
+      :nGenerations_anomaly_median => "nGen_anomaly",
       :emergeDOY_min => "emergeDOY",
       :emergeDOY_median_min => "emergeDOY_30yr",
-      :emergeDOY_anomaly_min => "emergeDOY_anomaly")
+      :emergeDOY_anomaly_median => "emergeDOY_anomaly")
 
     # Select specific years
     select!(out_10km, [:hectad, :startDate,
@@ -1672,6 +1674,8 @@ function save_OPRAM_10km_CSV(out_10km::DataFrame, grid::DataFrame, species_name:
 
   # Write the data
   CSV.write(fileout3, out_10km, missingstring="NA", dateformat="yyyy-mm-dd")
+
+  return nothing
 end
 
 
