@@ -15,6 +15,13 @@ using CSV
 using Dates
 using Plots
 using JLD2
+using Distributed;
+using TOML;
+
+
+
+include("OPRAM_io_functions.jl");
+include("OPRAM_processing_functions.jl");
 
 
 # =================================================================================
@@ -22,37 +29,31 @@ using JLD2
 # If more than one year then take average across years
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
-run_params = (speciesName="agrilus_anxius",      # Name of the species
-    years=2020,                         # A single year
-    startMonth = 1,                     # The month to Visualise
-    country="IE",                       # Country code (IE or NI)
-    thinFactor=1,                       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-    gridFile="IE_grid_locations.csv",   # File containing a 1km grid of lats and longs over Ireland 
-    averagedPeriod="1991_2020",
-    # (used for daylength calculations as well as importing and thining of meteo data)
-    save_figs=true)  # If true save figures
+# run_params = (speciesName="halyomorpha_halys",      # Name of the species
+#     years=2024,                         # A single year
+#     startMonth = 1,                     # The month to Visualise
+#     country="IE",                       # Country code (IE or NI)
+#     thinFactor=1,                       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
+#     gridFile="IE_grid_locations.csv",   # File containing a 1km grid of lats and longs over Ireland 
+#     averagedPeriod="1991_2020",
+#     # (used for daylength calculations as well as importing and thining of meteo data)
+#     save_figs=true)  # If true save figures
 
+year = 2024
+month = 1
+scale = 10     # Either 1 for 1km scale or 10 for hectad scale
+county = 5      # Set to 0 to import all counties
 
+# Model parameters are stored in a TOML file https://toml.io/en/
+if length(ARGS) == 1
+    nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], true)
 
+elseif length(ARGS) == 0 & isfile("parameters.toml")
+    nNodes, run_params, species_setup, paths = import_parameters("parameters.toml", true)
 
-# =================================================================================
-# Specify directories for import and export of data
-
-if isdir(joinpath(homedir(), "DATA//OPRAM"))       # Linux workstation
-    paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//"),
-        dataDir=joinpath(homedir(), "DATA//OPRAM//"))
-
-elseif isdir(joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//R"))   # Mac
-    paths = (outDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//results//"),
-        dataDir=joinpath(homedir(), "Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"))
-
-elseif isdir(joinpath(homedir(), "Desktop//OPRAM//"))
-    paths = (outDir=joinpath(homedir(), "Desktop//OPRAM//results//"),
-        dataDir=joinpath(homedir(), "Desktop//OPRAM//"))
+else
+    @error "No parameter file given"
 end
-
-include("OPRAM_io_functions.jl");
-include("OPRAM_ddmodel_functions.jl");
 
 
 
@@ -62,12 +63,26 @@ include("OPRAM_ddmodel_functions.jl");
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Import location data and thin it using thinFactor
 # (needed to add the hectad codes to the 10km output) 
-grid = prepare_data(joinpath([paths.dataDir, run_params.gridFile]), run_params.thinFactor, run_params.country)
+grid = read_grid(run_params)
 
 # Create easting and northings of bottom left of a hectad
 grid.east_hectad = convert.(Int32, floor.(grid.east ./ 1e4) .* 1e4)
 grid.north_hectad = convert.(Int32, floor.(grid.north ./ 1e4) .* 1e4)
 
+
+hectad_list = unique(grid.hectad)
+idx = [findfirst(grid.hectad.==hectad_list[l]) for l in eachindex(hectad_list)]
+grid_hectad = grid[idx,:]
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Set species parameters from the parameter file (can be more than one species)
+if species_setup.speciesStr[1] == "all"
+    @info "Importing all species from the species file" * string(species_setup.speciesStr)
+    species_params = import_species(species_setup.speciesFile, species_setup.speciesStr[1])
+else
+    @info "Importing species from the species file: " * string(species_setup.speciesStr)
+    species_params = [import_species(species_setup.speciesFile, species_setup.speciesStr[s]) for s in eachindex(species_setup.speciesStr)]
+end
 
 
 # =========================================================
@@ -75,7 +90,9 @@ grid.north_hectad = convert.(Int32, floor.(grid.north ./ 1e4) .* 1e4)
 # Import data
 
 # Find directory matching the species name in run_params
-speciesName = filter(x -> occursin(r"" * run_params.speciesName, x), readdir(paths.outDir))
+regex = Regex(replace(lowercase(species_params[1].species_name),
+    r"\s" => "\\w"))  # Replace spaces with reg expression
+speciesName = filter(x -> occursin(regex, x), readdir(paths.outDir))
 if length(speciesName) > 1
     @error "More than one species name found"
 elseif length(speciesName) == 0
@@ -83,28 +100,39 @@ elseif length(speciesName) == 0
 end
 
 
-# Import 30 year average
-aggFile = joinpath(paths.outDir, run_params.speciesName, "average_" * speciesName[1] * "_" *
-                                                         run_params.averagedPeriod * "_1km.csv")
-d_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
+# Default values
+ms = 0.5
+inFile = [speciesName[1] * "_" * string(scale) * "_" * string(county) * "_" * string(year) * ".csv"]
+
+if scale == 10
+    inFile = [speciesName[1] * "_100_" * string(year) * ".csv"]
+    ms = 3
+else
+    if county == 0
+        # Import mulitple files
+        reg = Regex(speciesName[1] * "_" * string(scale) * "_" * "[[:digit:]]{1,2}" * "_" * string(year) * ".csv")
+        inFile = filter(x -> occursin(reg, x), readdir(joinpath(paths.outDir, speciesName[1])))
+    end
+end
+
+d = CSV.read(joinpath(paths.outDir, speciesName[1], inFile[1]), DataFrame, missingstring="NA")
+for f in 2:length(inFile)
+      append!(d, CSV.read(joinpath(paths.outDir, speciesName[1], inFile[f]), DataFrame, missingstring="NA"))
+end
 
 
-# Import single year result
-yearFile_1km = joinpath(paths.outDir, speciesName[1], "combined_" * speciesName[1] * "_" *
-                                                  string(minimum(run_params.years)) * "_" * string(maximum(run_params.years)) * "_" * string(run_params.thinFactor) * "km.csv")
-
-d_1km = CSV.read(yearFile_1km, DataFrame, missingstring="NA")
-
-
-# Import single year 10km result
-yearFile_10km = joinpath(paths.outDir, speciesName[1], "combined_" * speciesName[1] * "_" *
-                                                  string(minimum(run_params.years)) * "_" * string(maximum(run_params.years)) * "_10km.csv")
-
-d_10km = CSV.read(yearFile_10km, DataFrame, missingstring="NA")
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Define starting month for start dates (and set as integer)
+idx = .!ismissing.(d.startDate)
+d.startMonth = Vector{Union{Missing,Int}}(missing, nrow(d))
+d.startMonth[idx] = Dates.month.(d.startDate[idx])  # Use month rather than DOY to avoid leap year problems
 
 
-
-
+# Add in coordinates
+if scale==10
+   leftjoin!(d, grid_hectad[:,[:hectad, :east_hectad, :north_hectad]], on=[:hectad])
+   rename!(d, :east_hectad => "eastings", :north_hectad => "northings")
+end
 
 
 # =========================================================
@@ -112,92 +140,41 @@ d_10km = CSV.read(yearFile_10km, DataFrame, missingstring="NA")
 # Create some maps!
 
 # Pick a starting month
-idx2 = d_agg.startMonth .== run_params.startMonth
+idx2 = d.startMonth .== month
 
-
-if length(run_params.years) == 1
-    year_label = string(run_params.years)
-else
-    year_label = string(minimum(run_params.years)) * "-" * string(maximum(run_params.years))
-end
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Map of number of generations =================================================
 # Plots a map with a break in colour at 1 generation
-colorRange1 = (floor(minimum([0.999,minimum(d_agg.nGenerations_median[idx2])]),digits=1), 
-            ceil(maximum(d_agg.nGenerations_median[idx2]),digits=1))
-plot(d_agg.east[idx2],
-    d_agg.north[idx2],
-    zcolor=d_agg.nGenerations_median[idx2],
+x=d.eastings[idx2]
+y=d.northings[idx2]
+z = d.nGen[idx2]
+
+plot_idx = .!ismissing.(z)
+
+plot(x[plot_idx],
+    y[plot_idx],
+    zcolor=z[plot_idx],
     seriestype=:scatter,
-    markersize=0.5,
+    markersize=ms,
     markerstrokewidth=0,
-    colormap=cgrad(:bam,[0,(1-colorRange1[1])/(colorRange1[2]-colorRange1[1]),1]),
-    clims=colorRange1,
+    # colormap=cgrad(:bam,[0,(1-colorRange1[1])/(colorRange1[2]-colorRange1[1]),1]),
+    # clims=colorRange1,
     showaxis=false,
     grid=false,
     legend=false,
     cbar=true,
     aspect_ratio=:equal,
-    colorbar_title="nGenerations",
-    title="Average number of generations per year\n"*run_params.averagedPeriod * " (" * speciesName[1] * ")",
+    # colorbar_title="nGenerations",
+    # title="Average number of generations per year\n"*run_params.averagedPeriod * " (" * speciesName[1] * ")",
     dpi=400)
 
-if run_params.save_figs
-        savefig(speciesName[1] * "_ngen_" * run_params.averagedPeriod * ".png")
-end
-
-
-
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Map emergence date =================================================
-colorRange2 = (1, 
-            maximum([366,maximum(d_agg.emergeDOY_median[idx2])]))
-
-plot(d_agg.east[idx2],
-    d_agg.north[idx2],
-    zcolor=d_agg.emergeDOY_median[idx2],
+    # Add in points with missing data
+plot!(x[Not(plot_idx)],
+    y[Not(plot_idx)],
     seriestype=:scatter,
-    colormap=cgrad(:balance,[0,(366-colorRange2[1])/(colorRange2[2]-colorRange2[1])-0.001,1], rev=true),
-    clims=colorRange2,
-    markersize=0.5,
+    markersize=ms,
     markerstrokewidth=0,
-    showaxis=false,
-    grid=false,
-    legend=false,
-    cbar=true,
-    aspect_ratio=:equal,
-    colorbar_title="Emergence DOY",
-    title="Average emergence DOY\n"* run_params.averagedPeriod * " (" * speciesName[1] * ")",
-                dpi=400)
-
-if run_params.save_figs
-        savefig(speciesName[1] * "_emergeDOY_" * run_params.averagedPeriod * ".png")
-end
+    markercolor="green")
 
 
-
-
-
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-# Plot 10km data =================================================
-
-idx = df_10km.startMonth .== run_params.startMonth .&& Not(ismissing.(df_10km.nGenerations_median_max))
-plot(df_10km.east_hectad[idx] .+ 5000.0,
-    df_10km.north_hectad[idx] .+ 5000.0,
-    seriestype=:scatter,
-    zcolor=df_10km.nGenerations_median_max[idx],
-    colormap=cgrad(:bam, [0, (1 - colorRange1[1]) / (colorRange1[2] - colorRange1[1]), 1]),
-    # color=cgrad(:PiYG, categorical=false),
-    clims=colorRange1,
-    showaxis=false,
-    grid=false,
-    legend=false,
-    cbar=true,
-    aspect_ratio=:equal,
-    markersize=3,
-    markerstrokewidth=0.5,
-    colorbar_title="nGenerations",
-    title="Average number of generations per year\n"*run_params.averagedPeriod * " (" * speciesName[1] * ")",
-    dpi=400)
-   
