@@ -38,7 +38,7 @@ include("OPRAM_processing_functions.jl");
 # =============== Import parameter values =======================================================
 
 
-set_missing_anamaly_to_zero = true  # Set missing anomaly values to zero (this is work around for bug in app)
+set_missing_anomaly_to_zero = true  # Set missing anomaly values to zero (this is work around for bug in app)
 
 # Model parameters are stored in a TOML file https://toml.io/en/
 if length(ARGS) == 1
@@ -273,20 +273,30 @@ for s in eachindex(species_params)
         # =========================================================
         # =========================================================
         # Replace missing anomalies with zeros if required ---------
-        if set_missing_anamaly_to_zero
+        if set_missing_anomaly_to_zero
 
             @info "---- Replacing missing anomaly values with zeros"
 
-            # For nGenerations_anomaly (1km)
+            # For nGenerations_anomaly and emergeDOY_anomaly (1km)
             idx_ngen = ismissing.(df_1km.nGenerations_anomaly)
             if any(idx_ngen)
                 df_1km.nGenerations_anomaly[idx_ngen] .= 0.0
             end
 
-            # For nGenerations_anomaly (10km)
+            idx_ngen = ismissing.(df_1km.emergeDOY_anomaly)
+            if any(idx_ngen)
+                df_1km.emergeDOY_anomaly[idx_ngen] .= 0.0
+            end
+
+            # For nGenerations_anomaly_median and emergeDOY_anomaly_median (10km)
             idx_ngen = ismissing.(df_10km.nGenerations_anomaly_median)
             if any(idx_ngen)
                 df_10km.nGenerations_anomaly_median[idx_ngen] .= 0.0
+            end
+
+            idx_ngen = ismissing.(df_10km.emergeDOY_anomaly_median)
+            if any(idx_ngen)
+                df_10km.emergeDOY_anomaly_median[idx_ngen] .= 0.0
             end
         end
 
