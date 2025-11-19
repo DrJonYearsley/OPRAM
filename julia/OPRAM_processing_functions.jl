@@ -362,18 +362,23 @@ function aggregate_to_hectad(df_1km::DataFrame)
 
   # Set missing values to be extremes (e.g. generations are small and emergeDOY is large)
   # nGenerations should have no missing data because no emergence corresponds to nGenerations = 0.0
-  typeidx = findfirst(!isequal(Missing), typeof.(df_1km.emergeDOY))
-  missing_DOY = convert(typeof(df_1km.emergeDOY[typeidx]),99999)
 
-  typeidx = findfirst(!isequal(Missing), typeof.(df_1km.nGenerations))
-  missing_nGenerations = convert(typeof(df_1km.nGenerations[typeidx]),-99999)
+  # Try to find the type of emergeDOY and nGenerations
+  # typeidx = findfirst(!isequal(Missing), typeof.(df_1km.emergeDOY))
+  missing_DOY = convert(Int32, 99999)
 
+  # typeidx = findfirst(!isequal(Missing), typeof.(df_1km.nGenerations))
+  missing_nGenerations = convert(Float64, -99999)
 
   idx1 = ismissing.(df_1km.emergeDOY)
-  
+
+  if all(idx1)
+    df_1km.emergeDOY .= missing_DOY
+    df_1km.nGenerations .= missing_nGenerations
+  else
   df_1km.emergeDOY[idx1] .= missing_DOY
   df_1km.nGenerations[idx1] .= missing_nGenerations 
-
+  end
 
   idx2 = ismissing.(df_1km.emergeDOY_median)
   df_1km.emergeDOY_median[idx2] .= missing_DOY
@@ -402,10 +407,10 @@ function aggregate_to_hectad(df_1km::DataFrame)
 
   # Add in missing values for emergeDOY and zero for nGEnerations where 10km worst case is out of bounds
   # (i.e. nGenerations<0 or emergeDOY>5000)
-  # Note nGeneration_anomaly will be zero in place of missing
+  
   allowmissing!(df_10km, [:nGenerations_max, :nGenerations_median_max, :nGenerations_anomaly_median, :emergeDOY_min, :emergeDOY_median_min, :emergeDOY_anomaly_median])
   df_10km.nGenerations_max[df_10km.nGenerations_max.<0] .= 0.0
-  df_10km.nGenerations_anomaly_median[abs.(df_10km.nGenerations_anomaly_median).>5000] .= 0.0
+  df_10km.nGenerations_anomaly_median[abs.(df_10km.nGenerations_anomaly_median).>5000] .= missing
   df_10km.nGenerations_median_max[df_10km.nGenerations_median_max.<0] .= 0.0
 
   df_10km.emergeDOY_min[df_10km.emergeDOY_min.>5000] .= missing

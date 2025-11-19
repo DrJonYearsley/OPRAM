@@ -52,6 +52,12 @@ else
 end
 
 
+# Check that this is for past climate, not future climate
+if run_params.TRANSLATE_future
+    @error "Average calculation not available for future climates"
+end
+
+
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Set species parameters from the parameter file (can be more than one species)
 if species_setup.speciesStr[1] == "all"

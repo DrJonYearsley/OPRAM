@@ -90,7 +90,6 @@ include("OPRAM_ddmodel_functions.jl")
 # Start the main loop of the program
 if run_params.TRANSLATE_future
   # If a climate scenario is specified, run the model for future climates
-  using Distributed;
   using Distributions, Random;
 
   @info "Running OPRAM model for future climate scenarios"

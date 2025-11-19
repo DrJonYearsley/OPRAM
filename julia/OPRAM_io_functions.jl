@@ -1537,7 +1537,6 @@ function save_OPRAM_1km_CSV(df_1km::DataFrame, species_name::String,
     # Extract data for the relevant county and year
     out_1km = select(subset(df_1km, :countyID => x1 -> x1 .== c),
       :ID, :east, :north, :startDate,
-      # Not([:startMonth, :startDOY, :year, :countyID]))
       [:ID, :east, :north, :startDate,
         :emergeDOY, :emergeDOY_median, :emergeDOY_anomaly,
         :nGenerations, :nGenerations_median, :nGenerations_anomaly])

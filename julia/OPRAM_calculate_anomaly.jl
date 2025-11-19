@@ -38,7 +38,7 @@ include("OPRAM_processing_functions.jl");
 # =============== Import parameter values =======================================================
 
 
-
+set_missing_anamaly_to_zero = true  # Set missing anomaly values to zero (this is work around for bug in app)
 
 # Model parameters are stored in a TOML file https://toml.io/en/
 if length(ARGS) == 1
@@ -196,7 +196,7 @@ for s in eachindex(species_params)
         @info "Importing data for " * yearStrVec[f]
         df_tmp = read_OPRAM_JLD2(inFiles[f], yearVec[f], grid)
 
-        # df_1km = DataFrame()
+
         if run_params.TRANSLATE_future
             # If TRANSLATE future data then calculate the average across replicates
 
@@ -205,15 +205,15 @@ for s in eachindex(species_params)
 
             # Calculate average over all replicates
             df_1km = combine(df_group,
-                :nGenerations => (x -> if sum(.!isa.(x, Missing)) > 0
-                    mean(skipmissing(x))
+                :nGenerations => (x -> if all(isa.(x, Missing))
+                   missing
                 else
-                    missing
+                    mean(skipmissing(x))
                 end) => :nGenerations,          # Mean generations
-                :emergeDOY => (x -> if sum(.!isa.(x, Missing)) > 0
-                    mean(skipmissing(x))
-                else
+                :emergeDOY => (x -> if all(isa.(x, Missing))
                     missing
+                else
+                    mean(skipmissing(x))
                 end) => :emergeDOY)                # Mean emergence DOY
 
             df_1km.startDate = Date.(yearVec[f], df_1km.startMonth, 1)
@@ -259,6 +259,38 @@ for s in eachindex(species_params)
         df_1km.year = year.(df_1km.startDate)
         leftjoin!(df_1km, grid[:, [:ID, :countyID, :east, :north]], on=:ID)
 
+
+        # =========================================================
+        # =========================================================
+        # Create 10km summary ---------
+
+        @info "---- Aggregating data to 10km resolution"
+        df_10km = aggregate_to_hectad(df_1km)
+ 
+        # Add in hectad ID
+        leftjoin!(df_10km, unique(grid[:, [:hectad, :east_hectad, :north_hectad]]), on=[:east_hectad, :north_hectad])
+
+        # =========================================================
+        # =========================================================
+        # Replace missing anomalies with zeros if required ---------
+        if set_missing_anamaly_to_zero
+
+            @info "---- Replacing missing anomaly values with zeros"
+
+            # For nGenerations_anomaly (1km)
+            idx_ngen = ismissing.(df_1km.nGenerations_anomaly)
+            if any(idx_ngen)
+                df_1km.nGenerations_anomaly[idx_ngen] .= 0.0
+            end
+
+            # For nGenerations_anomaly (10km)
+            idx_ngen = ismissing.(df_10km.nGenerations_anomaly_median)
+            if any(idx_ngen)
+                df_10km.nGenerations_anomaly_median[idx_ngen] .= 0.0
+            end
+        end
+
+
         # =========================================================
         # =========================================================
         # Export the anomaly and multi year average using a separate file for every year and every county
@@ -266,17 +298,6 @@ for s in eachindex(species_params)
         @info "---- Writing 1km results to CSV files"
         save_OPRAM_1km_CSV(df_1km, speciesName[1], yearStrVec[f], paths)
 
-
-
-        # =========================================================
-        # =========================================================
-        # Create 10km summary ---------
-
-        @info "---- Aggregating data to 10km resolution"
-       df_10km = aggregate_to_hectad(df_1km)
- 
-        # Add in hectad ID
-        leftjoin!(df_10km, unique(grid[:, [:hectad, :east_hectad, :north_hectad]]), on=[:east_hectad, :north_hectad])
 
 
 
