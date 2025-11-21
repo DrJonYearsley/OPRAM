@@ -1,8 +1,6 @@
-#!//opt/homebrew/bin/julia -p 3
-#
-#!//home/jon/.juliaup/bin/julia -p 7
-#
-# Julia program to:
+# =============================================================================
+# Julia program to produce the final results for the OPRAM app. 
+# This program does the following:
 #  extract results from model jld2 files 
 #  import the multi-year average of degree day model results
 #  calculate corresponding anomaly for each year
@@ -38,7 +36,6 @@ include("OPRAM_processing_functions.jl");
 # =============== Import parameter values =======================================================
 
 
-set_missing_anomaly_to_zero = true  # Set missing anomaly values to zero (this is work around for bug in app)
 
 # Model parameters are stored in a TOML file https://toml.io/en/
 if length(ARGS) == 1
@@ -273,7 +270,7 @@ for s in eachindex(species_params)
         # =========================================================
         # =========================================================
         # Replace missing anomalies with zeros if required ---------
-        if set_missing_anomaly_to_zero
+        if run_params.missing2zero
 
             @info "---- Replacing missing anomaly values with zeros"
 
