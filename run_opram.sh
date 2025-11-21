@@ -11,4 +11,4 @@ julia -p "$nNodes" OPRAM_main_program.jl parameters_test.toml
 julia  OPRAM_calculate_average.jl parameters_test.toml
 
 # Create final files for the web app
-julia  OPRAM_calculate_anomaly.jl parameters_test.toml
+julia  OPRAM_final_results.jl parameters_test.toml

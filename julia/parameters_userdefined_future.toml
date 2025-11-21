@@ -7,6 +7,7 @@ nNodes = 5           # Number of compute nodes to use
 save2file = true     # If true save the full result to a JLD2 file
 save1year = true     # if true save first year's results, otherwise
                      # save all years from simYear tp simYear+meaxYears-1
+missing2zero = true  # if true set anomaly missing values to zero (workaround for bug in the app)
 
 [paths]   # All paths are relative to the user's home directory
 output =  "/media/jon/Seagate_5TB/OPRAM_results"      # Folder to save model output

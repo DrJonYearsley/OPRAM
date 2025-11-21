@@ -283,6 +283,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
       method=params["model"]["method"],          # The degree-day algotrithm to use
       saveJLDFile=params["runtime"]["save2file"],  # If true save the full result to a JLD2 file
       save1year=params["runtime"]["save1year"],    # If true save only the first year's results
+      missing2zero=params["runtime"]["missing2zero"], # If true missing meteo data are set to zero
       years=yearVec,                               # Years to run model
       maxYears=params["model"]["maxYears"],        # Maximum number of years to complete insect development
       lastMeteoYear=params["model"]["lastMeteoYear"], # Maximum number of years to complete insect development
@@ -302,6 +303,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
       method=params["model"]["method"],         # The degree-day algotrithm to use
       saveJLDFile=params["runtime"]["save2file"], # If true save the full result to a JLD2 file
       save1year=params["runtime"]["save1year"],   # If true save only the first year's results
+      missing2zero=params["runtime"]["missing2zero"],# If true missing meteo data are set to zero
       futurePeriod=params["model"]["futurePeriod"], # Years to run model
       rcp=params["model"]["rcp"],                 # Future RCP scenario
       nReps=params["model"]["nReps"],             # Number of replicate climate scenarios
@@ -1482,7 +1484,7 @@ function read_OPRAM_JLD2(inFiles::Union{String,Vector{String}}, years::Union{Int
         append!(df_1km, create_doy_results(dates, adult_emerge[r], grid))
       end
     else
-      @info "---- Generating output for specific starting dates"
+      @info "---- Generating output for specific starting dates for year " * string(years[y])
       append!(df_1km, create_doy_results(dates, adult_emerge, grid))
     end
   end

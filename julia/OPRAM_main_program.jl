@@ -1,8 +1,4 @@
-#!//opt/homebrew/bin/julia -p 3
-#
-#
-#!//home/jon/.juliaup/bin/julia -p 7
-#
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # This is the main program to run the OPRAM degree day model
 #
 # The program imports Met Eireann's gridded data 

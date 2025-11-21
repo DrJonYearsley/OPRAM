@@ -8,13 +8,14 @@ nNodes = 3           # Number of compute nodes to use
 save2file = true     # If true save the results to a JLD2 file
 save1year = true     # if true save first year's results, otherwise
                      # save all years from simYear tp simYear+meaxYears-1
+missing2zero = true  # if true set anomaly missing values to zero (workaround for bug in the app)
 
 
 [paths]   # All paths are relative to the user's home directory
 output =  "OPRAM//results"      # Folder to save model output
 results = "OPRAM//results"      # Folder for importing model results
-data = "DATA//OPRAM"                     # Folder for other model data
-meteoIE = "DATA//OPRAM//Climate_JLD2"    # Folder containing meteo data for ROI
+data = "/Users/jon"                     # Folder for other model data
+meteoIE = "/Users/jon/Google Drive/My Drive/Projects/DAFM_OPRAM/Data/Climate_JLD2"    # Folder containing meteo data for ROI
 meteoNI =  "nothing"                     # Folder containing meteo data for NI
 
 [inputData]   # Input data on the model grid and species params
@@ -32,14 +33,13 @@ maxYears = 4         # Maximum number of years to complete insect development
 lastMeteoYear = 2024  # The last year of meteo data
 country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-degreeday = "sine"   # degree-day algorithm ("sine","triangle","average")
+method = "triangle"  # degree-day algorithm ("sine","triangle","average")
 
 
-# List species to simulate. Species with several life stages are grouped together. 
-# This grouping only affects the programs OPRAM_calculate_average and OPRAM_calculate anomaly
+# List species to simulate. 
 speciesList = ["Agrilus anxius", 
-                "Ips sexdentatus", 
                 "Ips duplicatus", 
+                "Ips sexdentatus", 
                 "Spodoptera frugiperda", 
                 "Ips cembrae", 
                 "Leptinotarsa decemlineata", 
@@ -47,16 +47,3 @@ speciesList = ["Agrilus anxius",
                "Ips typographus",
                "Oulema melanopus, model 1",
                "Oulema melanopus, model 2"]
-
-        
-
-# Predefined species are:
-#  :agrilus_anxius
-#  :halyomorpha_halys
-#  :ips_cembrae
-#  :ips_duplicatus
-#  :ips_sexdentatus
-#  :ips_typographus
-#  :leptinotarsa_decemlineata
-#  :oulema_melanopus (models 1 and 2)
-#  :spodoptera_frugiperda

@@ -1,7 +1,4 @@
-#!//opt/homebrew/bin/julia -p 3
-#
-##!//home/jon/.juliaup/bin/julia -p 7
-#
+# =============================================================================
 # Julia program to:
 #  extract results from model jld2 files 
 #  calculate multi-year average of degree day model results
@@ -45,7 +42,7 @@ if length(ARGS) == 1
     nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], true)
 
 elseif length(ARGS) == 0 & isfile("parameters.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("parameters_test.toml", true)
+    nNodes, run_params, species_setup, paths = import_parameters("parameters.toml", true)
 
 else
     @error "No parameter file given"
@@ -139,9 +136,10 @@ for s in eachindex(species_params)
     # =========================================================
     # ################# Median across the years ##############
     # Calculate the median of nGenerations and emergeDOY
+    # Remove missing data when calculating the median
     d_agg = combine(df_group,
-        :nGenerations => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.5) else 0.0 end) => :nGenerations_median,
-        :emergeDOY => (x -> if sum(.!isa.(x,Missing))>0 quantile(skipmissing(x), 0.5) else missing end) => :emergeDOY_median,
+        :nGenerations => (x -> if all(isa.(x,Missing)) 0.0 else quantile(skipmissing(x), 0.5) end) => :nGenerations_median,
+        :emergeDOY => (x -> if all(isa.(x,Missing)) missing else quantile(skipmissing(x), 0.5)  end) => :emergeDOY_median,
         :emergeDOY => (x -> sum(ismissing.(x))) => :nMissing)
 
 
@@ -165,9 +163,10 @@ for s in eachindex(species_params)
     # Add eastings and northings into the 1km data frames (copy the data frames so we can round before saving)
     out_agg1km = rightjoin(grid[:, [:ID, :east, :north]], d_agg, on=[:ID])
 
-    # Round number of generations and emergeDOY
-    out_agg1km.nGenerations_median = round.(out_agg1km.nGenerations_median, digits=2)
-    out_agg1km.emergeDOY_median = round.(out_agg1km.emergeDOY_median, digits=2)
+    # # Round number of generations and emergeDOY 
+    # This is usually done when produing the final results, so it is commented out here
+    # out_agg1km.nGenerations_median = round.(out_agg1km.nGenerations_median, digits=2)
+    # out_agg1km.emergeDOY_median = round.(out_agg1km.emergeDOY_median, digits=2)
 
     # Remove unwanted variables
     select!(out_agg1km, Not(:nMissing))
