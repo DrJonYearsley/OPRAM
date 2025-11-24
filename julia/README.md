@@ -57,7 +57,8 @@ Filename  | Description
 ----------| --------------------------------
 meteo_to_jld.jl  | Convert Met Eireann gridded csv files of gridded temperatures into a jld2 file
 meteoUK_to_jld2.jl | Convert UK Met Office netCDF files of gridded temperatures into a jld2 file
-translate_to_jld.jl  | Convert Met Eireann TRANSLATE csv files of gridded temperatures into a jld2 file
+translate_to_jld.jl  | Convert Met Eireann TRANSLATE csv files of mean daily gridded temperatures into a jld2 file
+translatemaxmin_to_jld.jl  | Convert Met Eireann TRANSLATE csv files of max and min daily gridded temperatures into a jld2 file
 
 
 
