@@ -125,8 +125,8 @@ for s in eachindex(species_params)
             # Find future year from the futurePeriod
             if occursin(r"(2021|2035|2050)", run_params.futurePeriod[j])
                 Year = 2035
-            elseif occursin(r"(2051|2065|2070)", run_params.futurePeriod[j])
-                Year = 2065
+            elseif occursin(r"(2041|2055|2070)", run_params.futurePeriod[j])
+                Year = 2055
             else
                 @error "Future period not recognised"
             end
