@@ -371,31 +371,46 @@ function aggregate_to_hectad(df_1km::DataFrame)
   missing_nGenerations = convert(Float64, -99999)
 
   idx1 = ismissing.(df_1km.emergeDOY)
-
   if all(idx1)
     df_1km.emergeDOY .= missing_DOY
-    df_1km.nGenerations .= missing_nGenerations
   else
     df_1km.emergeDOY[idx1] .= missing_DOY
-    df_1km.nGenerations[idx1] .= missing_nGenerations
   end
 
   idx2 = ismissing.(df_1km.emergeDOY_median)
   if all(idx2)
     df_1km.emergeDOY_median .= missing_DOY
-    df_1km.nGenerations_median .= missing_nGenerations
   else
     df_1km.emergeDOY_median[idx2] .= missing_DOY
-    df_1km.nGenerations_median[idx2] .= missing_nGenerations
   end
 
   idx3 = ismissing.(df_1km.emergeDOY_anomaly)
   if all(idx3)
     df_1km.emergeDOY_anomaly .= missing_DOY
-    df_1km.nGenerations_anomaly .= -missing_nGenerations
   else
     df_1km.emergeDOY_anomaly[idx3] .= missing_DOY
-    df_1km.nGenerations_anomaly[idx3] .= -missing_nGenerations
+  end
+
+  # Do similar for nGenerations
+  idx4 = ismissing.(df_1km.nGenerations)
+  if all(idx4)
+    df_1km.nGenerations .= missing_nGenerations
+  else
+    df_1km.nGenerations[idx4] .= missing_nGenerations
+  end
+
+  idx5 = ismissing.(df_1km.nGenerations_median)
+  if all(idx5)
+    df_1km.nGenerations_median .= missing_nGenerations
+  else
+    df_1km.nGenerations_median[idx5] .= missing_nGenerations
+  end
+
+  idx6 = ismissing.(df_1km.nGenerations_anomaly)
+  if all(idx6)
+    df_1km.nGenerations_anomaly .= -missing_nGenerations
+  else
+    df_1km.nGenerations_anomaly[idx6] .= -missing_nGenerations
   end
 
   # Group data frame by location and then starting Date 
@@ -449,6 +464,34 @@ function aggregate_to_hectad(df_1km::DataFrame)
   df_10km.emergeDOY_min[df_10km.emergeDOY_min.>5000] .= missing
   df_10km.emergeDOY_anomaly_median[abs.(df_10km.emergeDOY_anomaly_median).>5000] .= missing
   df_10km.emergeDOY_median_min[df_10km.emergeDOY_median_min.>5000] .= missing
+
+  # Return df_1km missing values to original missing values
+  if any(idx1)
+    allowmissing!(df_1km, :emergeDOY)
+    df_1km.emergeDOY[idx1] .= missing
+  end
+
+  if any(idx2)
+    allowmissing!(df_1km, :emergeDOY_median)
+    df_1km.emergeDOY_median[idx2] .= missing
+  end
+  
+  if any(idx3)
+    allowmissing!(df_1km, :emergeDOY_anomaly)
+    df_1km.emergeDOY_anomaly[idx3] .= missing
+  end
+  if any(idx4)  
+    allowmissing!(df_1km, :nGenerations)
+    df_1km.nGenerations[idx4] .= missing
+  end
+  if any(idx5)  
+    allowmissing!(df_1km, :nGenerations_median)
+    df_1km.nGenerations_median[idx5] .= missing
+  end
+  if any(idx6)  
+    allowmissing!(df_1km, :nGenerations_anomaly)
+    df_1km.nGenerations_anomaly[idx6] .= missing
+  end
 
   return df_10km
 

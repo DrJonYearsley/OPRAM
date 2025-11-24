@@ -187,7 +187,6 @@ for s in eachindex(species_params)
     # Import and process individual year data
 
     for f in eachindex(inFiles)
-
         # Import the data from the jld2 files
         println("  ")
         @info "Importing data for " * yearStrVec[f]
@@ -247,7 +246,7 @@ for s in eachindex(species_params)
         # Combine origninal data frame with 30 year average
         leftjoin!(df_1km, select(d_agg, Not([:east, :north])), on=[:ID, :startMonth])
 
-        # Calculate anomalies
+        # Calculate anomalies (missing values will propagate through)
         transform!(df_1km, [:nGenerations, :nGenerations_median] => ((a, b) -> a .- b) => :nGenerations_anomaly)
         transform!(df_1km, [:emergeDOY, :emergeDOY_median] => ((a, b) -> a .- b) => :emergeDOY_anomaly)
 
@@ -298,12 +297,14 @@ for s in eachindex(species_params)
         end
 
 
+
         # =========================================================
         # =========================================================
         # Export the anomaly and multi year average using a separate file for every year and every county
 
         @info "---- Writing 1km results to CSV files"
         save_OPRAM_1km_CSV(df_1km, speciesName[1], yearStrVec[f], paths)
+
 
 
 
