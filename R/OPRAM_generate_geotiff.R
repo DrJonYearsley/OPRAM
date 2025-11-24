@@ -11,51 +11,73 @@
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
+library(RcppTOML)
 library(sf)
 library(lubridate)
 library(terra)
-# library(raster)
 
 rm(list=ls())
 
+zip_output = FALSE    # Zip together all files for 1 year
+# toml_file = "../julia/parameters_halymorpha.toml"
+toml_file = "../julia/parameters.toml"
+
+params = parseTOML(toml_file)  
+
 # Specify folder containing the CSV files
-dataFolder = "~/Google Drive/My Drive/Projects/DAFM_OPRAM/results/granite_output"
-outFolder = "~/Desktop/gisdata/"
-githubFolder = "~/git_repos/OPRAM/data"
-speciesfile = "species_parameters.csv"
+outFolder = "~/OPRAM//gisdata/"    # Folder to hold the geotiff output
+dataFolder = params$paths$output
+granite_defs = params$inputData$countyDefs
+gridFile = params$inputData$gridFile
+speciesFile = params$inputData$speciesFile
 
-years = c(1991:2024)
-speciesList = c("spodoptera_frugiperda","oulema_melanopus_model_2",
-                "oulema_melanopus_model_1","leptinotarsa_decemlineata",
-                "ips_sexdentatus","agrilus_anxius","ips_duplicatus",
-                "ips_cembrae","halyomorpha_halys")
-
-speciesList = c("oulema_melanopus_model_2",
-                "oulema_melanopus_model_1","leptinotarsa_decemlineata",
-                "ips_sexdentatus","agrilus_anxius","ips_duplicatus",
-                "ips_cembrae","halyomorpha_halys")
+years = params$model$simYears
+species = params$model$speciesList
 
 
-zip_output = FALSE
-useSpeciesFile = FALSE
 
+
+if (!grepl("^[~/\\]{1}",dataFolder)) {
+  dataFolder = file.path("~", dataFolder)
+}
+if (!grepl("^[~/\\]{1}",speciesFile)) {
+  speciesFile = file.path("~", speciesFile)
+}
+if (!grepl("^[~/\\]{1}",granite_defs)) {
+  granite_defs = file.path("~", granite_defs)
+}
+if (!grepl("^[~/\\]{1}",gridFile)) {
+  gridFile = file.path("~", gridFile)
+}
 
 
 # ===================================
 # Find and import data --------------
 
 # Import species names
-if (useSpeciesFile & file.exists(file.path(githubFolder, speciesfile))) {
-  species_info = read.csv(file.path(githubFolder, speciesfile))
-  
+species_info = read.csv(file.path(speciesFile))
+
+# Find rows that correspond to species in list
+if (any(species=="all")) {
   speciesList = species_info$species
-} 
+} else {
+  speciesList = array(NA, dim=length(species))
+  for (s in 1:length(species)) {
+    species_name = grep(pattern=gsub("[[:space:][:punct:]]+","[[:space:][:punct:]]*",species[s]),
+                        species_info$species,
+                        ignore.case = TRUE,
+                        value=TRUE)
+    # Replace all spaces with underscores and make lower case
+    speciesList[s] = gsub(" ","_",tolower(species_name))
+  }
+}
+
 
 # Import grid data
-granite = read.csv(file.path(githubFolder,"granite_hectad_county_defs.csv"))
-grid = read.csv(file.path(githubFolder,"IE_grid_locations.csv"))
-grid_hectad = read.csv(file.path(githubFolder,"IE_hectad_locations.csv"))
-counties = unique(granite[,c(4,5)])
+granite = read.csv(granite_defs)
+grid = read.csv(gridFile)
+# grid_hectad = read.csv(file.path(githubFolder,"IE_hectad_locations.csv"))
+counties = unique(granite[,c("County","Id")])
 
 # Find data Folder for species
 
@@ -67,7 +89,8 @@ for (species in speciesList) {
     # **************************************
     # Import results -------
     
-    for (c in 1:nrow(counties)) {
+ 
+   for (c in 1:nrow(counties)) {
       # Look for CSV files which are at the 1km scale
       files = list.files(path=file.path(dataFolder,species), 
                          pattern=paste0(species,"_1_",counties$Id[c],"_",y,"[[:graph:]]+csv"),
@@ -75,8 +98,9 @@ for (species in speciesList) {
       if (length(files)>0) {
         d = read.csv(file.path(dataFolder,species, files), 
                      header=TRUE,
-                     colClasses = c("integer","integer","integer","Date","numeric","integer",
-                                    "numeric", "numeric", "numeric", "numeric"))
+                     colClasses = c("integer","integer","integer","Date",
+                                    "integer","numeric", "numeric",   # emergeDOY
+                                    "numeric", "numeric", "numeric")) #nGen
         idx = match(d$ID, grid$ID)
         if (!exists("d_final")) {
           # Not needed if results contain eastings and northings
@@ -100,7 +124,7 @@ for (species in speciesList) {
         rm(list="d")
       }
     }
-    # Put eastings and northings in the middle of the grad square
+    # Put eastings and northings in the middle of the 1km grid square
     d_final$eastings = d_final$eastings + 500
     d_final$northings = d_final$northings + 500
     
