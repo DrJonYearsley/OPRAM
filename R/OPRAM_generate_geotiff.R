@@ -20,7 +20,7 @@ rm(list=ls())
 
 zip_output = FALSE    # Zip together all files for 1 year
 # toml_file = "../julia/parameters_halymorpha.toml"
-toml_file = "../julia/parameters.toml"
+toml_file = "../julia/parameters_future.toml"
 
 params = parseTOML(toml_file)  
 
@@ -31,8 +31,24 @@ granite_defs = params$inputData$countyDefs
 gridFile = params$inputData$gridFile
 speciesFile = params$inputData$speciesFile
 
-years = params$model$simYears
+
 species = params$model$speciesList
+
+if (!is.null(params$model$rcp)) {
+  # Set up years for future climate scenarios
+  translate=TRUE
+  yearStr = paste("rcp", rep(params$model$rcp, times=length(params$model$futurePeriod)),
+                  "_",
+                      rep(params$model$futurePeriod, each=length(params$model$rcp)),
+                          sep="")
+  # years = array(NA, dim=length(yearStr))
+  # years[grepl("2021-2050",yearStr)] = 2035
+  # years[grepl("2041-2070",yearStr)] = 2055
+} else {
+  # Assume results are for past climates
+  translate=TRUE
+  yearStr = as.character(params$model$simYears)
+}
 
 
 
@@ -82,7 +98,7 @@ counties = unique(granite[,c("County","Id")])
 # Find data Folder for species
 
 for (species in speciesList) {
-  for (y in years) {
+  for (y in yearStr) {
     
     print(paste0("Processing year ", y, " for species ",species))
     
@@ -98,9 +114,9 @@ for (species in speciesList) {
       if (length(files)>0) {
         d = read.csv(file.path(dataFolder,species, files), 
                      header=TRUE,
-                     colClasses = c("integer","integer","integer","Date",
-                                    "integer","numeric", "numeric",   # emergeDOY
-                                    "numeric", "numeric", "numeric")) #nGen
+                     colClasses = c("integer","integer","integer","Date", # Prelim
+                                    "integer","numeric", "numeric",       # emergeDOY
+                                    "numeric", "numeric", "numeric"))     #nGen
         idx = match(d$ID, grid$ID)
         if (!exists("d_final")) {
           # Not needed if results contain eastings and northings
@@ -146,9 +162,15 @@ for (species in speciesList) {
     
     
     for (m in 1:length(starts)) {
+      if (translate) {
+        filename = paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01.tif")
+       } else {
+        filename = paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01.tif")
+       }
+      
       if (zip_output) {
         fileout = file.path(outFolder,species,outPrefix,
-                            paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01.tif"))
+                            )
       } else {
         fileout = file.path(outFolder,species,
                             paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01.tif"))
