@@ -15,6 +15,7 @@ library(RcppTOML)
 library(sf)
 library(lubridate)
 library(terra)
+library(data.table)
 
 rm(list=ls())
 
@@ -37,10 +38,11 @@ species = params$model$speciesList
 if (!is.null(params$model$rcp)) {
   # Set up years for future climate scenarios
   translate=TRUE
-  yearStr = paste("rcp", rep(params$model$rcp, times=length(params$model$futurePeriod)),
-                  "_",
+  rcp = rep(params$model$rcp, times=length(params$model$futurePeriod))
+  yearStr = paste("rcp", rcp, "_",
                       rep(params$model$futurePeriod, each=length(params$model$rcp)),
                           sep="")
+  
   # years = array(NA, dim=length(yearStr))
   # years[grepl("2021-2050",yearStr)] = 2035
   # years[grepl("2041-2070",yearStr)] = 2055
@@ -98,9 +100,9 @@ counties = unique(granite[,c("County","Id")])
 # Find data Folder for species
 
 for (species in speciesList) {
-  for (y in yearStr) {
+  for (y in 1:length(yearStr)) {
     
-    print(paste0("Processing year ", y, " for species ",species))
+    print(paste0("Processing year ", yearStr[y], " for species ",species))
     
     # **************************************
     # Import results -------
@@ -109,32 +111,22 @@ for (species in speciesList) {
    for (c in 1:nrow(counties)) {
       # Look for CSV files which are at the 1km scale
       files = list.files(path=file.path(dataFolder,species), 
-                         pattern=paste0(species,"_1_",counties$Id[c],"_",y,"[[:graph:]]+csv"),
+                         pattern=paste0(species,"_1_",counties$Id[c],"_",yearStr[y],"[[:graph:]]+csv"),
                          recursive = TRUE)
       if (length(files)>0) {
-        d = read.csv(file.path(dataFolder,species, files), 
+        # Use fread to speed up import
+        d = data.table::fread(file.path(dataFolder,species, files), 
                      header=TRUE,
-                     colClasses = c("integer","integer","integer","Date", # Prelim
-                                    "integer","numeric", "numeric",       # emergeDOY
+                     colClasses = c("integer","integer","integer","Date", # Spatial ID, eastings, northings and date
+                                    "numeric","numeric", "numeric",       # emergeDOY
                                     "numeric", "numeric", "numeric"))     #nGen
-        idx = match(d$ID, grid$ID)
+
+                idx = match(d$ID, grid$ID)
         if (!exists("d_final")) {
-          # Not needed if results contain eastings and northings
-          
-          # d_final = cbind(eastings=grid$east[idx] + 500, 
-          #                 northings = grid$north[idx] + 500,
-          #                 county = counties$Id[c],
-          #                 d[,-c(1)]) 
           d_final = cbind(d, county = counties$Id[c])
         }    else {
-          # tmp = cbind(eastings=grid$east[idx] + 500, 
-          #             northings = grid$north[idx] + 500,
-          #             county = counties$Id[c],
-          #             d[,-c(1)])
-          
           d_final = rbind(d_final, 
                           cbind(d, county = counties$Id[c]))
-          # rm(list="tmp")
         }
         
         rm(list="d")
@@ -154,7 +146,7 @@ for (species in speciesList) {
       dir.create(file.path(outFolder,species))
     }
     if (zip_output) {
-      outPrefix = paste0(species,"_1_",y)
+      outPrefix = paste0(species,"_1_",yearStr[y])
       if (!dir.exists(file.path(outFolder,species,outPrefix))) {
         dir.create(file.path(outFolder,species,outPrefix))
       }
@@ -163,24 +155,22 @@ for (species in speciesList) {
     
     for (m in 1:length(starts)) {
       if (translate) {
-        filename = paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01.tif")
+        filename = paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01_rcp",rcp[y],".tif")
        } else {
         filename = paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01.tif")
        }
       
       if (zip_output) {
-        fileout = file.path(outFolder,species,outPrefix,
-                            )
+        fileout = file.path(outFolder,species,outPrefix,filename)
       } else {
-        fileout = file.path(outFolder,species,
-                            paste0(species,"_1_",format(starts[m],"%Y_%m"),"_01.tif"))
+        fileout = file.path(outFolder,species,filename)
         
       }
       
       d_sub = subset(d_final, startDate==starts[m], select=c("eastings","northings","emergeDOY",
                                                              "nGen","emergeDOY_30yr", "nGen_30yr",
                                                              "emergeDOY_anomaly", "nGen_anomaly", "county"))
-      d_rast = rast(d_sub, 
+      d_rast = terra::rast(d_sub, 
                     type="xyz", 
                     crs="EPSG:29903", 
                     extent = ext(min(d_sub$eastings)-500,
