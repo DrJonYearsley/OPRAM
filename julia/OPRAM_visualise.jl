@@ -29,31 +29,14 @@ include("OPRAM_processing_functions.jl");
 # If more than one year then take average across years
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
-# run_params = (speciesName="halyomorpha_halys",      # Name of the species
-#     years=2024,                         # A single year
-#     startMonth = 1,                     # The month to Visualise
-#     country="IE",                       # Country code (IE or NI)
-#     thinFactor=1,                       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
-#     gridFile="IE_grid_locations.csv",   # File containing a 1km grid of lats and longs over Ireland 
-#     averagedPeriod="1991_2020",
-#     # (used for daylength calculations as well as importing and thining of meteo data)
-#     save_figs=true)  # If true save figures
-
-year = 2024
+rcp = 26
+year = 2055
 month = 1
 scale = 10     # Either 1 for 1km scale or 10 for hectad scale
 county = 5      # Set to 0 to import all counties
+paramFile = "parameters_future_halymorpha.toml"
 
-# Model parameters are stored in a TOML file https://toml.io/en/
-if length(ARGS) == 1
-    nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], true)
-
-elseif length(ARGS) == 0 & isfile("parameters.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("parameters.toml", true)
-
-else
-    @error "No parameter file given"
-end
+nNodes, run_params, species_setup, paths = import_parameters(paramFile, true)
 
 
 
