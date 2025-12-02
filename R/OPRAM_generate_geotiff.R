@@ -20,7 +20,6 @@ library(data.table)
 rm(list=ls())
 
 zip_output = FALSE    # Zip together all files for 1 year
-# toml_file = "../julia/parameters_halymorpha.toml"
 toml_file = "../julia/parameters_future.toml"
 
 params = parseTOML(toml_file)  
