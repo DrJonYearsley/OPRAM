@@ -839,17 +839,16 @@ function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgr
   ID = read(f, "ID")
   close(f)
 
+  # Sort IDgrid
+  sort!(IDgrid)
 
   # Find ID's that are in grid_thin
-  ID = sort(intersect(IDgrid, ID))
+  IDgrid2 = intersect(IDgrid, ID)
 
   # Put location ID's (columns of Tavg) in order of ID
-  idx = [findfirst(ID .== id) for id in IDgrid]
+  idx = [findfirst(ID .== id) for id in IDgrid2]
 
-  Tavg_mean = Tavg_mean[:, idx]
-  Tavg_sd = Tavg_sd[:, idx]
-
-  return Tavg_mean, Tavg_sd, DOY, ID
+  return Tavg_mean[:,idx], Tavg_sd[:,idx], DOY, ID[idx]
 end
 
 # ------------------------------------------------------------------------------------------
@@ -894,9 +893,6 @@ function read_JLD2_translate2(meteoDir::String, rcp::String, period::String, IDg
     @error "Period must be one of: '2021-2055', '2041-2070'"
   end
 
-
-
-
   # Get the correct filename
   if !isnothing(meteoDir)
     if length(filter(x -> occursin(".jld2", x), readdir(meteoDir))) > 0
@@ -919,19 +915,16 @@ function read_JLD2_translate2(meteoDir::String, rcp::String, period::String, IDg
   ID = read(f, "ID")
   close(f)
 
+  # Sort IDgrid
+  sort!(IDgrid)
 
   # Find ID's that are in grid_thin
-  ID = sort(intersect(IDgrid, ID))
+  IDgrid2 = intersect(IDgrid, ID)
 
   # Put location ID's (columns of Tavg) in order of ID
-  idx = [findfirst(ID .== id) for id in IDgrid]
+  idx = [findfirst(ID .== id) for id in IDgrid2]
 
-  Tmax_mean = Tmax_mean[:, idx]
-  Tmax_sd = Tmax_sd[:, idx]
-  Tmin_mean = Tmin_mean[:, idx]
-  Tmin_sd = Tmin_sd[:, idx]
-
-  return Tmax_mean, Tmax_sd, Tmin_mean, Tmin_sd, DOY, ID
+  return Tmax_mean[:, idx], Tmax_sd[:, idx], Tmin_mean[:, idx], Tmin_sd[:, idx], DOY, ID[idx]
 end
 
 
