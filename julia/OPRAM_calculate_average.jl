@@ -125,6 +125,32 @@ for s in eachindex(species_params)
 
 
     # =========================================================
+    # =========================================================
+  # Set missing values to be extremes (e.g. generations are small and emergeDOY is large)
+  # nGenerations should have no missing data because no emergence corresponds to nGenerations = 0.0
+
+  missing_DOY = convert(Int32, 99999)
+  # Missing values should not be missing (a missing emergeDOY will have nGenerations=0). But just in case...
+  missing_nGenerations = convert(Float64, -99999)
+
+  idx1 = ismissing.(df_1km.emergeDOY)
+  if all(idx1)
+    df_1km.emergeDOY .= missing_DOY
+  else
+    df_1km.emergeDOY[idx1] .= missing_DOY
+  end
+
+  # Do similar for nGenerations
+  idx4 = ismissing.(df_1km.nGenerations)
+  if all(idx4)
+    df_1km.nGenerations .= missing_nGenerations
+  else
+    df_1km.nGenerations[idx4] .= missing_nGenerations
+  end
+
+
+
+    # =========================================================
     # Calculate average across years (use median to minimise outlier influence)
 
     @info "Calculating median values across years"
@@ -152,6 +178,26 @@ for s in eachindex(species_params)
         d_agg.emergeDOY_median[idx_agg] .= missing
     end
 
+    # =========================================================
+    # =========================================================
+  # Add in missing values for emergeDOY and zero for nGenerations where 10km worst case is out of bounds
+  # (i.e. nGenerations<0 or emergeDOY>5000)
+
+  allowmissing!(d_agg, [:nGenerations_median, :emergeDOY_median])
+  d_agg.nGenerations_median[d_agg.nGenerations_median.<0] .= 0.0
+
+  d_agg.emergeDOY_median[d_agg.emergeDOY_median.>5000] .= missing
+
+  # Return df_1km missing values to original missing values
+  if any(idx1)
+    allowmissing!(df_1km, :emergeDOY)
+    df_1km.emergeDOY[idx1] .= missing
+  end
+
+  if any(idx4)  
+    allowmissing!(df_1km, :nGenerations)
+    df_1km.nGenerations[idx4] .= missing
+  end
 
 
     # =========================================================
@@ -162,11 +208,6 @@ for s in eachindex(species_params)
 
     # Add eastings and northings into the 1km data frames (copy the data frames so we can round before saving)
     out_agg1km = rightjoin(grid[:, [:ID, :east, :north]], d_agg, on=[:ID])
-
-    # # Round number of generations and emergeDOY 
-    # This is usually done when produing the final results, so it is commented out here
-    # out_agg1km.nGenerations_median = round.(out_agg1km.nGenerations_median, digits=2)
-    # out_agg1km.emergeDOY_median = round.(out_agg1km.emergeDOY_median, digits=2)
 
     # Remove unwanted variables
     select!(out_agg1km, Not(:nMissing))

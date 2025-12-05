@@ -363,11 +363,8 @@ function aggregate_to_hectad(df_1km::DataFrame)
   # Set missing values to be extremes (e.g. generations are small and emergeDOY is large)
   # nGenerations should have no missing data because no emergence corresponds to nGenerations = 0.0
 
-  # Try to find the type of emergeDOY and nGenerations
-  # typeidx = findfirst(!isequal(Missing), typeof.(df_1km.emergeDOY))
   missing_DOY = convert(Int32, 99999)
-
-  # typeidx = findfirst(!isequal(Missing), typeof.(df_1km.nGenerations))
+  # Missing values should not be missing (a missing emergeDOY will have nGenerations=0). But just in case...
   missing_nGenerations = convert(Float64, -99999)
 
   idx1 = ismissing.(df_1km.emergeDOY)
@@ -453,7 +450,7 @@ function aggregate_to_hectad(df_1km::DataFrame)
     end) => :emergeDOY_anomaly_median,
     :emergeDOY => (x -> sum(x .== missing_DOY)) => :nMissing)                            # Count number of no emergence events  
 
-  # Add in missing values for emergeDOY and zero for nGEnerations where 10km worst case is out of bounds
+  # Add in missing values for emergeDOY and zero for nGenerations where 10km worst case is out of bounds
   # (i.e. nGenerations<0 or emergeDOY>5000)
 
   allowmissing!(df_10km, [:nGenerations_max, :nGenerations_median_max, :nGenerations_anomaly_median, :emergeDOY_min, :emergeDOY_median_min, :emergeDOY_anomaly_median])
