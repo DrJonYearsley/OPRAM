@@ -20,12 +20,20 @@ library(data.table)
 rm(list=ls())
 
 zip_output = FALSE    # Zip together all files for 1 year
-toml_file = "../julia/parameters_future.toml"
+
+# Import parameter file
+args <- commandArgs(trailingOnly = TRUE)
+
+if (length(args > 0)) {
+  toml_file = args[1]
+ } else {
+  toml_file = "../julia/parameters_future.toml"
+}
 
 params = parseTOML(toml_file)  
 
 # Specify folder containing the CSV files
-outFolder = "~/OPRAM//gisdata/"    # Folder to hold the geotiff output
+outFolder = "~/scratch/gisdata/"    # Folder to hold the geotiff output
 dataFolder = params$paths$output
 granite_defs = params$inputData$countyDefs
 gridFile = params$inputData$gridFile
@@ -47,13 +55,13 @@ if (!is.null(params$model$rcp)) {
   # years[grepl("2041-2070",yearStr)] = 2055
 } else {
   # Assume results are for past climates
-  translate=TRUE
+  translate=FALSE
   yearStr = as.character(params$model$simYears)
 }
 
 
 
-
+# Add home directory to start of file paths if necessary
 if (!grepl("^[~/\\]{1}",dataFolder)) {
   dataFolder = file.path("~", dataFolder)
 }
@@ -93,7 +101,6 @@ if (any(species=="all")) {
 # Import grid data
 granite = read.csv(granite_defs)
 grid = read.csv(gridFile)
-# grid_hectad = read.csv(file.path(githubFolder,"IE_hectad_locations.csv"))
 counties = unique(granite[,c("County","Id")])
 
 # Find data Folder for species
