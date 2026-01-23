@@ -23,7 +23,6 @@ If the multi-year average results already exist, you only need to run OPRAM_fina
 Filename  | Description
 ----------| --------------------------------
 OPRAM_processing_functions.jl | Functions used to process the saved model data (e.g. calculate multi-year averages and anomalies)
-OPRAM_calculate_emergeDOY.jl  | A program to output OPRAM results in CSV format for a specific starting date
 OPRAM_calculate_average.jl    | A program to calculate averages across multiple years (default is 1991-2020)
 OPRAM_final_results.jl    | A program to import OPRAM results and the multi-year averages and format them in a CSV file suitable for the OPRAM online app
  
@@ -35,7 +34,6 @@ These parameter files are used by
   + OPRAM_main_program.jl  
   + OPRAM_calculate_average.jl  
   + OPRAM_final_results.jl  
-  + OPRAM_calculate_emergeDOY.jl 
 
 
 
@@ -57,21 +55,7 @@ Filename  | Description
 ----------| --------------------------------
 meteo_to_jld.jl  | Convert Met Eireann gridded csv files of gridded temperatures into a jld2 file
 meteoUK_to_jld2.jl | Convert UK Met Office netCDF files of gridded temperatures into a jld2 file
-translate_to_jld.jl  | Convert Met Eireann TRANSLATE csv files of mean daily gridded temperatures into a jld2 file
-translatemaxmin_to_jld.jl  | Convert Met Eireann TRANSLATE csv files of max and min daily gridded temperatures into a jld2 file
-
-
-
-
-## Additional programs
-
-Filename  | Description
-----------| --------------------------------
-OPRAM_visualise.jl  | Create some visualisations of the model (Model visualisation is better done in R with OPRAM_visualisations.R)
-visualise_GDD_results.jl | Create maps of Ireland showing key model outputs (can also display averages across years)
-map_plot.jl  | Another program to plot maps of the results
-matrix_model.jl | Create a metric model that iterates the model and viualises the long-term distribution of emergence dates
-periodicMatrixModel.jl | Create a full periodic matrix model to translate insect phenologies into population growth rates
+translate_to_jld.jl  | Convert Met Eireann TRANSLATE NETcdf files of max and min daily gridded temperatures into a jld2 file
 
 
 
