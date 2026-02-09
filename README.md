@@ -4,3 +4,20 @@ The primary goal of this project is to provide a practical visual tool that comm
 
 More details at https://DrJonYearsley.github.io/pesttool.html
 
+
+
+
+==============================
+
+## File Handling Scripts
+
+
+| Filename | Description |
+| -----------| ----------------|
+| `compress_jld2_files.sh`  | Compress OPRAM model results (i.e. JLD2 files) |
+| `aws_upload_tar.sh`  | Extract CSV files from compressed tar file and upload them to OPRAM Amazon Web Services bucket (extracted files are deleted after upload) |
+| `aws_upload.sh`  | Upload multiple directories of CSV files to OPRAM Amazon Web Services bucket |
+| `aws_upload_gis.sh`  | Upload geoTIF files to OPRAM Amazon Web Services bucket |
+| `aws_delete.sh` |  Delete specific files from OPRAM Amazon Web Services bucket |
+| `aws_upload_1dir.sh` | Upload a single directory of CSV files to OPRAM Amazon Web Services bucket |
+
