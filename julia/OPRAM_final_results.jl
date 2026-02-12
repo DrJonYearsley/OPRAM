@@ -168,15 +168,20 @@ for s in eachindex(species_params)
 
     # =========================================================
     # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-    # Import the averaged data
-    aggFile = joinpath(paths.resultsDir, speciesName[1], "average_" * speciesName[1] * "_" *
-                                                         run_params.thirty_years * "_1km_" * run_params.method * ".csv")
-    d_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
+    # Import the averaged data (if required)
+
+    if isnothing(run_params.thirty_years)
+        @warn("Not including multi-year average in the final results")
+    else
+        aggFile = joinpath(paths.resultsDir, speciesName[1], "average_" * speciesName[1] * "_" *
+                                                             run_params.thirty_years * "_1km_" * run_params.method * ".csv")
+        d_agg = CSV.read(aggFile, DataFrame, missingstring="NA")
 
 
-    # If spatial locations are missing from d_gg then fill them in with missing values (or 0 for nGenerations)
-    if length(unique(d_agg.ID)) < nrow(grid)
-        @info "Some spatial location data missing in d_agg"
+        # If spatial locations are missing from d_gg then fill them in with missing values (or 0 for nGenerations)
+        if length(unique(d_agg.ID)) < nrow(grid)
+            @info "Some spatial location data missing in d_agg"
+        end
     end
     # =========================================================
 
@@ -202,7 +207,7 @@ for s in eachindex(species_params)
             # Calculate average over all replicates
             df_1km = combine(df_group,
                 :nGenerations => (x -> if all(isa.(x, Missing))
-                   missing
+                    missing
                 else
                     mean(skipmissing(x))
                 end) => :nGenerations,          # Mean generations
@@ -241,14 +246,23 @@ for s in eachindex(species_params)
         # =========================================================
         # Combine the multi year median with the original data and calculate anomalies
 
-        @info "---- Calculating anomalies"
+        if isnothing(run_params.thirty_years)
+            @info "---- Setting anomalies and multi-year average to missing"
+            df_1km.:nGenerations_median = missing
+            df_1km.:emergeDOY_median = missing
+            df_1km.:nGenerations_anomaly = missing
+            df_1km.:emergeDOY_anomaly = missing
 
-        # Combine origninal data frame with 30 year average
-        leftjoin!(df_1km, select(d_agg, Not([:east, :north])), on=[:ID, :startMonth])
+        else
+            @info "---- Calculating anomalies"
 
-        # Calculate anomalies (missing values will propagate through)
-        transform!(df_1km, [:nGenerations, :nGenerations_median] => ((a, b) -> a .- b) => :nGenerations_anomaly)
-        transform!(df_1km, [:emergeDOY, :emergeDOY_median] => ((a, b) -> a .- b) => :emergeDOY_anomaly)
+            # Combine origninal data frame with 30 year average
+            leftjoin!(df_1km, select(d_agg, Not([:east, :north])), on=[:ID, :startMonth])
+
+            # Calculate anomalies (missing values will propagate through)
+            transform!(df_1km, [:nGenerations, :nGenerations_median] => ((a, b) -> a .- b) => :nGenerations_anomaly)
+            transform!(df_1km, [:emergeDOY, :emergeDOY_median] => ((a, b) -> a .- b) => :emergeDOY_anomaly)
+        end
 
 
         # Add year and countyID into df_1km
@@ -262,7 +276,7 @@ for s in eachindex(species_params)
 
         @info "---- Aggregating data to 10km resolution"
         df_10km = aggregate_to_hectad(df_1km)
- 
+
         # Add in hectad ID
         leftjoin!(df_10km, unique(grid[:, [:hectad, :east_hectad, :north_hectad]]), on=[:east_hectad, :north_hectad])
 

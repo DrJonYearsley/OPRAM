@@ -266,10 +266,15 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
   # =========================================================
   # Put all parameters in named tuple =======================
 
+  thirty_years_str = nothing
+  if params["model"]["thirty_years"]!="nothing"
+    thirty_years_str = string(params["model"]["thirty_years"][1]) *
+                   "_" * string(params["model"]["thirty_years"][2]) 
+  end
 
   # Put parameters into a named tuple
   if in("simYears", keys(params["model"]))
-    if calculate_average
+    if calculate_average & !isnothing(thirty_years_str)
       # An average across years is being calculated
       yearVec = collect(params["model"]["thirty_years"][1]:params["model"]["thirty_years"][2])
     else
@@ -291,8 +296,7 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
       thinFactor=params["model"]["thinFactor"],    # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
       gridFile=params["inputData"]["gridFile"],    # File containing a 1km grid of lats and longs over Ireland 
       countyFile=params["inputData"]["countyDefs"],# File containing names and codes of counties
-      thirty_years=string(params["model"]["thirty_years"][1]) *
-                   "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
+      thirty_years= thirty_years_str)               # 30 years to create averaged results
 
 
   # (gridfile used for daylength calculations as well as importing and thining of meteo data)
@@ -312,8 +316,8 @@ function import_parameters(tomlFile::String, calculate_average::Bool=false)
       thinFactor=params["model"]["thinFactor"],   # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
       gridFile=params["inputData"]["gridFile"],   # File containing a 1km grid of lats and longs over Ireland 
       countyFile=params["inputData"]["countyDefs"],  # File containing names and codes of counties
-      thirty_years=string(params["model"]["thirty_years"][1]) *
-                   "_" * string(params["model"]["thirty_years"][2]))  # 30 years to create averaged results
+      thirty_years= thirty_years_str)               # 30 years to create averaged results
+
   # (gridfile used for daylength calculations as well as importing and thining of meteo data)
   else
     error("parameter file doesn't contain simulation years")

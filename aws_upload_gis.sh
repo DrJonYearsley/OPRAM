@@ -1,8 +1,8 @@
 #  bash script to copy files from computer to aws s3 bucket
 # This copies multiple directories
 #
-#path="/media/jon/Seagate_5TB/OPRAM_results/data" # the path containing the data
-path="/Users/jon/OPRAM/gisdata" # the path containing the data
+path="/media/jon/Seagate_5TB/OPRAM_sonic/gisdata" # the path containing the data
+#path="/Users/jon/OPRAM/gisdata" # the path containing the data
 s3Dir="s3://ucd-pest-risk/irish-hectad-map/gisdata" # the s3 bucket path
 
 for entry in "$path"/*; do
