@@ -234,7 +234,7 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
               else
                 invalid_temps = true
                 while invalid_temps
-                  TmaxVec[y] = Tmax_mean .+ Tmax_sd .* rand(Normal(0, 1), size(Tmin_sd))
+                  TmaxVec[y] = Tmax_mean .+ Tmax_sd .* rand(Normal(0, 1), size(Tmax_sd))
                   TminVec[y] = Tmin_mean .+ Tmin_sd .* rand(Normal(0, 1), size(Tmin_sd))
 
                   # Check Tmax>=Tmin
@@ -684,11 +684,11 @@ function calculate_GDD(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataF
   elseif method == "sine"
     @info "        Using single sine method"
     gdd_update = Tmax .> params.base_temperature
-    dd_calculate = triangle_degreeday
+    dd_calculate = sine_degreeday
   elseif method == "triangle"
     @info "        Using single triangle method"
     gdd_update = Tmax .> params.base_temperature
-    dd_calculate = sine_degreeday
+    dd_calculate = triangle_degreeday
   else
     error("Degree day method not recognised. Use 'average', 'sine' or 'triangle'")
   end
