@@ -6,12 +6,12 @@ library(terra)
 library(tidyterra)
 library(ggplot2)
 
-metoffice_resultFile = "/Users/jon/OPRAM/resultsUK_MetOffice/emDay_bt10_dd277/emDay_bt10_dd277_2023.tif"
+metoffice_resultFile = "/Users/jon/OPRAM/resultsUK_MetOffice/emDay_bt10_dd600/emDay_bt10_dd600_2023.tif"
 
-opramUKtriangle_resultFile = "/Users/jon/OPRAM/resultsUK_triangle/agrilus_anxius/agrilus_anxius_01_Jan_2023_1km.csv"
-opramUKsine_resultFile = "/Users/jon/OPRAM/resultsUK_sine/agrilus_anxius/agrilus_anxius_01_Jan_2023_1km.csv"
-opramUKaverage_resultFile = "/Users/jon/OPRAM/resultsUK_average/agrilus_anxius/agrilus_anxius_01_Jan_2023_1km.csv"
-opramIE_resultFile = "/Users/jon/OPRAM/resultsNI_triangle/agrilus_anxius/agrilus_anxius_01_Jan_2023_1km.csv"
+opramUKtriangle_resultFile = "/Users/jon/OPRAM/resultsUK_triangle/base10_thresh600/base10_thresh600_01_Jan_2023_1km.csv"
+opramUKsine_resultFile = "/Users/jon/OPRAM/resultsUK_sine/base10_thresh600/base10_thresh600_01_Jan_2023_1km.csv"
+opramUKaverage_resultFile = "/Users/jon/OPRAM/resultsUK_average/base10_thresh600/base10_thresh600_01_Jan_2023_1km.csv"
+opramIE_resultFile = "/Users/jon/OPRAM/resultsNI_sine/base10_thresh600/base10_thresh600_01_Jan_2023_1km.csv"
 
 
 IE_CRS = 29903  # Irish grid is 29903, UK is 27700
@@ -137,49 +137,14 @@ names(df_final) = c("east","north","opram_IE","metoffice", "opram_UK_average", "
 ggplot(data=df_final,
        aes(x=east,
            y=north,
-           colour=opram_UK_triangle-metoffice)) +
-  geom_point() +
+           colour=opram_UK_sine-metoffice)) +
+  geom_point(size=0.2) +
   scale_colour_distiller(palette = "PuOr", limits=c(-30,30)) +
   theme_bw()
 
-# ggplot(data=df_final,
-#        aes(x=east,
-#            y=north,
-#            colour=opram_IE-metoffice)) + 
-#   geom_point() + 
-#   scale_colour_distiller(palette = "PuOr", limits=c(-50,50)) +
-#   theme_bw()
-# 
-# 
-#   
-# ggplot(data=df_final,
-#        aes(x=east,
-#            y=north,
-#            colour=opram_UK_sine-metoffice)) + 
-#   geom_point() + 
-#   scale_colour_distiller(palette = "PuOr", limits=c(-30,30)) +
-#   theme_bw()
-# 
-# ggplot(data=df_final,
-#        aes(x=opram_UK_average-metoffice)) + 
-#   geom_histogram() +
-#   lims(x=c(-10,50)) + 
-#   theme_bw()
-# 
-# ggplot(data=df_final,
-#          aes(x=opram_UK_triangle-metoffice)) + 
-#     geom_histogram() +
-#     lims(x=c(-10,20)) + 
-#   theme_bw()
 
-# ggplot(data=df_final,
-#        aes(x=opram_UK_sine - metoffice)) + 
-#   geom_histogram() +
-#   lims(x=c(-10,20)) + 
-#   theme_bw()
-
-
-
+# Boxplot comparing different methods to UK Met Office results =====
+# ==================================================================
 library(tidyr)
 
 df_long = pivot_longer(df_final, cols=-c(1:2), 
@@ -207,25 +172,26 @@ ggplot(data=df_long2,
   scale_x_discrete(labels=c("Met Eireann data\n (single triangle method)",
                             "UK Met Office data, \n (simple average method)",
                             "UK  Met Office data, \n(single sine method)",
-                            "UK  Met Office data, \n(single triangle method)")) +
+                            "UK  Met Office data, \n(single triamgle method)")) +
   theme_bw() + 
   theme(panel.grid = element_blank(),
         axis.title = element_text(size=17),
         axis.text = element_text(size=17,
                                  angle=45,
                                  hjust=1))
-ggsave("OPRAM_NI_discrepancy_boxplot.png")
+ggsave("OPRAM_NI_discrepancy_boxplot_base10_thresh600.png")
 
 
-# Convert OPRAM result (run on UK data) into raster
+# Convert OPRAM result (run on UK data) into raster ============
 # ==================================================================
 
 
 # Put eastings and northings in the middle of the grad square
-opram_UK_triangle$east = opram_UK_triangle$east + 500
-opram_UK_triangle$north = opram_UK_triangle$north + 500
+opram_data = opram_UK_sine
+opram_data$east = opram_data$east + 500
+opram_data$north = opram_data$north + 500
 
-opram_sub = subset(opram_UK_triangle,select=c("east","north","emergeDOY"))
+opram_sub = subset(opram_data,select=c("east","north","emergeDOY"))
 opram_rast = rast(opram_sub, 
                   type="xyz", 
                   crs=crs(metOffice), 
@@ -255,10 +221,10 @@ ggplot() +
         legend.title = element_text(size=16),
         legend.text = element_text(size=14))
 
-ggsave("OPRAM_NI_discrepancy_map.png")
+ggsave("OPRAM_NI_discrepancy_map_base10_thresh600_sine.png")
 
 
-# Produce similar map but with OPRAm results run on Met Eireann data
+# Produce similar map but with OPRAM results run on Met Eireann data
 ggplot() +
   geom_spatraster(data=opram_UK_crop - met_UK_crop) + 
   geom_sf(data=UK_crop, fill=NA, linewidth=1, colour="black") +
@@ -273,12 +239,12 @@ ggplot() +
         legend.title = element_text(size=16),
         legend.text = element_text(size=14))
 
-ggsave("OPRAM_NI_discrepancy_map2.png")
+ggsave("OPRAM_NI_discrepancy_map2_base10_thresh600.png")
 
 
 
 # Generate quantile
-quantile(df_final$opram_UK_average-df_final$metoffice, c(0.025,0.25, 0.5, 0.75, 0.975))
-quantile(df_final$opram_UK_sine-df_final$metoffice, c(0.025,0.25, 0.5, 0.75, 0.975))
-quantile(df_final$opram_UK_triangle-df_final$metoffice, c(0.025,0.25, 0.5, 0.75, 0.975))
-quantile(df_final$opram_IE-df_final$metoffice, c(0.025,0.25, 0.5, 0.75, 0.975))
+quantile(df_final$opram_UK_average-df_final$metoffice, c(0.025,0.25, 0.5, 0.75, 0.975), na.rm=TRUE)
+quantile(df_final$opram_UK_sine-df_final$metoffice, c(0.025,0.25, 0.5, 0.75, 0.975), na.rm=TRUE)
+quantile(df_final$opram_UK_triangle-df_final$metoffice, c(0.025,0.25, 0.5, 0.75, 0.975), na.rm=TRUE)
+quantile(df_final$opram_IE-df_final$metoffice, c(0.025,0.25, 0.5, 0.75, 0.975), na.rm=TRUE)
