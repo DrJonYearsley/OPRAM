@@ -20,8 +20,8 @@ using TOML;
 
 
 
-include("OPRAM_io_functions.jl");
-include("OPRAM_processing_functions.jl");
+include("../julia/OPRAM_io_functions.jl");
+include("../julia/OPRAM_processing_functions.jl");
 
 
 # =================================================================================
@@ -46,10 +46,10 @@ county = 5      # Set to 0 to import all counties
 
 # Model parameters are stored in a TOML file https://toml.io/en/
 if length(ARGS) == 1
-    nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], true)
+    nNodes, run_params, species_setup, paths = import_parameters(ARGS[1])
 
-elseif length(ARGS) == 0 & isfile("parameters.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("parameters_future.toml", true)
+elseif length(ARGS) == 0 & isfile("../julia/parameters_test.toml")
+    nNodes, run_params, species_setup, paths = import_parameters("../julia/parameters_test.toml")
 
 else
     @error "No parameter file given"
@@ -79,9 +79,72 @@ grid = read_grid(run_params)
 # =========================================================
 # Import data
 
-Tmax, Tmaxsd, Tmin, Tminsd, DOY, ID = read_JLD2_translate2(paths.meteoDir_IE, "26", "2021-2050", grid.ID)
+Tmax26, Tmaxsd26, Tmin26, Tminsd26, DOY, ID = read_JLD2_translate2(paths.meteoDir_IE,
+    "26", "2041-2070", grid.ID)
+
+Tmax85, Tmaxsd85, Tmin85, Tminsd85, DOY, ID = read_JLD2_translate2(paths.meteoDir_IE,
+    "85", "2041-2070", grid.ID)
+
+Tmin_IE, Tmax_IE, DOY_IE, ID_IE = read_JLD2_meteo2(paths.meteoDir_IE, [2024], grid.ID, "IE")
 
 
+# =========================================================
+# =========================================================
+# Comparison plots for one specific location
+
+
+Tmean = [mean(Tmax_IE[x,:]) for x in 1:size(Tmax_IE,1)]
+
+ID_col = 237  # The column to visualise
+
+
+plot(DOY,
+    Tmax85[:, ID_col]+ 1.96*Tmaxsd85[:, ID_col],
+    seriestype=:path,
+    linewidth=2,
+    label="Tmax 85  (upr CI)")
+
+plot!(DOY,
+    Tmax85[:, ID_col]- 1.96*Tmaxsd85[:, ID_col],
+    seriestype=:path,
+    linewidth=2,
+    linecolor=:green,
+    label="Tmax 85 (lwr CI)")
+
+plot!(DOY,
+    Tmax_IE[:, ID_col],
+    markercolor=:red,
+    seriestype=:scatter,
+    markersize=2,
+    markerstrokewidth=1,
+    label="Tmax 2024")  
+    
+# plot!(DOY_IE,
+#     Tmin_IE[:, 1],
+#     linecolor=:blue,
+#     seriestype=:path,
+#   linewidth=2,
+#     label="Tmax 2024") 
+
+
+
+
+plot(DOY,
+    Tmaxsd85[:, ID_col],
+    seriestype=:path,
+    linewidth=2,
+    color=:red,
+    label="Tmax 85  sd")
+
+# Calculate moving window sd of T_max_IE
+
+Tmax_IE_sd = [std(Tmax_IE[max(1,x-5):min(size(Tmax_IE,1),x+5), ID_col]) for x in 1:size(Tmax_IE,1)]
+
+plot!(DOY_IE,
+    Tmax_IE_sd,
+    seriestype=:path,
+    linewidth=2,
+    label="Tmax 2024  sd")
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Define coordinates
@@ -96,7 +159,7 @@ leftjoin!(coord_df, grid[:,[:ID, :east, :north]], on=[:ID])
 
 x=coord_df.east
 y=coord_df.north
-z = Tmin[1,:]
+z = Tmin_IE[1,:]
 ms=0.5
 
 # x = grid2.east
@@ -114,3 +177,4 @@ plot(x,
     legend=false,
     cbar=true,
     aspect_ratio=:equal)
+

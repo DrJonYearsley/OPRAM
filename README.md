@@ -14,12 +14,8 @@ More details at https://DrJonYearsley.github.io/pesttool.html
 
 | Filename | Description |
 | -----------| ----------------|
-| `run_opram.sh` | Main script to run the OPRAM model (requires Julia and R to be installed) |
+| `run_opram.sh` | Main script to run the OPRAM model and produce CSV and geotiff output (requires Julia and R to be installed) |
+| `run_main_test_UK_NI.sh` | Run the OPRAM model for Northern Ireland on either UK Met Office or Met Eireann data |
 | `compress_jld2_files.sh`  | Compress OPRAM model results (i.e. JLD2 files) |
-| `aws_upload_tar.sh`  | Extract CSV files from compressed tar file and upload them to OPRAM Amazon Web Services bucket (extracted files are deleted after upload) |
-| `aws_upload.sh`  | Upload multiple directories of CSV files to OPRAM Amazon Web Services bucket |
-| `aws_upload_gis.sh`  | Upload geoTIFF files to OPRAM Amazon Web Services bucket |
-| `aws_delete.sh` |  Delete specific files from OPRAM Amazon Web Services bucket |
-| `aws_upload_1dir.sh` | Upload a single directory of CSV files to OPRAM Amazon Web Services bucket |
 | `modify_filenames.sh` | Bulk-modify filenames |
 
