@@ -23,8 +23,8 @@ pastYear = 2024
 fileLoaded = c(FALSE, FALSE)
 # Find translate data
 translateFile = paste0("translate_tmax_rcp",rcpStr,"_",period,".Rdata")
-if (file.exists(file.path("~/MEGAsync/Projects/DAFM_OPRAM/ExampleData",translateFile))) {
-  translateDir = "~/MEGAsync/Projects/DAFM_OPRAM/ExampleData"
+if (file.exists(file.path("~/MEGA/Projects/DAFM_OPRAM/ExampleData",translateFile))) {
+  translateDir = "~/MEGA/Projects/DAFM_OPRAM/ExampleData"
   load(file.path(translateDir,translateFile))
   fileLoaded[1] = TRUE
 } else if (dir.exists("~/DATA/OPRAM/TRANSLATE/")) {
@@ -36,8 +36,8 @@ if (file.exists(file.path("~/MEGAsync/Projects/DAFM_OPRAM/ExampleData",translate
 
 # Find Met Eireann gridded data
 meteireannFile = "meteo_AllIreland_1km_2015_2024.RData"
-if (file.exists(file.path("~/MEGAsync/Projects/DAFM_OPRAM/ExampleData",meteireannFile))) {
-  griddedDir = "~/MEGAsync/Projects/DAFM_OPRAM/ExampleData"
+if (file.exists(file.path("~/MEGA/Projects/DAFM_OPRAM/ExampleData",meteireannFile))) {
+  griddedDir = "~/MEGA/Projects/DAFM_OPRAM/ExampleData"
   load(file.path(griddedDir,meteireannFile))
   fileLoaded[2] = TRUE
   
@@ -103,15 +103,83 @@ if (fileLoaded[2]==FALSE) {
   list.files(path=griddedDir, pattern=paste0("TX_",pastYear), full.names = TRUE)
 }
 
-tmp = subset(d_long, doy==150 )
 
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Compare TRANSLATE and historic variability
+
+
+# Calculate average 10th and 90th qunatile difference
+
+d_long$diff = d_long$tmax_90 - d_long$tmax_10
+a=aggregate(diff~doy, data=d_long, FUN=quantile, probs=c(0.1, 0.5, 0.9))
+
+
+# Calculate difference between 10th and 90th quantiles for each day of year
+# across all locations in Ireland
+d_past = data.frame(doy=c(1:365), TX_diff_10=NA,TX_diff_50=NA,TX_diff_90=NA, TX_diff=NA, 
+                    TX_future_10=a$diff[,1], 
+                    TX_future_50=a$diff[,2], 
+                    TX_future_90=a$diff[,3])
+rm("d_long")
+rm("d_TN")
+
+for (j in 1:length(d_TX)) {
+  print(paste0("File ",j))
+  d_TX[[j]]$doy = as.numeric(format(d_TX[[j]]$Dates,"%j"))
+}
+
+for (i in 1:nrow(d_past)) {
+  print(paste0("DOY ",i))
+  for (j in 1:length(d_TX)) {
+    if (i %in% d_TX[[j]]$doy){
+      if (exists("tmp")) {
+        tmp = rbind(tmp, subset(d_TX[[j]], doy==i))
+      } else {
+        tmp = subset(d_TX[[j]], doy==i)
+      }
+    }
+  }
+  a = aggregate(TX~east+north, data=tmp, FUN=function(x) {diff(quantile(x, probs=c(0.1, 0.9)))})
+  d_past$TX_diff_10[i] = quantile(a$TX, 0.1)
+  d_past$TX_diff_50[i] = quantile(a$TX, 0.5)
+  d_past$TX_diff_90[i] = quantile(a$TX, 0.9)
+  d_past$TX_diff[i] = diff(quantile(tmp$TX, probs=c(0.1, 0.9)))
+  rm("tmp")
+}
+
+save(d_past, file="TX_quantile_difference.RData")
+
+
+
+library(dplyr)
 library(ggplot2)
+library(tidyr)
+
+tmp = rename(d_past, "2015-2024"=TX_diff)
+
+tmp = d_past |>
+    select(doy, TX_diff_10,  TX_diff_50,  TX_diff_90, 
+           TX_future_10, TX_future_50, TX_future_90) |>
+    rename("2015-2024 Q10"= TX_diff_10, 
+           "2015-2024 Q50"= TX_diff_50,
+           "2015-2024 Q90"= TX_diff_90,
+           "2021-2050 Q10"= TX_future_10, 
+           "2021-2050 Q50"= TX_future_50, 
+           "2021-2050 Q90"= TX_future_90) |>
+    select(doy, "2015-2024 Q50", "2021-2050 Q50") |>
+    pivot_longer(cols=-1, names_to="Data", values_to="T_max")
+
 ggplot(data=tmp,
-       aes(x=longitude,
-           y=latitude,
-           colour=tmax_50)) + 
+       aes(x=doy,
+           y=T_max,
+           colour=Data)) + 
   geom_point(size=0.5) + 
-  scale_colour_distiller("Daily Max Temp\ndoy=150", palette="OrRd") +
+  scale_colour_brewer(name="",palette="Dark2") +
+  labs(x="Day of Year",
+       y="Tmax (Q90-Q10)",
+    title="Tmax 1km Q90-Q10,\nTRANSLATE RCP8.5 versus historic") +
   theme_bw()
 
 
