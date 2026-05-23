@@ -2,6 +2,24 @@
 # A file containing the functions to run the degree day development models
 # on Met Eireann daily temperature data
 #
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#    Copyright (C) 2026  Jon Yearsley  (Jon.Yearsley@ucd.ie)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 # This file contains the following functions
 # function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
 # function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
@@ -20,9 +38,6 @@
 #                           ID::Vector{Int64}, save1year::Bool)
 
 
-#
-# Jon Yearsley (jon.yearsley@ucd.ie)
-# 7th Aug 2024
 #
 # ====================================================================
 

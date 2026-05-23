@@ -6,11 +6,25 @@
 # and uses it to run a degree day model for a range of insect species
 #
 # Full model output is saved in a JLD2 file
-# Summary results for specific starting dates are saved at raw resolution and 10km resolution in CSV files
+# Summary results for specific starting dates are saved at raw 
+# resolution and 10km resolution in CSV files
 #
-# Jon Yearsley (jon.yearsley@ucd.ie)
-# 18th June 2025
 #
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#    Copyright (C) 2026  Jon Yearsley  (Jon.Yearsley@ucd.ie)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
@@ -47,7 +61,7 @@ if length(ARGS)==1
   nNodes, run_params, species_params, paths =  import_parameters(ARGS[1])
 
 elseif length(ARGS)==0 & isfile("parameters.toml")
-  nNodes, run_params, species_params, paths =  import_parameters("parameters_future.toml")
+  nNodes, run_params, species_params, paths =  import_parameters("parameters.toml")
 
 else
   @error "No parameter file given"

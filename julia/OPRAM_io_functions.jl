@@ -1,5 +1,22 @@
 # Functions to import and export data for the OPRAM model
 #
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#    Copyright (C) 2026  Jon Yearsley  (Jon.Yearsley@ucd.ie)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+#
 # function import_parameters(tomlFile::String)
 # function import_species(speciesFile::String, speciesName::String)
 # function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame, run_params::NamedTuple)
@@ -18,8 +35,6 @@
 # function save_OPRAM_1km_CSV(df_1km::DataFrame, species_name::String, yearStr::String, paths::NamedTuple, saveDates::Bool=false)
 # function save_OPRAM_10km_CSV(out_10km::DataFrame, species_name::String, yearStr::String, paths::NamedTuple, saveDates::Bool=false)
 #
-# Jon Yearsley (jon.yearsley@ucd.ie)
-# 7th Aug 2024
 #
 # ====================================================================
 
