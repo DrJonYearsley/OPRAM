@@ -21,6 +21,10 @@ period = "2021-2050"
 pastYear = 2024
 
 fileLoaded = c(FALSE, FALSE)
+
+# Give file for single ensemble run
+translateEnsembleFile = "~/git_repos/OPRAM/translate_ensemble_tmax_aggregated.csv"
+
 # Find translate data
 translateFile = paste0("translate_tmax_rcp",rcpStr,"_",period,".Rdata")
 if (file.exists(file.path("~/MEGA/Projects/DAFM_OPRAM/ExampleData",translateFile))) {
@@ -96,6 +100,9 @@ d_long = d_long[!is.na(d_long$tmax_50),]
 save(d_long, file=paste0("~/translate_tmax_rcp",rcpStr,"_",period,".Rdata"))
 }
 
+
+
+
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Load Met Eireann gridded data
 
@@ -122,8 +129,22 @@ d_past = data.frame(doy=c(1:365), TX_diff_10=NA,TX_diff_50=NA,TX_diff_90=NA, TX_
                     TX_future_10=a$diff[,1], 
                     TX_future_50=a$diff[,2], 
                     TX_future_90=a$diff[,3])
+
+
 rm("d_long")
 rm("d_TN")
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Load one ensemble run from TRANSLATE (30 yr run)
+
+if (file.exists(translateEnsembleFile)) {
+  tmax_ensemble = read.csv(translateEnsembleFile)
+  tmax_ensemble$tmax_diff = tmax_ensemble$tmax_90-tmax_ensemble$tmax_10
+  d_past = cbind(d_past, tmax_ensemble)
+}
+
+
 
 for (j in 1:length(d_TX)) {
   print(paste0("File ",j))
@@ -157,31 +178,34 @@ library(dplyr)
 library(ggplot2)
 library(tidyr)
 
-tmp = rename(d_past, "2015-2024"=TX_diff)
+# tmp = rename(d_past[,-9], "2015-2024"=TX_diff)
 
-tmp = d_past |>
+tmp = d_past[,-9] |>
     select(doy, TX_diff_10,  TX_diff_50,  TX_diff_90, 
-           TX_future_10, TX_future_50, TX_future_90) |>
+           TX_future_10, TX_future_50, TX_future_90,
+           tmax_diff) |>
     rename("2015-2024 Q10"= TX_diff_10, 
            "2015-2024 Q50"= TX_diff_50,
            "2015-2024 Q90"= TX_diff_90,
            "2021-2050 Q10"= TX_future_10, 
            "2021-2050 Q50"= TX_future_50, 
-           "2021-2050 Q90"= TX_future_90) |>
-    select(doy, "2015-2024 Q50", "2021-2050 Q50") |>
+           "2021-2050 Q90"= TX_future_90,
+           "2071-2100 Q50"= tmax_diff) |>
+    select(doy, "2015-2024 Q50", "2021-2050 Q50", "2071-2100 Q50") |>
     pivot_longer(cols=-1, names_to="Data", values_to="T_max")
 
 ggplot(data=tmp,
        aes(x=doy,
            y=T_max,
            colour=Data)) + 
-  geom_point(size=0.5) + 
+  geom_point(size=1) + 
   scale_colour_brewer(name="",palette="Dark2") +
   labs(x="Day of Year",
        y="Tmax (Q90-Q10)",
     title="Tmax 1km Q90-Q10,\nTRANSLATE RCP8.5 versus historic") +
   theme_bw()
 
+ggsave("Tmax_variation.png")
 
 
 
