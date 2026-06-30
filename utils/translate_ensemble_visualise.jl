@@ -41,45 +41,20 @@ TSize = size(Tmax)
 nDays = TSize[3];
 
 
-# Reshape arrays in place
-Tmax_long = reshape(Tmax,:,nDays);
-lon_2D = reshape([lon[i] for i in eachindex(lon), j in eachindex(lat)],:);
-lat_2D = reshape([lat[j] for i in eachindex(lon), j in eachindex(lat)], :);
+# Find data that has  max temps more than -273 (i.e. not missing data) for 
+# every time point 
+nonzero_idx = findall(view(Tmax,:,:,1).>-273)
 
-Tmax = nothing
-lat = nothing
-lon = nothing
-
-# Find data that has  max temps more than -273 (i.e. not missing data) 
-# and keep only those lats and longs
-nonzero_idx = dropdims(all(Tmax_long.>-273, dims=2), dims=2);
-
-
+# Create data frame for every location with non-zero data
+tmax_df = reduce(vcat, [DataFrame(ID=Int32(x), tmax= Tmax[nonzero_idx[x],:]) for x in eachindex(nonzero_idx)]);
 # Keep only lats and longs with non-zero temps
-lon_2D = lon_2D[nonzero_idx];
-lat_2D = lat_2D[nonzero_idx];
+
+# Clear memory
+Tmax = nothing
 
 
-Tmax_long2 = reshape(Tmax_long[nonzero_idx, :], :, 1);
+jldsave("translate_ensemble_tmax.jld2"; tmax_df=tmax_df, lat=lat, lon=lon, doy=doy)
 
-Tmax_long = nothing
-nLocation = length(lon_2D)
-
-size(Tmax_long2)
-size(lon_2D)
-size(lat_2D)
-
-tmax_df = DataFrame(
-    # lat=repeat(lat_2D,outer=nDays), 
-    #                 lon=repeat(lon_2D, outer=nDays), 
-                    doy = mod1.(repeat(doy, inner=nLocation),365),
-                    tmax=Tmax_long2[:])
-
-jldsave("translate_ensemble_tmax.jld2"; tmax_df=tmax_df)
-
-lat_2D=nothing
-lon_2D=nothing
-Tmax_long2=nothing
 
  
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
