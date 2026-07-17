@@ -166,7 +166,8 @@ for r in eachindex(rcpList)
                 # Save this to a JLD2 file
                 outfile = joinpath([outDir, "TRANSLATE_" * ensemble_member[ens] * "_year" * string(year) * ".jld2"])
                 fh = jldopen(outfile, "w");
-                fh["Tmax"]=Tmax[:, (year-1)*nDays+1:year*nDays];
+                # Save Tmax... transpose so that spatial locations are in columns and days are in rows
+                fh["Tmax"]=transpose(Tmax[:, (year-1)*nDays+1:year*nDays]);
                 fh["DOY"]=DOY;
                 fh["ID"]=grid.ID;
                 close(fh)
@@ -189,7 +190,8 @@ for r in eachindex(rcpList)
                 # Append Tmin to a JLD2 file
                 outfile = joinpath([outDir, "TRANSLATE_" * ensemble_member[ens] * "_year" * string(year) * ".jld2"])
                 fh = jldopen(outfile, "a");
-                fh["Tmin"]=Tmin[:, (year-1)*nDays+1:year*nDays];
+                # Save Tmin... transpose so that spatial locations are in columns and days are in rows
+                fh["Tmin"]=transpose(Tmin[:, (year-1)*nDays+1:year*nDays]);
                 close(fh)
             end
             Tmin = nothing  # Clear memory

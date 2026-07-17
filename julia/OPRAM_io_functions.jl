@@ -790,7 +790,7 @@ function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector
   Tmax = reduce(vcat, TmaxVec)
   DOY = reduce(vcat, DOYVec)
 
-  # Put location ID's (columns of Tavg) in order of ID
+  # Put location ID's (columns of Tmin and Tmax) in order of ID
   # And leave out locations not in ID
   idx = [findfirst(IDVec[1] .== id) for id in ID]
   Tmin = Tmin[:, idx]
@@ -947,6 +947,88 @@ function read_JLD2_translate2(meteoDir::String, rcp::String, period::String, IDg
 end
 
 
+# ------------------------------------------------------------------------------------------
+
+
+function read_JLD2_translate(meteoDir::String, years::Vector{Int64}, rcp::String, 
+  period::String, ensemble::String, IDgrid::Vector{Int64})
+  # Import multiple years of future climate scenario daily min and max temperature from a jld2 file 
+  # and create the daily min/max temp, the ID, eastings and northings of spatial locations
+  #
+  # This version of the function imports raw ensemble data from the TRASLATE project
+  #
+  # Arguments:
+  #   meteoDir    the directory containing the TRANSLATE meteo data in JLD2 format 
+  #   years       years to be read
+  #   rcp         the RCP (26, 45, 85)
+  #   period      the 30 yr period (2021-2040, 2041-2070)
+  #   ensemble    the name of the ensemble to use (an identifying string in the file name)
+  #   IDgrid      ID of locations in grid_thin
+  #
+  # Output:
+  #   A list with three entries
+  #     First entry:     Matrix of minimum daily temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Second entry:    Matrix of maximum daily temperature for the period 
+  #                      (Columns are spatial locations, rows are days of year)
+  #     Third entry:     A vector of days of year (could span several years, length 
+  #                      equals the number of rows of temp matrix)
+  #     Fourth entry:    A vector of unique location ID's 
+  #                      (length equals number of columns temp matrix)
+  #
+  # *************************************************************
+
+
+  # Create empty array of arrays to hold average temps 
+  TminVec = Vector{Array{Float32,2}}(undef, length(years))
+  TmaxVec = Vector{Array{Float32,2}}(undef, length(years))
+  DOYVec = Vector{Array{Int16,1}}(undef, length(years))
+  IDVec = Vector{Array{Int64,1}}(undef, length(years))
+
+  # Find files corresponding to the RCP, period and ensemble
+  meteoFileList = filter(x -> occursin(Regex("rcp" * rcp * "_" * period * "_" * "[-\\w]+.jld2"), x),
+      readdir(meteoDir))
+
+  # Keep only required ensemble files
+  meteoFileList = filter(x -> occursin(ensemble, x), meteoFileList)
+
+  for y in eachindex(years)
+    # Get the correct filename
+
+    meteoFile = filter(x -> occursin("year" * string(years[y]), x), meteoFileList)
+
+    # Import the data for Tmin and Tmax
+    f = jldopen(joinpath(meteoDir, meteoFile[1]), "r")
+    TminVec[y] = f["Tmin"]
+    TmaxVec[y] = f["Tmax"]
+    DOYVec[y] = f["DOY"]
+    IDVec[y] = f["ID"]
+    close(f)
+  end
+
+  # Check all ID's are equivalent if importing NI and IE data
+  if length(IDVec) > 1
+    if any(map(x -> !issetequal(IDVec[1], x), IDVec))
+      @error "Locations in different meteo files are not the same"
+      println(map(x -> setdiff(IDVec[1], x), IDVec))
+    end
+  end
+
+  # Find ID's that are in grid_thin
+  ID = intersect(IDgrid, IDVec[1])
+
+  # Put all the temperature data together into one Matrix
+  Tmin = reduce(vcat, TminVec)
+  Tmax = reduce(vcat, TmaxVec)
+  DOY = reduce(vcat, DOYVec)
+
+  # Put location ID's (columns of Tmin and Tmax) in order of ID
+  # And leave out locations not in ID
+  idx = [findfirst(IDVec[1] .== id) for id in ID]
+  Tmin = Tmin[:, idx]
+  Tmax = Tmax[:, idx]
+  return Tmin, Tmax, DOY, ID
+end
 
 # ------------------------------------------------------------------------------------------
 

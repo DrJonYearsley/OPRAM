@@ -45,8 +45,8 @@ include("OPRAM_processing_functions.jl");
 if length(ARGS) == 1
     nNodes, run_params, species_setup, paths = import_parameters(ARGS[1], false)
 
-elseif length(ARGS) == 0 & isfile("parameters_UK_test.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("parameters_UK_test.toml", false)
+elseif length(ARGS) == 0 & isfile("julia/parameters_test.toml")
+    nNodes, run_params, species_setup, paths = import_parameters("julia/parameters_test.toml", false)
 
 else
     @error "No parameter file given"

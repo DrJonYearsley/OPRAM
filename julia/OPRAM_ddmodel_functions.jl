@@ -23,6 +23,7 @@
 # This file contains the following functions
 # function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
 # function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
+# function run_model_futures2(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
 # function average_degreeday(Tmin, Tmax, T_baseline)
 # function triangle_degreeday(Tmin, Tmax, T_baseline)
 # function sine_degreeday(Tmin, Tmax, T_baseline)
@@ -236,7 +237,7 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
           adult_emerge = Vector{DataFrame}(undef, run_params.nReps)
 
           for x in 1:run_params.nReps
-            @info "====== Replicate " * string(r) * " ==========="
+            @info "====== Replicate " * string(x) * " ==========="
 
             # Generate daily temperature for maxYears
             @info "        Generating climate data"
@@ -278,7 +279,7 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
 
 
             # Add in a column for the replicate number
-            insertcols!(adult_emerge[x], 1, :rep => Int8(r))
+            insertcols!(adult_emerge[x], 1, :rep => Int8(x))
 
             result = nothing
             @everywhere GDDsh = nothing   # Make sure the shared array is cleared everywhere
@@ -318,6 +319,161 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
   end
 end
 
+# ------------------------------------------------------------------------------------------
+
+
+function run_model_futures2(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
+  # Function to run the degree day model for a range of future climate predictions and for a range of species
+  #
+  # This function uses raw individual ensemble data from the TRANSLATE project rather than the mean 
+  # and standard deviation of daily temperatures
+  # 
+  # The differences to run_model are:
+  #      + imports data from the TRANSLATE project which gives mean and standard deviation of daily temps
+  #      + generates many yearly weather scenario replicates (e.g. 50) based upon TRANSLATE data
+  #      
+  #
+  # Arguments:
+  #   run_params      a named tuple containing the parameters for the model
+  #   species_params   a named tuple containing the parameters for the species
+  #   paths           a named tuple containing the paths to the data
+  #
+  # Output:
+  #   a data frame containing the adult emergence dates that is saved in JLD2 format
+  #                   Columns are: 
+  #                     ID         unique ID of spatial location, 
+  #                     DOY        starting day of year for development
+  #                     emergeDOY  day of year for adult emergence
+  #
+  #
+  # ====================================================================
+  # ====================================================================
+
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Set species parameters from the parameter file (can be more than one species)
+  if species_params.speciesStr[1] == "all"
+    @info "Importing all species from the species file" * string(species_params.speciesStr)
+    species_params = import_species(species_params.speciesFile, species_params.speciesStr[1])
+  else
+    @info "Importing species from the species file" * string(species_params.speciesStr)
+    species_params = [import_species(species_params.speciesFile, species_params.speciesStr[s]) for s in eachindex(species_params.speciesStr)]
+  end
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Import location data and thin it using thinFactor
+  grid = read_grid(run_params)
+
+
+  # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+  # Import TRANSLATE climate data
+
+  for r in eachindex(run_params.rcp)
+    @info "======Running model for RCP " * run_params.rcp[r] * "============="
+
+    for p in eachindex(run_params.futurePeriod)
+      @info "======Running model for future period " * run_params.futurePeriod[p] * "============="
+
+
+
+
+
+      # Select the ensemble and years to use for each replicate
+      reg = Regex("^TRANSLATE[-\\w]+" * "_rcp" * string(run_params.rcp[r]) * "_" * string(run_params.futurePeriod[p]) * "[-\\w]+" * ".jld2")
+      files = filter(x -> occursin(reg, x), readdir(paths.meteoDir_IE))
+
+      # Extract the name of the ensemble member from the file name
+      ensemble_member = unique([convert(String, match(Regex("TRANSLATE_([-\\w]+)_year[0-9]{1,2}.jld2"), file).captures[1]) for file in files])
+      ensembleList = rand(ensemble_member, run_params.nReps)  # Randomly select ensemble members for each replicate
+
+      # For each replicate select the starting year to use
+      yearList = rand(collect(1:(31-run_params.maxYears)), run_params.nReps)  # Randomly select starting year for each replicate
+
+      # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+      # Start the main loop of the program
+
+      # Loop through all the species
+      for s in eachindex(species_params)
+        if ismissing(species_params[s].species_name)
+          @warn "Skipping an undefined species"
+        else
+          @info "\n#######  Running model for species " * species_params[s].species_name * " #######"
+
+          # Run the simulation for this species
+
+          # Initialise data frame
+          adult_emerge = Vector{DataFrame}(undef, run_params.nReps)
+
+          for x in 1:run_params.nReps
+            @info "====== Replicate " * string(x) * " ==========="
+
+
+
+            # Generate daily temperature for maxYears
+            @info "        Importing climate data"
+            years = collect(yearList[x]:(yearList[x]+run_params.maxYears-1))
+            Tmin, Tmax, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, years, run_params.rcp[r],
+              run_params.futurePeriod[p], ensembleList[x], grid.ID)
+
+            # Remove grid points not in the meteo data
+            keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
+            grid_final = grid[keep_ID, :]
+
+
+
+            @info "        Calculate GDD"
+            GDDsh, idx, locInd1, locInd2 = calculate_GDD(Tmin, Tmax, grid_final, DOY, species_params[s], run_params.method)
+
+            # Calculate model at each location
+            @info "        Calculating adult emergence dates"
+            result = location_loop(locInd1, locInd2, idx, GDDsh, species_params[s].threshold)
+
+            # Simplify the results and put them in a DataFrame
+            adult_emerge[x] = cleanup_results(result, idx, grid_final.ID, run_params.save1year)
+
+
+            # Add in a column for the replicate number
+            insertcols!(adult_emerge[x], 1, :rep => Int8(x))
+
+            result = nothing
+            @everywhere GDDsh = nothing   # Make sure the shared array is cleared everywhere
+            @everywhere GC.gc()           # Clean up memory (this call may not be needed)
+          end
+
+
+          # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+          # ========== Save output to a JLD2 file ====================================
+          # Specify the output directory using the species name
+          outPrefix = replace(lowercase(species_params[s].species_name), " " => "_")
+
+          # Make directory for the output prefix if one doesn't exist
+          if !isdir(joinpath(paths.outDir, outPrefix))
+            @info "        Making directory " * outPrefix
+            mkpath(joinpath(paths.outDir, outPrefix))
+          end
+
+          if run_params.saveJLDFile
+            @info "        Saving the results to JLD2 file"
+            # Save using jld2 format
+            outFile = joinpath([paths.outDir, outPrefix,
+              outPrefix * "_" * run_params.country * "_rcp" * run_params.rcp[r] * "_" *
+              run_params.futurePeriod[p] * "_" * string(run_params.thinFactor) * "km_" * run_params.method * ".jld2"])
+            save_object(outFile, adult_emerge)
+          end
+
+
+          # # Clear memory of model results before starting next species
+          # # NOTE: Don't clear the Climate data because it will be reused
+          # adult_emerge = nothing
+        end
+        println(" ")    # Print a blank line
+      end
+    end
+  end
+end
+
+
 
 
 # ------------------------------------------------------------------------------------------
@@ -343,7 +499,7 @@ function average_degreeday(Tmin, Tmax, T_baseline)
   # ========================================================================================
 
   DD = (Tmax .+ Tmin) ./ 2.0 .- T_baseline
-  DD[DD.<0] .= 0.0
+  DD[DD .< 0] .= 0.0
 
   # Calculate average temp minus base temp
   return DD
@@ -381,7 +537,7 @@ function triangle_degreeday(Tmin, Tmax, T_baseline)
 
   # Adjust for cases where Tmin < T_baseline
   idx = Tmin .< T_baseline
-  
+
   if any(idx)
     DD[idx] = ((Tmax[idx] .- T_baseline) .^ 2) ./ (2.0 .* (Tmax[idx] .- Tmin[idx]))
   end
@@ -418,20 +574,20 @@ function sine_degreeday(Tmin, Tmax, T_baseline)
   # Calculate degree days according to the single sine method
 
   # This is result if T_baseline<Tmin
-  DD = (Tmax .+ Tmin) .* 0.5  .- T_baseline
+  DD = (Tmax .+ Tmin) .* 0.5 .- T_baseline
 
   # Adjust for cases where Tmax>T_baseline>Tmin
   idx = Tmin .< T_baseline
 
   # Calculate time temperature equals T_baseline
   if any(idx)
-    deltaT = (Tmax[idx] .- Tmin[idx]).*0.5
+    deltaT = (Tmax[idx] .- Tmin[idx]) .* 0.5
     x = -DD[idx] ./ deltaT
     # t_baseline = acos.( x) # this is 2*pi*time
 
     # DD[idx] =  (deltaT .* sin.(t_baseline) .+  t_baseline .* DD[idx]) ./ pi
 
-    DD[idx] =  ((deltaT.^2.0 - DD[idx].^2.0).^0.5 .+  acos.(x) .* DD[idx]) ./ pi
+    DD[idx] = ((deltaT .^ 2.0 - DD[idx] .^ 2.0) .^ 0.5 .+ acos.(x) .* DD[idx]) ./ pi
 
   end
 
@@ -656,7 +812,7 @@ function calculate_GDD(Tavg::Matrix{Float32}, grid::DataFrame, DOY::Vector{Int16
   # Find indices separatng different locations
   ind = vec(sum(gdd_update, dims=1))
   locInd2 = accumulate(+, ind)  # End locations
-  locInd1 = vcat(1, locInd2[1:end-1] .+ 1)
+  locInd1 = vcat(1, locInd2[1:(end-1)] .+ 1)
 
   return GDDsh, idx, locInd1, locInd2
 end
@@ -763,7 +919,7 @@ function calculate_GDD(Tmin::Matrix{Float32}, Tmax::Matrix{Float32}, grid::DataF
   # Find indices separatng different locations
   ind = vec(sum(gdd_update, dims=1))
   locInd2 = accumulate(+, ind)  # End locations
-  locInd1 = vcat(1, locInd2[1:end-1] .+ 1)
+  locInd1 = vcat(1, locInd2[1:(end-1)] .+ 1)
 
   return GDDsh, idx, locInd1, locInd2
 end
@@ -845,9 +1001,9 @@ function cleanup_results(result::SharedMatrix{Int16}, idx::Vector{CartesianIndex
 
   # Index to remove rows where the final prediction at the same location 
   # doesn't change (they can be recalculated later)
-  idxKeep2 = (loc_idx[1:end-1] .!= loc_idx[2:end]) .||
-             (loc_idx[1:end-1] .== loc_idx[2:end] .&&
-              result[1:end-1, 2] .!= result[2:end, 2])
+  idxKeep2 = (loc_idx[1:(end-1)] .!= loc_idx[2:end]) .||
+             (loc_idx[1:(end-1)] .== loc_idx[2:end] .&&
+              result[1:(end-1), 2] .!= result[2:end, 2])
   push!(idxKeep2, true)    # Add a true value at the end
 
 
@@ -859,8 +1015,8 @@ function cleanup_results(result::SharedMatrix{Int16}, idx::Vector{CartesianIndex
     # Remove all but the first result with DOY >= 365 (results only for 1 year)
     # Keep data with DOY<=365 or when DOY>365 and the previous result was less than 365
     idxKeep3 = result[2:end, 1] .<= 365 .||
-               (loc_idx[1:end-1] .== loc_idx[2:end] .&&
-                (result[1:end-1, 1] .< 365 .&& result[2:end, 1] .>= 365))
+               (loc_idx[1:(end-1)] .== loc_idx[2:end] .&&
+                (result[1:(end-1), 1] .< 365 .&& result[2:end, 1] .>= 365))
     pushfirst!(idxKeep3, true)    # Add a true value at the start
 
     # Update idxKeep

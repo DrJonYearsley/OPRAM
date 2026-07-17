@@ -6,9 +6,17 @@
 # and uses it to run a degree day model for a range of insect species
 #
 # Full model output is saved in a JLD2 file
-# Summary results for specific starting dates are saved at raw 
-# resolution and 10km resolution in CSV files
 #
+# Processing of the results is performed by other programs. 
+# Specifically: 
+#     + averaging results acoss years, 
+#     + calculating development dates and anomalies for specific biofix dates
+#     + averaging results at 1km scale
+#
+#  This version is designed to use TRANSLATE's individual ensemble member data 
+#  rather than the average data across ensemble members.
+#
+# Version 1.1  (July 2026)
 #
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #    Copyright (C) 2026  Jon Yearsley  (Jon.Yearsley@ucd.ie)
@@ -32,9 +40,6 @@
 # ===============================================================
 # ===============================================================
 # Load packages that will be used
-
-
-
 using TOML
 using Distributed;
 using CSV;
@@ -100,12 +105,12 @@ include("OPRAM_ddmodel_functions.jl")
 # Start the main loop of the program
 if run_params.TRANSLATE_future
   # If a climate scenario is specified, run the model for future climates
-  using Distributions, Random;
+  using Random;
 
   @info "Running OPRAM model for future climate scenarios"
 
   # Run future climate degree-day model
-  @time "OPRAM future model run complete:" run_model_futures(run_params, species_params, paths)
+  @time "OPRAM future model run complete:" run_model_futures2(run_params, species_params, paths)
 else
   # If no climate scenario is specified, run the model for past climates
 

@@ -55,8 +55,8 @@ include("OPRAM_processing_functions.jl");
 if length(ARGS) == 1
     nNodes, run_params, species_setup, paths = import_parameters(ARGS[1])
 
-elseif length(ARGS) == 0 & isfile("parameters.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("parameters_future_halyomorpha.toml")
+elseif length(ARGS) == 0 & isfile("julia/parameters_test.toml")
+    nNodes, run_params, species_setup, paths = import_parameters("julia/parameters_test.toml")
 
 else
     @error "No parameter file given"
@@ -141,6 +141,8 @@ for s in eachindex(species_params)
                 Year = 2035
             elseif occursin(r"(2041|2055|2070)", run_params.futurePeriod[j])
                 Year = 2055
+            elseif occursin(r"(2071|2085|2100)", run_params.futurePeriod[j])
+                Year = 2085
             else
                 @error "Future period not recognised"
             end
@@ -223,12 +225,13 @@ for s in eachindex(species_params)
                 :nGenerations => (x -> if all(isa.(x, Missing))
                     missing
                 else
-                    mean(skipmissing(x))
+                    median(skipmissing(x))
                 end) => :nGenerations,          # Mean generations
+
                 :emergeDOY => (x -> if all(isa.(x, Missing))
                     missing
                 else
-                    mean(skipmissing(x))
+                    median(skipmissing(x))
                 end) => :emergeDOY)                # Mean emergence DOY
 
             df_1km.startDate = Date.(yearVec[f], df_1km.startMonth, 1)
@@ -262,10 +265,10 @@ for s in eachindex(species_params)
 
         if isnothing(run_params.thirty_years)
             @info "---- Setting anomalies and multi-year average to missing"
-            df_1km.:nGenerations_median = missing
-            df_1km.:emergeDOY_median = missing
-            df_1km.:nGenerations_anomaly = missing
-            df_1km.:emergeDOY_anomaly = missing
+            df_1km[!,:nGenerations_median] .= missing
+            df_1km[!,:emergeDOY_median] .= missing
+            df_1km[!,:nGenerations_anomaly] .= missing
+            df_1km[!,:emergeDOY_anomaly] .= missing
 
         else
             @info "---- Calculating anomalies"
