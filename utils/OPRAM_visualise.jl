@@ -29,12 +29,12 @@ include("OPRAM_processing_functions.jl");
 # If more than one year then take average across years
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
-rcp = 26
+rcp = 85
 year = 2055
 month = 1
 scale = 10     # Either 1 for 1km scale or 10 for hectad scale
 county = 5      # Set to 0 to import all counties
-paramFile = "parameters_future_halymorpha.toml"
+paramFile = "parameters_test.toml"
 
 nNodes, run_params, species_setup, paths = import_parameters(paramFile, true)
 

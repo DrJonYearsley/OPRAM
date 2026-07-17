@@ -140,7 +140,7 @@ rm("d_TN")
 
 if (file.exists(translateEnsembleFile)) {
   tmax_ensemble = read.csv(translateEnsembleFile)
-  tmax_ensemble$tmax_diff = tmax_ensemble$tmax_90-tmax_ensemble$tmax_10
+  tmax_ensemble$tmax_diff = tmax_ensemble$diff_50
   d_past = cbind(d_past, tmax_ensemble)
 }
 
