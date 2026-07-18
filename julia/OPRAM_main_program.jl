@@ -65,8 +65,8 @@ include("OPRAM_io_functions.jl")
 if length(ARGS)==1
   nNodes, run_params, species_params, paths =  import_parameters(ARGS[1])
 
-elseif length(ARGS)==0 & isfile("parameters.toml")
-  nNodes, run_params, species_params, paths =  import_parameters("parameters.toml")
+elseif length(ARGS)==0 & isfile("julia/parameters.toml")
+  nNodes, run_params, species_params, paths =  import_parameters("julia/parameters_test.toml")
 
 else
   @error "No parameter file given"
@@ -93,7 +93,7 @@ end
 @everywhere using DataFrames;
 
 # This must be included ater the worker nodes have been assigned
-include("OPRAM_ddmodel_functions.jl")
+include("OPRAM_main_functions.jl")
 
 
 @info "Workers : $(workers())"

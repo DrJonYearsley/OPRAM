@@ -40,7 +40,12 @@ nDays = 365;  # Number of days in the data (assumes no leap years)
 # =========================================================
 
 # Specify directories for import and export of data
-if isdir("//home//jon//DATA//OPRAM")
+if isdir("//Volumes//CLIMATEDATA//Translate")
+    outDir = "//Volumes//CLIMATEDATA//Climate_JLD2"
+    dataDir = "//users//jon//git_repos//OPRAM//Data"
+    translateDir = "//Volumes//CLIMATEDATA//Translate//Ensemble_member_sample_30_years_daily_data"
+
+elseif isdir("//home//jon//DATA//OPRAM")
     outDir = "//home//jon//DATA//OPRAM//Climate_JLD2//"
     dataDir = "//home//jon//DATA//OPRAM//"
     translateDir = "//home//jon//DATA//OPRAM//TRANSLATE"
@@ -82,7 +87,7 @@ grid_gt = georef((x=grid.east, y=grid.north, ID=grid.ID), ("x", "y"), crs=EPSG{2
 # Check size of data to be imported (using Tmax) and 
 
 # Find correct directory and file
-reg = Regex("^tmax_" * "[-\\w]+" * "_rcp" * string(rcpList[1]) * "_" * string(periodList[1]) * "[-\\w]+" * ".nc")
+reg = Regex("^tmax_" * "[-\\w]+" * "_rcp" * string(rcpList[1]) * "_" * string(periodList[1]) * "[-\\w]+" * ".nc");
 files = filter(x -> occursin(reg, x), readdir(translateDir))
 
 # Extract the name of the ensemble member from the file name

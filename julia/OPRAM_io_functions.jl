@@ -762,7 +762,7 @@ function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector
   for y in eachindex(years)
     # Get the correct filename
 
-    meteoFile = filter(x -> occursin("meteo" * countryStr * "_Tminmax_" * string(years[y]), x),
+    meteoFile = filter(x -> occursin(Regex("^meteo" * countryStr * "_Tminmax_" * string(years[y])), x),
       readdir(meteoDir))
 
     # Import the data for Tmin and Tmax
@@ -986,8 +986,8 @@ function read_JLD2_translate(meteoDir::String, years::Vector{Int64}, rcp::String
   IDVec = Vector{Array{Int64,1}}(undef, length(years))
 
   # Find files corresponding to the RCP, period and ensemble
-  meteoFileList = filter(x -> occursin(Regex("rcp" * rcp * "_" * period * "_" * "[-\\w]+.jld2"), x),
-      readdir(meteoDir))
+  meteoFileList = filter(x -> occursin(Regex("^[[:alnum:]]{1}[-\\w]*" *"rcp" * rcp * "_" * period * "_" * "[-\\w]+.jld2"), x),
+      readdir(meteoDir));
 
   # Keep only required ensemble files
   meteoFileList = filter(x -> occursin(ensemble, x), meteoFileList)

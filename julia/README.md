@@ -11,7 +11,7 @@ The main program requires that the temperature data has been processed into a jl
 Filename  | Description
 ----------| --------------------------------
 OPRAM_main_program.jl | The main file to start running the model
-OPRAM_ddmodel_functions.jl | The underlying functions for running the degree day model
+OPRAM_main_functions.jl | The underlying functions for running the degree day model
 OPRAM_io_functions.jl | Functions to import/export data (meteo, grid and species data)
 
 
@@ -60,7 +60,8 @@ Filename  | Description
 ----------| --------------------------------
 meteo_to_jld.jl  | Convert Met Eireann gridded csv files of gridded temperatures into a jld2 file
 meteoUK_to_jld2.jl | Convert UK Met Office netCDF files of gridded temperatures into a jld2 file
-translate_to_jld.jl  | Convert Met Eireann TRANSLATE netcdf files of max and min daily gridded temperatures into a jld2 file
+translate_to_jld.jl  | Convert Met Eireann TRANSLATE netcdf files (from results averaged across ensembles and years) of max and min daily gridded temperatures into a jld2 file
+translate2_to_jld.jl  | Convert Met Eireann TRANSLATE netcdf files (from raw ensemble results) of max and min daily gridded temperatures into a jld2 file
 
 
 
