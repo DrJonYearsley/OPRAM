@@ -1,4 +1,4 @@
-# OPRAM_ddmodel_functions.jl
+# OPRAM_main_functions.jl
 # A file containing the functions to run the degree day development models
 # on Met Eireann daily temperature data
 #

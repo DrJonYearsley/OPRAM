@@ -6,7 +6,7 @@ title = "Degree day model parameter file"
 nNodes = 3           # Number of compute nodes to use
 save2file = true     # If true save the results to a JLD2 file
 save1year = true     # if true save first year's results, otherwise
-                     # save all years from simYear to simYear+meaxYears-1
+                     # save all years from simYear to simYear+maxYears-1
 missing2zero = true  # if true set anomaly missing values to zero (workaround for bug in the app)
 
 
@@ -28,11 +28,12 @@ meteoNI =  "nothing"                     # Folder containing meteo data for NI
 speciesFile = "git_repos/OPRAM/data/species_parameters.csv"
 gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 countyDefs = "git_repos/OPRAM/data/granite_county_defs.csv"
+ensembleStr = ["CNRM-CM5", "EC-EARTH", "MPI-ESM-LR", "HadGEM2-ES"]     # Names of climate ensembles to include 
 
 
 
 [model]     # Parameters to define the model
-nReps = 1          # Number of replicates to run for future climates
+nReps = 1   # Number of replicates to run for future climates
 futurePeriod = ["2021-2050", "2041-2070"]  # Climate future period
 rcp = ["26","45","85"]                     # Climate future RCP
 maxYears = 4         # Maximum number of years to complete insect development

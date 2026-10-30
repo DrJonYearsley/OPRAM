@@ -15,8 +15,6 @@
 #
 # ====================================================================
 
-
-
 using CSV;
 using JLD2;
 using DataFrames;
@@ -31,8 +29,8 @@ rcpList = ["26", "45", "85"];              # The RCP scenario (26 = RCP2.6, 45=R
 periodList = ["2021-2050", "2041-2070"];   # The future scenario (2021-2050 or 2041-2070)
 gridFile = "IE_grid_locations.csv";        # File containing a 1km grid of lats and longs over Ireland 
 
-rcpList = ["85"];              # The RCP scenario (26 = RCP2.6, 45=RCP4.5, 85=RCP8.5)
-periodList = ["2071-2100"];   # The future scenario (2021-2050 or 2041-2070)
+# rcpList = ["85"];              # The RCP scenario (26 = RCP2.6, 45=RCP4.5, 85=RCP8.5)
+# periodList = ["2071-2100"];   # The future scenario (2021-2050 or 2041-2070)
 
 nDays = 365;  # Number of days in the data (assumes no leap years)
 
@@ -40,10 +38,15 @@ nDays = 365;  # Number of days in the data (assumes no leap years)
 # =========================================================
 
 # Specify directories for import and export of data
-if isdir("//Volumes//CLIMATEDATA//Translate")
+if isdir("//Volumes//CLIMATEDATA//Translate")|
     outDir = "//Volumes//CLIMATEDATA//Climate_JLD2"
     dataDir = "//users//jon//git_repos//OPRAM//Data"
-    translateDir = "//Volumes//CLIMATEDATA//Translate//Ensemble_member_sample_30_years_daily_data"
+    translateDir = "//Volumes//CLIMATEDATA//Translate//Five_Ensembles"
+
+elseif isdir("//run//media//jon//CLIMATEDATA//Translate")
+    outDir = "//run//media//jon//CLIMATEDATA//Climate_JLD2"
+    dataDir = "//home//jon//git_repos//OPRAM//data"
+    translateDir = "//run//media//jon//CLIMATEDATA//Translate//Five_Ensembles//nolan"
 
 elseif isdir("//home//jon//DATA//OPRAM")
     outDir = "//home//jon//DATA//OPRAM//Climate_JLD2//"
