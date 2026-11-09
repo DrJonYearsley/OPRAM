@@ -28,7 +28,7 @@ meteoNI =  "nothing"                     # Folder containing meteo data for NI
 speciesFile = "git_repos/OPRAM/data/species_parameters.csv"
 gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 countyDefs = "git_repos/OPRAM/data/granite_county_defs.csv"
-ensembleStr = ["CNRM-CM5", "EC-EARTH", "MPI-ESM-LR", "HadGEM2-ES"]     # Names of climate ensembles to include 
+translateEnsemble = ["CNRM-CM5", "EC-EARTH", "MPI-ESM-LR", "HadGEM2-ES"]     # Names of climate ensembles to include 
 
 
 
@@ -41,7 +41,7 @@ country = "IE"       # Can be "IE", "NI" or "AllIreland"
 thinFactor = 1       # Factor to thin grid (2 = sample every 2 km, 5 = sample every 5km)
 method = "sine"   # degree-day algorithm ("sine","triangle","average")
 thirty_years = [1991, 2020]  # 30yr period to average
-speciesList = ["Agrilus anxius", 
+speciesList = [
                 "Ips sexdentatus", 
                 "Ips duplicatus", 
                 "Spodoptera frugiperda", 
