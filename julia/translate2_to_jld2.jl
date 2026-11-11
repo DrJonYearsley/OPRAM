@@ -93,8 +93,8 @@ grid_gt = georef((x=grid.east, y=grid.north, ID=grid.ID), ("x", "y")) |> Proj(EP
 # Check size of data to be imported (using Tmax) and 
 
 # Find correct directory and file
-reg = Regex("^tmax_" * "[-\\w]+" * "_rcp(" * join(rcpList, "|") * ")_(" * join(periodList, "|") * ")[-\\w]+" * ".nc");
-files = filter(x -> occursin(reg, x), readdir(translateDir))
+reg1 = Regex("^tmax_" * "[-\\w]+" * "_rcp(" * join(rcpList, "|") * ")_(" * join(periodList, "|") * ")[-\\w]+" * ".nc");
+files = filter(x -> occursin(reg1, x), readdir(translateDir))
 
 # Import one file of the TRANSLATE data 
 ds = NCDataset(joinpath(translateDir, files[1]), "r");
@@ -178,8 +178,8 @@ for r in eachindex(rcpList)
 
             # Tmax data first
             # Find tmax files for a specific RCP, time period and ensemble member
-            reg = Regex("^tmax_" * "[-\\w]+" * ensembleList[ens] * "[-\\w]+" * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "[-\\w]+" * ".nc")
-            files_max = filter(x -> occursin(reg, x), readdir(translateDir))
+            reg2 = Regex("^tmax_" * "[-\\w]+" * ensembleList[ens] * "[-\\w]+" * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "[-\\w]+" * ".nc")
+            files_max = filter(x -> occursin(reg2, x), readdir(translateDir))
             if length(files_max) == 0
                 @warn "No files found for ensemble member " * string(ensembleList[ens]) * ", RCP " * string(rcpList[r]) * ", period " * string(periodList[p])
             else
@@ -206,8 +206,8 @@ for r in eachindex(rcpList)
                 # Now Tmin data
                 @info "Importing Tmin data for ensemble member " * string(ens)
                 # Find tmin files for a specific RCP, time period and ensemble member
-                reg = Regex("^tmin_" * "[-\\w]+" * ensembleList[ens] * "[-\\w]+" * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "[-\\w]+" * ".nc")
-                files_min = filter(x -> occursin(reg, x), readdir(translateDir))
+                reg3 = Regex("^tmin_" * "[-\\w]+" * ensembleList[ens] * "[-\\w]+" * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "[-\\w]+" * ".nc")
+                files_min = filter(x -> occursin(reg3, x), readdir(translateDir))
 
                 ds = NCDataset(joinpath(translateDir, files_min[1]), "r")
                 Tmin = convert.(Float32, ds["tmin"][nonzero_idx[grid.translateID], :])
