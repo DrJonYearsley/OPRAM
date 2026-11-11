@@ -21,6 +21,7 @@ using GeoStats;
 using NCDatasets;
 using Distributed;
 import CSV;
+using CoordRefSystems;
 
 include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 
@@ -28,7 +29,8 @@ include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 rcpList = ["26", "45", "85"];              # The RCP scenario (26 = RCP2.6, 45=RCP4.5, 85=RCP8.5)
 periodList = ["2021-2050", "2041-2070"];   # The future scenario (2021-2050 or 2041-2070)
 gridFile = "IE_grid_locations.csv";        # File containing a 1km grid of lats and longs over Ireland 
-ensembleList = ["CNRM-CM5", "EC-EARTH", "MPI-ESM-LR", "HadGEM2-ES"]
+ensembleList = ["CNRM-CM5", "EC-EARTH", "MPI-ESM-LR", "HadGEM2-ES"];   # Cordex ensembles
+# ensembleList = ["MIROC5"];   # Nolan ensembles
 
 # rcpList = ["85"];              # The RCP scenario (26 = RCP2.6, 45=RCP4.5, 85=RCP8.5)
 # periodList = ["2071-2100"];   # The future scenario (2021-2050 or 2041-2070)
@@ -47,7 +49,7 @@ if isdir("//Volumes//CLIMATEDATA//Translate")
 elseif isdir("//run//media//jon//CLIMATEDATA//Translate")
     outDir = "//run//media//jon//CLIMATEDATA//Climate_JLD2"
     dataDir = "//home//jon//git_repos//OPRAM//data"
-    translateDir = "//run//media//jon//CLIMATEDATA//Translate//Five_Ensembles//nolan"
+    translateDir = "//run//media//jon//CLIMATEDATA//Translate//Five_Ensembles//cordex"
 
 elseif isdir("//home//jon//DATA//OPRAM")
     outDir = "//home//jon//DATA//OPRAM//Climate_JLD2//"
@@ -82,8 +84,8 @@ grid = CSV.read(joinpath([dataDir, gridFile]), DataFrame);
 # Sort locations in order of IDs
 grid = grid[sortperm(grid.ID), :];
 
-# Create a geotable of the grid data
-grid_gt = georef((x=grid.east, y=grid.north, ID=grid.ID), ("x", "y"), crs=EPSG{29903})
+# Create a geotable of the grid data 
+grid_gt = georef((x=grid.east, y=grid.north, ID=grid.ID), ("x", "y")) |> Proj(EPSG{29903})  # Convert to Irish National Grid TM75
 
 
 # =========================================================
@@ -127,13 +129,30 @@ translate_xy = georef((lat=lat, lon=lon, ID=collect(1:length(nonzero_idx))),
     ("lat", "lon"),
     crs=EPSG{4326}) |> Proj(EPSG{29903})  # Convert to Irish National Grid TM75
 
-# Define interpolation model
-interpolation_model = InterpolateNeighbors(domain(grid_gt),
-    model=NN(EuclideanDistance()),
-    maxneighbors=10)
 
 # Find nearest neighbour IDs for the TRANSLATE data
-translate_NN = translate_xy |> interpolation_model
+
+
+
+# Remove CRS from geotables so that interpolation can work (this is a bug in GeoStats.jl)
+
+# Extract raw coordinate tuples (stripping the CRS and datum)
+raw_coords1 = [CoordRefSystems.raw(coords(p)) for p in domain(grid_gt)];
+raw_coords2 = [CoordRefSystems.raw(coords(p)) for p in domain(translate_xy)];
+
+# Rebuild the GeoTable with default Cartesian{NoDatum}
+grid_nodatum = georef(values(grid_gt), Point.(raw_coords1))
+translate_nodatum = georef(values(translate_xy), Point.(raw_coords2))
+
+# Define interpolation model
+interpolation_model = InterpolateNeighbors(domain(grid_nodatum),
+    model=NN(EuclideanDistance()),
+    maxneighbors=10,
+    minneighbors=1)
+
+translate_NN = translate_nodatum |> interpolation_model
+
+# Include the Translate ID in the grid dataframe
 grid.translateID = translate_NN.ID
 
 # Create array for days of year
@@ -142,6 +161,7 @@ DOY = collect(1:nDays);
 # Clear memory
 translate_NN = nothing;
 translate_xy = nothing;
+translate_nodatum = nothing;
 
 # =========================================================
 # =========================================================
@@ -174,7 +194,7 @@ for r in eachindex(rcpList)
 
                     # Save this to a JLD2 file
                     outfile = joinpath([outDir, "TRANSLATE_" * ensembleList[ens] * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "_year" * string(year) * ".jld2"])
-                    fh = jldopen(outfile, "w")
+                    fh = JLD2.jldopen(outfile, "w")
                     # Save Tmax... transpose so that spatial locations are in columns and days are in rows
                     fh["Tmax"]=transpose(Tmax[:, ((year-1)*nDays+1):(year*nDays)])
                     fh["DOY"]=DOY
@@ -199,7 +219,7 @@ for r in eachindex(rcpList)
 
                     # Append Tmin to a JLD2 file
                     outfile = joinpath([outDir, "TRANSLATE_" * ensembleList[ens] * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "_year" * string(year) * ".jld2"])
-                    fh = jldopen(outfile, "a")
+                    fh = JLD2.jldopen(outfile, "a")
                     # Save Tmin... transpose so that spatial locations are in columns and days are in rows
                     fh["Tmin"]=transpose(Tmin[:, ((year-1)*nDays+1):(year*nDays)])
                     close(fh)
