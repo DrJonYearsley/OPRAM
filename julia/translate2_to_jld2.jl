@@ -29,8 +29,8 @@ include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 rcpList = ["26", "45", "85"];              # The RCP scenario (26 = RCP2.6, 45=RCP4.5, 85=RCP8.5)
 periodList = ["2021-2050", "2041-2070"];   # The future scenario (2021-2050 or 2041-2070)
 gridFile = "IE_grid_locations.csv";        # File containing a 1km grid of lats and longs over Ireland 
-ensembleList = ["CNRM-CM5", "EC-EARTH", "MPI-ESM-LR", "HadGEM2-ES"];   # Cordex ensembles
-# ensembleList = ["MIROC5"];   # Nolan ensembles
+# ensembleList = ["CNRM-CM5", "EC-EARTH", "MPI-ESM-LR", "HadGEM2-ES"];   # Cordex ensembles
+ensembleList = ["MIROC5"];   # Nolan ensembles
 
 # rcpList = ["85"];              # The RCP scenario (26 = RCP2.6, 45=RCP4.5, 85=RCP8.5)
 # periodList = ["2071-2100"];   # The future scenario (2021-2050 or 2041-2070)
@@ -49,7 +49,7 @@ if isdir("//Volumes//CLIMATEDATA//Translate")
 elseif isdir("//run//media//jon//CLIMATEDATA//Translate")
     outDir = "//run//media//jon//CLIMATEDATA//Climate_JLD2"
     dataDir = "//home//jon//git_repos//OPRAM//data"
-    translateDir = "//run//media//jon//CLIMATEDATA//Translate//Five_Ensembles//cordex"
+    translateDir = "//run//media//jon//CLIMATEDATA//Translate//Five_Ensembles//nolan"
 
 elseif isdir("//home//jon//DATA//OPRAM")
     outDir = "//home//jon//DATA//OPRAM//Climate_JLD2//"
@@ -97,10 +97,10 @@ reg1 = Regex("^tmax_" * "[-\\w]+" * "_rcp(" * join(rcpList, "|") * ")_(" * join(
 files = filter(x -> occursin(reg1, x), readdir(translateDir))
 
 # Import one file of the TRANSLATE data 
-ds = NCDataset(joinpath(translateDir, files[1]), "r");
-Tmax1 = ds["tmax"];
-lat = ds["lat"];
-lon = ds["lon"];
+ds1 = NCDataset(joinpath(translateDir, files[1]), "r");
+Tmax1 = ds1["tmax"];
+lat = ds1["lat"];
+lon = ds1["lon"];
 
 
 # Indices to remove data that has unrealsitic max temps
@@ -183,7 +183,7 @@ for r in eachindex(rcpList)
             if length(files_max) == 0
                 @warn "No files found for ensemble member " * string(ensembleList[ens]) * ", RCP " * string(rcpList[r]) * ", period " * string(periodList[p])
             else
-            @info "Importing Tmax data for ensemble member " * string(ensembleList[ens])
+            @info "Importing Tmax data for ensemble member " * string(ensembleList[ens]) * "rcp " * string(rcpList[r]) * ", period " * string(periodList[p])
                 ds = NCDataset(joinpath(translateDir, files_max[1]), "r")
                 Tmax = convert.(Float32, ds["tmax"][nonzero_idx[grid.translateID], :])
                 close(ds)
@@ -204,7 +204,7 @@ for r in eachindex(rcpList)
                 Tmax = nothing  # Clear memory
 
                 # Now Tmin data
-                @info "Importing Tmin data for ensemble member " * string(ens)
+                @info "Importing Tmin data for ensemble member " * string(ensembleList[ens]) * "rcp " * string(rcpList[r]) * ", period " * string(periodList[p])
                 # Find tmin files for a specific RCP, time period and ensemble member
                 reg3 = Regex("^tmin_" * "[-\\w]+" * ensembleList[ens] * "[-\\w]+" * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "[-\\w]+" * ".nc")
                 files_min = filter(x -> occursin(reg3, x), readdir(translateDir))
