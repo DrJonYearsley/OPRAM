@@ -55,8 +55,8 @@ include("OPRAM_processing_functions.jl");
 if length(ARGS) == 1
     nNodes, run_params, species_setup, paths = import_parameters(ARGS[1])
 
-elseif length(ARGS) == 0 & isfile("julia/parameters_test.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("julia/parameters_test.toml")
+elseif length(ARGS) == 0 & isfile("julia/parameters.toml")
+    nNodes, run_params, species_setup, paths = import_parameters("parameters_future_halyomorpha.toml")
 
 else
     @error "No parameter file given"
@@ -129,7 +129,7 @@ for s in eachindex(species_params)
     # Import the 1km results for the species and years
 
     # Initialise vector of files to import
-    inFiles = Vector{String}(undef, 0)
+    inFiles = Vector{Vector{String}}(undef, 0)
     yearVec = Vector{Int64}(undef, 0)
     yearStrVec = Vector{String}(undef, 0)
     if run_params.TRANSLATE_future
@@ -151,15 +151,19 @@ for s in eachindex(species_params)
             dates = [Date(Year, m, 01) for m in 1:12]
 
             for i in eachindex(run_params.rcp)
-                filename = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country *
-                                                "_rcp" * run_params.rcp[i] * "_" * run_params.futurePeriod[j] * "_1km_" * run_params.method * ".jld2", x),
+                # There could be more than ione file due to several ensembles being run. 
+                # The files are named with the ensemble name at the end of the file name.
+                reg = Regex("^" * speciesName[1] * "_" * run_params.country *
+                            "_rcp" * run_params.rcp[i] * "_" * run_params.futurePeriod[j] * 
+                            "_[-\\w]+_1km_" * run_params.method * ".jld2")
+                filename = filter(x -> occursin(reg, x),
                     readdir(joinpath(paths.resultsDir, speciesName[1])))
 
-                if length(filename) > 1
-                    @error "More than one input file found"
-                end
+                # if length(filename) > 1
+                #     @error "More than one input file found"
+                # end
 
-                push!(inFiles, joinpath(paths.resultsDir, speciesName[1], filename[1]))
+                push!(inFiles, joinpath.(paths.resultsDir, speciesName[1], filename))
                 push!(yearStrVec, "rcp" * run_params.rcp[i] * "_" * run_params.futurePeriod[j])
                 push!(yearVec, Year)
             end
@@ -209,13 +213,28 @@ for s in eachindex(species_params)
 
     for f in eachindex(inFiles)
         # Import the data from the jld2 files
-        println("  ")
-        @info "Importing data for " * yearStrVec[f]
-        df_tmp = read_OPRAM_JLD2(inFiles[f], yearVec[f], grid)
 
 
         if run_params.TRANSLATE_future
             # If TRANSLATE future data then calculate the average across replicates
+
+           # Import data for all ensembles and add them on to each other
+
+           # ======================================================================
+           # WORK IN PROGRESS
+            println("  ")
+            for e in eachindex(run_params.ensembles)
+                @info "Importing data for " * yearStrVec[f] * " ensemble " * run_params.ensembles[e]
+                df_tmp = read_OPRAM_JLD2(inFiles[f], yearVec[f], grid, run_params.ensembles[e])
+
+                if e == 1
+                    df_1km = df_tmp
+                else
+                    append!(df_1km, df_tmp)
+                end
+            end
+           # ======================================================================
+ 
 
             # Group data frame by location and then starting Date 
             df_group = groupby(df_tmp, [:ID, :startMonth])
@@ -237,12 +256,14 @@ for s in eachindex(species_params)
             df_1km.startDate = Date.(yearVec[f], df_1km.startMonth, 1)
 
             df_group = nothing  # Remove df_group
-
+            df_tmp = nothing    # Remove df_tmp
         else
-            # If not TRANSLATE future data then just use the imported data
-            df_1km = df_tmp
+            # Import data for historical climates
+            println("  ")
+            @info "Importing data for " * yearStrVec[f]
+            df_1km = read_OPRAM_JLD2(inFiles[f], yearVec[f], grid)
         end
-        df_tmp = nothing  # Remove df_tmp
+
 
 
 
