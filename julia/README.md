@@ -60,8 +60,8 @@ Filename  | Description
 ----------| --------------------------------
 meteo_to_jld.jl  | Convert Met Eireann gridded csv files of gridded temperatures into a jld2 file
 meteoUK_to_jld2.jl | Convert UK Met Office netCDF files of gridded temperatures into a jld2 file
-translate_to_jld.jl  | Convert Met Eireann TRANSLATE netcdf files (from results averaged across ensembles and years) of max and min daily gridded temperatures into a jld2 file
-translate2_to_jld.jl  | Convert Met Eireann TRANSLATE netcdf files (from raw ensemble results) of max and min daily gridded temperatures into a jld2 file
+translate_to_jld2.jl  | Convert Met Eireann TRANSLATE netcdf files (from raw ensemble results) of max and min daily gridded temperatures into a jld2 file
+translate_to_jld2_old.jl  | Convert Met Eireann TRANSLATE netcdf files (from results averaged across ensembles and years) of max and min daily gridded temperatures into a jld2 file [NOTE: these averaged data are nolonger used in OPRAM]
 
 
 
