@@ -17,6 +17,7 @@
 #  rather than the average data across ensemble members.
 #
 # Version 1.1  (July 2026)
+# Version 1.2  (November 2026) updated to use raw TRANSLATE ensemble data rather than the mean and standard deviation summaries
 #
 # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #    Copyright (C) 2026  Jon Yearsley  (Jon.Yearsley@ucd.ie)
@@ -108,7 +109,7 @@ if run_params.TRANSLATE_future
   @info "Running OPRAM model for future climate scenarios"
 
   # Run future climate degree-day model
-  @time "OPRAM future model run complete:" run_model_futures2(run_params, species_params, paths)
+  @time "OPRAM future model run complete:" run_model_futures(run_params, species_params, paths)
 else
   # If no climate scenario is specified, run the model for past climates
 

@@ -1,30 +1,29 @@
-# Script to import TRANSLATE project meteo files and convert them 
-# to jld2 format for more efficient import
+# Script to import raw ensemble level TRANSLATE project meteo files and 
+# convert them  to jld2 format for more efficient import
 # 
 # The TRANSLATE files for maximum and minimum daily temperatures are imported.
-# The median, 10th and 90th quantiles are combined to estimate a mean 
-# and standard deviation (that will be used later to produce random temp data). 
-# Then the mean and standard deviation are interpolated (using a 
-# nearest-neighbour model) onto a 1km grid of locations in Ireland.
+# These files give 30yr of simulations  for an ensemble member 
+# The data are interpolated onto the 1km grid of Ireland and 
+# saved in a jld2 file for each RCP and time period.
 #
 # Interpolation uses nearest-neighbour model with 10 neighbours. 
 # This avoids extrapolation errors, but may need to be revised.
 #
 #
 # Jon Yearsley (jon.yearsley@ucd.ie)
-# 23th Feb 2025
+# 15th July 2026
+#
+# Updated: Nov 2026, modify interpolation to remove coordinate system info (workaround for bug in geoStats package)
 #
 # ====================================================================
 
-
-
-using CSV;
-using JLD2;
+import JLD2;
 using DataFrames;
 using GeoStats;
-using NetCDF;
-using SpecialFunctions;
+using NCDatasets;
 using Distributed;
+import CSV;
+using CoordRefSystems;
 
 include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 
@@ -32,33 +31,42 @@ include("OPRAM_io_functions.jl")  # Includes functions to import meteo data
 rcpList = ["26", "45", "85"];              # The RCP scenario (26 = RCP2.6, 45=RCP4.5, 85=RCP8.5)
 periodList = ["2021-2050", "2041-2070"];   # The future scenario (2021-2050 or 2041-2070)
 gridFile = "IE_grid_locations.csv";        # File containing a 1km grid of lats and longs over Ireland 
-quantiles = ["10", "50", "90"];            # The quantiles of the ensemble to import
+# ensembleList = ["CNRM-CM5", "EC-EARTH", "MPI-ESM-LR", "HadGEM2-ES"];   # Cordex ensembles
+ensembleList = ["MIROC5"];   # Nolan ensembles
 
 # rcpList = ["85"];              # The RCP scenario (26 = RCP2.6, 45=RCP4.5, 85=RCP8.5)
-# periodList = ["2041-2070"];   # The future scenario (2021-2050 or 2041-2070)
+# periodList = ["2071-2100"];   # The future scenario (2021-2050 or 2041-2070)
 
+nDays = 365;  # Number of days in the data (assumes no leap years)
 
 # =========================================================
 # =========================================================
 
 # Specify directories for import and export of data
-if isdir("//home//jon//DATA//OPRAM")
+if isdir("//Volumes//CLIMATEDATA//Translate")
+    outDir = "//Volumes//CLIMATEDATA//Climate_JLD2"
+    dataDir = "//users//jon//git_repos//OPRAM//Data"
+    translateDir = "//Volumes//CLIMATEDATA//Translate//Five_Ensembles"
+
+elseif isdir("//run//media//jon//CLIMATEDATA//Translate")
+    outDir = "//run//media//jon//CLIMATEDATA//Climate_JLD2"
+    dataDir = "//home//jon//git_repos//OPRAM//data"
+    translateDir = "//run//media//jon//CLIMATEDATA//Translate//Five_Ensembles//nolan"
+
+elseif isdir("//home//jon//DATA//OPRAM")
     outDir = "//home//jon//DATA//OPRAM//Climate_JLD2//"
     dataDir = "//home//jon//DATA//OPRAM//"
-    translateDir_max = "//home//jon//DATA//OPRAM//TRANSLATE//tmax"
-    translateDir_min = "//home//jon//DATA//OPRAM//TRANSLATE//tmin"
+    translateDir = "//home//jon//DATA//OPRAM//TRANSLATE"
 
-elseif isdir("//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//R")
-    outDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//Climate_JLD2//"
-    dataDir = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//"
-    translateDir_max = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//TRANSLATE//tmax"
-    translateDir_min = "//users//jon//Google Drive//My Drive//Projects//DAFM_OPRAM//Data//TRANSLATE//tmin"
+elseif isdir("/Users/jon/Research/Data/Climate/Translate/ensemble2/")
+    outDir = "/Users/jon/Research/OPRAM/Climate_JLD2"
+    dataDir = "/Users/jon/Library/CloudStorage/GoogleDrive-jon.yearsley@ucd.ie/My Drive//Projects//DAFM_OPRAM//Data//"
+    translateDir = "/Users/jon/Research/Data/Climate/Translate/ensemble2"
 
 elseif isdir("//users//jon//Desktop//OPRAM//")
     outDir = "//users//jon//Desktop//OPRAM//Climate_JLD2//"
     dataDir = "//users//jon//Desktop//OPRAM//"
-    translateDir_max = "//users//jon//Desktop//OPRAM//TRANSLATE//tmax"
-    translateDir_min = "//users//jon//Desktop//OPRAM//TRANSLATE//tmin"
+    translateDir = "//users//jon//Desktop//OPRAM//TRANSLATE"
 end
 
 
@@ -78,8 +86,8 @@ grid = CSV.read(joinpath([dataDir, gridFile]), DataFrame);
 # Sort locations in order of IDs
 grid = grid[sortperm(grid.ID), :];
 
-# Create a geotable of the grid data
-grid_gt = georef((x=grid.east, y=grid.north, ID=grid.ID), ("x", "y"), crs=EPSG{29903})
+# Create a geotable of the grid data 
+grid_gt = georef((x=grid.east, y=grid.north, ID=grid.ID), ("x", "y")) |> Proj(EPSG{29903})  # Convert to Irish National Grid TM75
 
 
 # =========================================================
@@ -87,265 +95,169 @@ grid_gt = georef((x=grid.east, y=grid.north, ID=grid.ID), ("x", "y"), crs=EPSG{2
 # Check size of data to be imported (using Tmax) and 
 
 # Find correct directory and file
-files = filter(x -> occursin(Regex("^tmax_rcp" * string(rcpList[1]) * "_" *string(periodList[1]) * "_" * "\\w+"  *  "_ens50.nc") , x), readdir(translateDir_max))
+reg1 = Regex("^tmax_" * "[-\\w]+" * "_rcp(" * join(rcpList, "|") * ")_(" * join(periodList, "|") * ")[-\\w]+" * ".nc");
+files = filter(x -> occursin(reg1, x), readdir(translateDir))
 
 # Import one file of the TRANSLATE data 
-Tmax1 = ncread(joinpath(translateDir_max, files[1]), "tmax");
-lat = ncread(joinpath(translateDir_max, files[1]), "lat");
-lon = ncread(joinpath(translateDir_max, files[1]), "lon");
+ds1 = NCDataset(joinpath(translateDir, files[1]), "r");
+Tmax1 = ds1["tmax"];
+lat = ds1["lat"];
+lon = ds1["lon"];
+
+
+# Indices to remove data that has unrealsitic max temps
+nonzero_idx = findall(dropdims(.!all(ismissing.(Tmax1[:, :, 1:3]), dims=3), dims=3));
 
 # Calculate some dimensions
 TSize = size(Tmax1)
-nDays = TSize[3];
+nYears = floor(Int, TSize[3] / nDays);
 
-# Reshape arrays in place
-Tmax_long = reshape(Tmax1,:,nDays);
-lon_2D = reshape([lon[i] for i in eachindex(lon), j in eachindex(lat)],:);
-lat_2D = reshape([lat[j] for i in eachindex(lon), j in eachindex(lat)], :);
-
-# Clear some variables
-Tmax1 = nothing;
-lat = nothing;
-lon = nothing;
+# Reshape lat and lon arrays into 2D arrays 
+lon_2D = [lon[i] for i in eachindex(lon), j in eachindex(lat)];
+lat_2D = [lat[j] for i in eachindex(lon), j in eachindex(lat)];
 
 
-# Find data that has unrealsitic max temps
-nonzero_idx = dropdims(all(Tmax_long.>-273, dims=2), dims=2);
-
-# Keep only lats and longs with non-zero temps
-lon_2D = lon_2D[nonzero_idx];
-lat_2D = lat_2D[nonzero_idx];
-
+# Remove locations with missing values
+lon = lon_2D[nonzero_idx]
+lat = lat_2D[nonzero_idx]
 
 
 # =========================================================
 # =========================================================
 # For each 1km grid square find nearest neighbour TRANSLATE location
 
-# Convert TRANSLATE lat lon into eastings and northings
-translate_xy = georef((lat=lat_2D, lon=lon_2D, ID=collect(1:length(lon_2D))),
+# Convert TRANSLATE lat lon into eastings and northings for the full grid of TRANSLATE data
+translate_xy = georef((lat=lat, lon=lon, ID=collect(1:length(nonzero_idx))),
     ("lat", "lon"),
     crs=EPSG{4326}) |> Proj(EPSG{29903})  # Convert to Irish National Grid TM75
 
-# Define interpolation model
-interpolation_model = InterpolateNeighbors(domain(grid_gt),
-                   model=NN(Euclidean()),
-                   maxneighbors=10) 
 
 # Find nearest neighbour IDs for the TRANSLATE data
-translate_NN =  translate_xy |> interpolation_model
+
+
+
+# Remove CRS from geotables so that interpolation can work (this is a bug in GeoStats.jl)
+
+# Extract raw coordinate tuples (stripping the CRS and datum)
+raw_coords1 = [CoordRefSystems.raw(coords(p)) for p in domain(grid_gt)];
+raw_coords2 = [CoordRefSystems.raw(coords(p)) for p in domain(translate_xy)];
+
+# Rebuild the GeoTable with default Cartesian{NoDatum}
+grid_nodatum = georef(values(grid_gt), Point.(raw_coords1))
+translate_nodatum = georef(values(translate_xy), Point.(raw_coords2))
+
+# Define interpolation model
+interpolation_model = InterpolateNeighbors(domain(grid_nodatum),
+    model=NN(EuclideanDistance()),
+    maxneighbors=10,
+    minneighbors=1)
+
+translate_NN = translate_nodatum |> interpolation_model
+
+# Include the Translate ID in the grid dataframe
 grid.translateID = translate_NN.ID
-
-
-# Array to hold temperature data for the quantiles
-Tmax_quantiles = Array{Float32,3}(undef, sum(nonzero_idx), nDays, length(quantiles));
-Tmin_quantiles = Array{Float32,3}(undef, sum(nonzero_idx), nDays, length(quantiles));
-
-# Array to hold interpolated temperature data (mean and tandard deviation)
-Tmax_interp = Array{Float32,2}(undef, nDays, length(grid.ID));
-Tmaxsd_interp = Array{Float32,2}(undef, nDays, length(grid.ID));
-Tmin_interp = Array{Float32,2}(undef, nDays, length(grid.ID));
-Tminsd_interp = Array{Float32,2}(undef, nDays, length(grid.ID));
 
 # Create array for days of year
 DOY = collect(1:nDays);
 
-
-# Calculate distance between 10th and 90th quantiles in units of standard deviation
-# (used to estimate standard deviation of temp))
-sd_estimator = (erfinv(2*0.9 - 1) - erfinv(2*0.1 - 1)) * sqrt(2)
-
+# Clear memory
+translate_NN = nothing;
+translate_xy = nothing;
+translate_nodatum = nothing;
 
 # =========================================================
 # =========================================================
 # Import the data for each RCP and period, interpolate data onto 1km grid 
-# and save in a JLD2 file
+# and save each individual year in a JLD2 file
 
 for r in eachindex(rcpList)
     @time "Converted TRANSLATE data:" for p in eachindex(periodList)
-        # +++++++++++++++++++++++++++++++++++++++++++++++++++
-        # Import the TRANSLATE data
-        @info "Importing data for RCP " * string(rcpList[r]) * " and period " * string(periodList[p])
+        for ens in eachindex(ensembleList)
+            # +++++++++++++++++++++++++++++++++++++++++++++++++++
+            # Import the TRANSLATE data
 
+            # Extract data from the netCDF and put nearest TRANSLATE data point onto the 1km grid
 
-        # Find the three files for a specific RCP and time period
-        # rcpDir = filter(x -> occursin(string(rcpList[r]), x), readdir(joinpath(translateDir)))
-        # files_max = filter(x -> occursin(r"_" * string(periodList[p]) * "_ens", x), readdir(joinpath(translateDir, rcpDir[1])))
-        files_max = filter(x -> occursin(Regex("^tmax_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) ), x), readdir(translateDir_max))
-        files_min = filter(x -> occursin(Regex("^tmin_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) ), x), readdir(translateDir_min))
+            # Tmax data first
+            # Find tmax files for a specific RCP, time period and ensemble member
+            reg2 = Regex("^tmax_" * "[-\\w]+" * ensembleList[ens] * "[-\\w]+" * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "[-\\w]+" * ".nc")
+            files_max = filter(x -> occursin(reg2, x), readdir(translateDir))
+            if length(files_max) == 0
+                @warn "No files found for ensemble member " * string(ensembleList[ens]) * ", RCP " * string(rcpList[r]) * ", period " * string(periodList[p])
+            else
+            @info "Importing Tmax data for ensemble member " * string(ensembleList[ens]) * "rcp " * string(rcpList[r]) * ", period " * string(periodList[p])
+                ds = NCDataset(joinpath(translateDir, files_max[1]), "r")
+                Tmax = convert.(Float32, ds["tmax"][nonzero_idx[grid.translateID], :])
+                close(ds)
 
-        for q in eachindex(quantiles)
-            @info "Processing quantile " * string(quantiles[q])
-            # Read the Tmax and Tmin data and reshape into a 2D matrix
-            fileIn = filter(x -> occursin("ens" * quantiles[q], x), files_max)
-            Tmax = reshape(ncread(joinpath(translateDir_max, fileIn[1]), "tmax"), : , nDays)
+                # Write data to files (one file per year)
+                for year in 1:nYears
+                    @info "Saving data for year " * string(year)
 
-            fileIn = filter(x -> occursin("ens" * quantiles[q], x), files_min)
-            Tmin = reshape(ncread(joinpath(translateDir_min, fileIn[1]), "tmin"), : , nDays)
+                    # Save this to a JLD2 file
+                    outfile = joinpath([outDir, "TRANSLATE_" * ensembleList[ens] * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "_year" * string(year) * ".jld2"])
+                    fh = JLD2.jldopen(outfile, "w")
+                    # Save Tmax... transpose so that spatial locations are in columns and days are in rows
+                    fh["Tmax"]=transpose(Tmax[:, ((year-1)*nDays+1):(year*nDays)])
+                    fh["DOY"]=DOY
+                    fh["ID"]=grid.ID
+                    close(fh)
+                end
+                Tmax = nothing  # Clear memory
 
-            # Save non-zero temp data
-            Tmax_quantiles[:, :, q] .= Tmax[nonzero_idx, :];
-            Tmin_quantiles[:, :, q] .= Tmin[nonzero_idx, :];
+                # Now Tmin data
+                @info "Importing Tmin data for ensemble member " * string(ensembleList[ens]) * "rcp " * string(rcpList[r]) * ", period " * string(periodList[p])
+                # Find tmin files for a specific RCP, time period and ensemble member
+                reg3 = Regex("^tmin_" * "[-\\w]+" * ensembleList[ens] * "[-\\w]+" * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "[-\\w]+" * ".nc")
+                files_min = filter(x -> occursin(reg3, x), readdir(translateDir))
+
+                ds = NCDataset(joinpath(translateDir, files_min[1]), "r")
+                Tmin = convert.(Float32, ds["tmin"][nonzero_idx[grid.translateID], :])
+                close(ds)
+
+                # Write data to files (one file per year)
+                for year in 1:nYears
+                    @info "Appending Tmin data for year " * string(year)
+
+                    # Append Tmin to a JLD2 file
+                    outfile = joinpath([outDir, "TRANSLATE_" * ensembleList[ens] * "_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * "_year" * string(year) * ".jld2"])
+                    fh = JLD2.jldopen(outfile, "a")
+                    # Save Tmin... transpose so that spatial locations are in columns and days are in rows
+                    fh["Tmin"]=transpose(Tmin[:, ((year-1)*nDays+1):(year*nDays)])
+                    close(fh)
+                end
+                Tmin = nothing  # Clear memory
+            end
         end
-
-        # Calculate standard deviation from 10th and 90th quantiles
-        Tmaxsd = (Tmax_quantiles[:,:,3] .- Tmax_quantiles[:,:,1]) ./ sd_estimator;
-        Tminsd = (Tmin_quantiles[:,:,3] .- Tmin_quantiles[:,:,1]) ./ sd_estimator;
-
-        # Interpolate the median and standard deviations onto the 1km grid
-        for doy in eachindex(DOY)
-            @info "Interpolating for Day" * string(doy)
-            # Interpolate the temperature data onto the 1km grid
-
-            # Max temp interpolation (based on nearest neighbour)
-            Tmax_interp[doy, :] = Tmax_quantiles[grid.translateID, doy, 2]
-            Tmaxsd_interp[doy, :] = Tmaxsd[grid.translateID, doy]
-
-            # Min temp interpolation
-            Tmin_interp[doy, :] = Tmin_quantiles[grid.translateID, doy, 2]
-            Tminsd_interp[doy, :] = Tminsd[grid.translateID, doy]
-        end
-
-        # An alternative interpolation approach could be to interpolate the data directly
-        # This would be better if we were not doing nearest neightbour
-        # e.g. 
-        # data_xy = georef((lat=lat_2D, lon=lon_2D,
-        #         X=Tmax_quantiles[:, doy, 2]), ("lat", "lon"), crs=EPSG{4326}) |> Proj(EPSG{29903})
-        # x_interp = data_xy |> interpolation_model
-
-        # Save this to a JLD2 file
-        outfile = joinpath([outDir, "TRANSLATE_Tmaxmin_rcp" * string(rcpList[r]) * "_" * string(periodList[p]) * ".jld2"])
-        @info "Saving file " * outfile
-        jldsave(outfile; Tmax_mean=Tmax_interp, Tmax_sd=Tmaxsd_interp, Tmin_mean=Tmin_interp, Tmin_sd=Tminsd_interp, DOY=DOY, ID=grid.ID)
     end
 end
 
-# tmp = Tmax_interp .- 8.0
-# tmp[tmp.<0.0] .= 0.0
-# z = [sum(Tmaxsd_interp[:,i]) for i in eachindex(grid.ID)]
-
-# Plots.plot(grid.east,
-#      grid.north,
-#       zcolor=z,
-#      seriestype=:scatter,
-#      markerstrokewidth=0,
-#      markersize=0.5,
-#         showaxis=true,
-#     grid=false,
-#     legend=false,
-#     cbar=true,
-#     aspect_ratio=:equal)
-
-# z
-
-# =========================================================
-# =========================================================
-# scatter(grid.longitude, grid.latitude, marker_z=Tavg_interp[1,:,1], markerstrokewidth=0, markersize=1)
-
-
-# Plots.scatter(lon_2D, lat_2D, marker_z=Tsd[:,1], markerstrokewidth=0, markersize=1)
-# Plots.scatter(lon_2D, lat_2D, marker_z=Tavg_quantiles[:,1,2], markerstrokewidth=0, markersize=1)
-
-# ind = ismissing.(Tavg_interp2)
-# scatter(grid.longitude[.!ind], grid.latitude[.!ind],
-#     marker_z=Tavg_interp2[.!ind],
-#     markerstrokewidth=0,
-#     markersize=1)
-
-
-
-# # Look at symmetry of the 10th and 90th quantiles
-# tmp10 = Tavg_interp[:,:,2] -  Tavg_interp[:,:,1]
-# tmp90 = Tavg_interp[:,:,3] -  Tavg_interp[:,:,2]
-# histogram(tmp90[:,1] .- tmp10[:,1])
-
-# x=[mean(tmp90[:,i] .- tmp10[:,i]) for i in 1:size(tmp10,2)] # Average across year
-# y=[mean(tmp90[i,:] .- tmp10[i,:]) for i in 1:size(tmp10,1)] # Average across locations
-
-# rat = (tmp90 .- tmp10) ./ Tavg_interp[:,:,2]
-
-
-# histogram(x)
-# histogram(y)
-
-# DOY_2D = [DOY[i] for i in eachindex(DOY), j in eachindex(grid.ID)]
-
-# Plots.scatter(DOY, y)
-# Makie.boxplot(ceil.(DOY_2D[:].*(12/365)), tmp90[:] .- tmp10[:])
-# Makie.boxplot(ceil.(DOY_2D[:].*(12/365)), rat[:])
-
-# Plots.scatter(grid.longitude, grid.latitude, marker_z=x, markerstrokewidth=0, markersize=1)
-
-
-# std(tmp10 .- tmp90)
 
 
 
 
-# # Visualise the TRANSLATE and 1km grid
-# # Take a subset of the data
+# # PLot data to test
+
 # using Plots
-# idx = grid.east .> 20000 .&& grid.east .< 80000 .&& 
-#         grid.north .> 25000 .&& grid.north .< 80000
-
-# idx = grid.east .> 3.1e5 .&& grid.east .< 3.5e5 .&& 
-#         grid.north .> 2.25e5 .&& grid.north .< 2.4e5
-
-# idx = grid.east .> 3.16e5 .&& grid.east .< 3.27e5 .&& 
-#         grid.north .> 2.25e5 .&& grid.north .< 2.36e5
-         
-
-# Plots.plot(grid.east[idx],
-#      grid.north[idx],
-#      seriestype=:scatter,
-#      markerstrokewidth=0,
-#      markersize=2,
-#         showaxis=true,
-#     grid=false,
+# plot(grid.east,
+#     grid.north,
+#     zcolor=tmin[:, 200], 
+#     st=:scatter, 
+#     ms=1,
+#     markerstrokewidth=0,
+#     c=:thermal,
+#     clims=(0, 30),
+#         grid=false,
 #     legend=false,
 #     cbar=true,
-#     aspect_ratio=:equal)
+#     aspect_ratio=:equal,
+#     xlabel="Eastings",
+#     ylabel="Northings",
+#     title="Max Temp Day 1")
 
 
-# xCoord = [ustrip(translate_xy.geometry.geoms[i].coords.x) for i in eachindex(translate_xy.geometry.geoms)];
-# yCoord = [ustrip(translate_xy.geometry.geoms[i].coords.y) for i in eachindex(translate_xy.geometry.geoms)];
-    
-# Plots.plot!(xCoord[grid.translateID[idx]],
-#      yCoord[grid.translateID[idx]],
-#      seriestype=:scatter,
-#      markerstrokewidth=0,
-#      markersize=2,
-#      markercolor=:red,
-#     showaxis=false,
-#     grid=false,
-#     legend=false,
-#     cbar=false,
-#     aspect_ratio=:equal)
 
-#     # using Makie
-#     # using GLMakie
-# using CairoMakie
+# # Try loading a JLD2 file to check it has been saved correctly
+# tmp = load(joinpath([outDir, "TRANSLATE_" * ensemble_member[1] * "_year" * string(1) * ".jld2"]));
 
-# xs = grid.east[idx]
-# ys = grid.north[idx]
-# xs2 = xCoord[grid.translateID[idx]]
-# ys2 = yCoord[grid.translateID[idx]]
-# us = xs .- xs2
-# vs = ys .- ys2
-# strength = vec(sqrt.(us .^ 2 .+ vs .^ 2))
-
-# f = Figure(size = (800, 800))
-# Axis(f[1, 1], 
-#  xlabel = "Eastings (m)", 
-#  ylabel = "Northings (m)",
-#  xlabelsize=28,
-#     ylabelsize=28,
-#  backgroundcolor = "white")
-
-
-# CairoMakie.scatter!(xs,ys, color = :blue, markersize = 15, marker=:circle)
-# CairoMakie.scatter!(xs2,ys2, color = :red, markersize = 15, marker=:xcross)
-# CairoMakie.arrows2d!(xs2, ys2, us, vs, lengthscale = 1, color = :red)
-# f
-
- 
+# tmin = load(joinpath([outDir, "TRANSLATE_" * ensemble_member[1] * "_year" * string(1) * ".jld2"]), "Tmin");

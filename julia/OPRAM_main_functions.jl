@@ -23,7 +23,6 @@
 # This file contains the following functions
 # function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
 # function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
-# function run_model_futures2(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
 # function average_degreeday(Tmin, Tmax, T_baseline)
 # function triangle_degreeday(Tmin, Tmax, T_baseline)
 # function sine_degreeday(Tmin, Tmax, T_baseline)
@@ -37,6 +36,9 @@
 #                        outPrefix::String, paths::NamedTuple, run_params::NamedTuple)
 # function cleanup_results(result::SharedMatrix{Int16}, idx::Vector{CartesianIndex{2}},
 #                           ID::Vector{Int64}, save1year::Bool)
+
+# Deprecated functions
+# function run_model_futures_deprecated(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
 
 
 #
@@ -96,7 +98,7 @@ function run_model(run_params::NamedTuple, species_params::NamedTuple, paths::Na
 
     @info "Importing " * string(run_params.maxYears) * " years of meteo data, starting at year " * string(run_params.years[y])
     # Tavg, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params)
-    Tmin, Tmax, DOY, ID = read_meteo2(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params)
+    Tmin, Tmax, DOY, ID = read_meteo(run_params.years[y], [paths.meteoDir_IE, paths.meteoDir_NI], grid, run_params)
 
     # Remove grid points not in the meteo data
     keep_ID = [in(grid.ID[i], ID) for i in eachindex(grid.ID)]
@@ -157,7 +159,9 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
+function run_model_futures_deprecated(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
+  # Deprecated. OPRAM now uses raw ensemble climate data rather than the mean and standard deviation of daily temperatures
+  #
   # Function to run the degree day model for a range of future climate predictions and for a range of species
   #
   # The differences to run_model are:
@@ -207,8 +211,7 @@ function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, p
     for p in eachindex(run_params.futurePeriod)
       @info "======Running model for future period " * run_params.futurePeriod[p] * "============="
 
-      # Tavg_mean, Tavg_sd, DOY, ID = read_JLD2_translate(paths.meteoDir_IE, run_params.rcp[r], run_params.futurePeriod[p], grid.ID)
-      Tmax_mean, Tmax_sd, Tmin_mean, Tmin_sd, DOY, ID = read_JLD2_translate2(paths.meteoDir_IE, run_params.rcp[r], run_params.futurePeriod[p], grid.ID)
+      Tmax_mean, Tmax_sd, Tmin_mean, Tmin_sd, DOY, ID = read_JLD2_translate_deprecated(paths.meteoDir_IE, run_params.rcp[r], run_params.futurePeriod[p], grid.ID)
 
 
       if run_params.nReps == 1
@@ -322,7 +325,7 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function run_model_futures2(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
+function run_model_futures(run_params::NamedTuple, species_params::NamedTuple, paths::NamedTuple)
   # Function to run the degree day model for a range of future climate predictions and for a range of species
   #
   # This function uses raw individual ensemble data from the TRANSLATE project rather than the mean 

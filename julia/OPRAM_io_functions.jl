@@ -19,23 +19,26 @@
 #
 # function import_parameters(tomlFile::String)
 # function import_species(speciesFile::String, speciesName::String)
-# function read_meteo(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame, run_params::NamedTuple)
-# function read_meteo2(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, run_params::NamedTuple)
-# function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
-# function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64},
-# function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
-# function read_JLD2_translate2(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+# function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, run_params::NamedTuple)
+# function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64},
+# function read_JLD2_translate(meteoDir::String, years::Vector{Int64}, rcp::String, period::String, ensemble::String, IDgrid::Vector{Int64})
 # function read_netCDF_meteoUK(meteoDir::String, grid::DataFrame, years)
-# function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years::Vector{Int64})
-# function read_CSV_meteoIE2(meteoDir_IE::String, grid_thin::DataFrame, years)
-# function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years::Vector{Int64})
+# function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years)
+# function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years)
 # function read_grid(gridFilePath::String, thinFactor::Int, countryStr::String="IE")
 # function read_grid(run_params::NamedTuple)
 # function read_OPRAM_JLD2(inFiles::Union{String,Vector{String}}, years::Union{Int,Vector{Int}}, grid::DataFrame)
 # function save_OPRAM_1km_CSV(df_1km::DataFrame, species_name::String, yearStr::String, paths::NamedTuple, saveDates::Bool=false)
 # function save_OPRAM_10km_CSV(out_10km::DataFrame, species_name::String, yearStr::String, paths::NamedTuple, saveDates::Bool=false)
 #
-#
+# Deprecated functions
+# function read_meteo_deprecated(meteoYear::Int64, meteoDirs::Vector{String}, grid_thin::DataFrame, run_params::NamedTuple)
+# function read_CSV_meteoIE_deprecated(meteoDir_IE::String, grid_thin::DataFrame, years::Vector{Int64})
+# function read_CSV_meteoNI_deprecated(meteoDir_NI::String, grid_thin::DataFrame, years::Vector{Int64})
+# function read_JLD2_meteo_deprecated(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64}, country::String)
+# function read_JLD2_translate_deprecated(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+# function read_JLD2_translate2_deprecated(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+
 # ====================================================================
 
 # Define a structure (with default values) to hold model parameters
@@ -412,7 +415,10 @@ end
 
 
 
-function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, run_params::NamedTuple)
+function read_meteo_deprecated(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, run_params::NamedTuple)
+    # Deprecated. OPRAM now uses daily min max temperatures rather than daily average temperatures. 
+    # This function is kept for backwards compatibility with older versions of the model.
+    #
     # Import multiple years of daily min and max temperature for Republic of Ireland and 
     # Northern Ireland (and maybe UK)
     # Then creates the daily average temp for each eastings and northings of spatial locations
@@ -457,10 +463,10 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, r
     if in(run_params.country, ["IE", "AllIreland"]) & !isnothing(meteoDirs[1])
         if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[1]))) > 0
             # Check for jld2 files and import them
-            Tavg_IE, DOY_IE, ID_IE = read_JLD2_meteo(meteoDirs[1], years, grid_thin.ID, "IE")
+            Tavg_IE, DOY_IE, ID_IE = read_JLD2_meteo_deprecated(meteoDirs[1], years, grid_thin.ID, "IE")
         else
             # Otherwise import csv files
-            Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE(meteoDirs[1], grid_thin, years)
+            Tavg_IE, DOY_IE, ID_IE = read_CSV_meteoIE_deprecated(meteoDirs[1], grid_thin, years)
         end
     end
 
@@ -468,15 +474,15 @@ function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, r
     if in(run_params.country, ["NI", "AllIreland"]) & !isnothing(meteoDirs[2])
         if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
             # Check for jld2 files and import them
-            Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, "NI")
+            Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo_deprecated(meteoDirs[2], years, grid_thin.ID, "NI")
         else
             # Otherwise import csv files
-            Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI(meteoDirs[2], grid_thin, years)
+            Tavg_NI, DOY_NI, ID_NI = read_CSV_meteoNI_deprecated(meteoDirs[2], grid_thin, years)
         end
     elseif in(run_params.country, ["UK", "EN", "SC", "WL"]) & !isnothing(meteoDirs[2])
         if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
             # Check for jld2 files and import them
-            Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, run_params.country)
+            Tavg_NI, DOY_NI, ID_NI = read_JLD2_meteo_deprecated(meteoDirs[2], years, grid_thin.ID, run_params.country)
         end
     end
 
@@ -531,7 +537,7 @@ end
 
 
 
-function read_meteo2(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, run_params::NamedTuple)
+function read_meteo(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, run_params::NamedTuple)
     # Import multiple years of daily min and max temperature for Republic of Ireland and 
     # Northern Ireland (and maybe UK)
     #
@@ -576,7 +582,7 @@ function read_meteo2(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, 
     if in(run_params.country, ["IE", "AllIreland"]) & !isnothing(meteoDirs[1])
         if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[1]))) > 0
             # Check for jld2 files and import them
-            Tmin_IE, Tmax_IE, DOY_IE, ID_IE = read_JLD2_meteo2(meteoDirs[1], years, grid_thin.ID, "IE")
+            Tmin_IE, Tmax_IE, DOY_IE, ID_IE = read_JLD2_meteo(meteoDirs[1], years, grid_thin.ID, "IE")
         else
             # Otherwise error
             error("No JLD2 meteo files found for IE")
@@ -587,7 +593,7 @@ function read_meteo2(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, 
     if in(run_params.country, ["NI", "AllIreland"]) & !isnothing(meteoDirs[2])
         if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
             # Check for jld2 files and import them
-            Tmin_NI, Tmax_NI, DOY_NI, ID_NI = read_JLD2_meteo2(meteoDirs[2], years, grid_thin.ID, "NI")
+            Tmin_NI, Tmax_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, "NI")
         else
             # Otherwise error
             error("No JLD2 meteo files found for NI")
@@ -595,7 +601,7 @@ function read_meteo2(meteoYear::Int64, meteoDirs::Vector, grid_thin::DataFrame, 
     elseif in(run_params.country, ["UK", "EN", "SC", "WL"]) & !isnothing(meteoDirs[2])
         if length(filter(x -> occursin(".jld2", x), readdir(meteoDirs[2]))) > 0
             # Check for jld2 files and import them
-            Tmin_NI, Tmax_NI, DOY_NI, ID_NI = read_JLD2_meteo2(meteoDirs[2], years, grid_thin.ID, run_params.country)
+            Tmin_NI, Tmax_NI, DOY_NI, ID_NI = read_JLD2_meteo(meteoDirs[2], years, grid_thin.ID, run_params.country)
         end
     end
 
@@ -648,8 +654,9 @@ end
 
 # ------------------------------------------------------------------------------------------
 
-function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64},
+function read_JLD2_meteo_deprecated(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64},
     country::String)
+    # Deprecated: OPRAM now uses daily min/max temperatures
     # Import multiple years of daily average temperature from a jld2 file 
     # for Republic of Ireland and create the daily average temp, and 
     # the ID, eastings and northings of spatial locations
@@ -722,7 +729,7 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function read_JLD2_meteo2(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64},
+function read_JLD2_meteo(meteoDir::String, years::Vector{Int64}, IDgrid::Vector{Int64},
     country::String)
     # Import multiple years of daily min and max temperature from a jld2 file 
     # and create the daily min/max temp, the ID, eastings and northings of spatial locations
@@ -803,7 +810,9 @@ end
 
 
 
-function read_JLD2_translate(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+function read_JLD2_translate_deprecated(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+    # Deprecated. OPRAM now uses raw ensemble climate data rather than the mean and standard deviation of daily temperatures
+    #
     # Import the TRANSLATE data for a given RCP and period from a jld2 file
     # and subset to the locations in IDgrid
     #
@@ -875,7 +884,9 @@ end
 
 
 
-function read_JLD2_translate2(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+function read_JLD2_translate2_deprecated(meteoDir::String, rcp::String, period::String, IDgrid::Vector{Int64})
+    # Deprecated. OPRAM now uses raw ensemble climate data rather than the mean and standard deviation of daily temperatures
+    #
     # Import the max and min daily temperatures for the TRANSLATE data 
     # for a given RCP and period from a jld2 file
     # and subset to the locations in IDgrid
@@ -956,7 +967,7 @@ function read_JLD2_translate(meteoDir::String, years::Vector{Int64}, rcp::String
     # Import multiple years of future climate scenario daily min and max temperature from a jld2 file 
     # and create the daily min/max temp, the ID, eastings and northings of spatial locations
     #
-    # This version of the function imports raw ensemble data from the TRASLATE project
+    # This version of the function imports raw ensemble data from the TRANSLATE project
     #
     # Arguments:
     #   meteoDir    the directory containing the TRANSLATE meteo data in JLD2 format 
@@ -1035,7 +1046,9 @@ end
 
 
 
-function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years)
+function read_CSV_meteoIE_deprecated(meteoDir_IE::String, grid_thin::DataFrame, years)
+    # Deprecated. OPRAM now uses daily min/max temperatures rather than average daily temperatures
+    #
     # Import multiple years of daily min and max temperature from a CSV file
     # for Republic of Ireland and create the daily average temp, and 
     # the ID, eastings and northings of spatial locations
@@ -1104,7 +1117,7 @@ end
 
 
 
-function read_CSV_meteoIE2(meteoDir_IE::String, grid_thin::DataFrame, years)
+function read_CSV_meteoIE(meteoDir_IE::String, grid_thin::DataFrame, years)
     # Import multiple years of daily min and max temperature from a CSV file
     # for Republic of Ireland and place in a data frame with 
     # the ID, eastings and northings of spatial locations
@@ -1269,7 +1282,9 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years)
+function read_CSV_meteoNI_deprecated(meteoDir_NI::String, grid_thin::DataFrame, years)
+    # Deprecated. OPRAM now uses daily min/max temperatures rather than average daily temperatures
+    #
     # Import multiple years of daily mean temperature for Northern Ireland
     # create the daily average temp, and the ID, eastings and northings of spatial locations
     #
@@ -1337,7 +1352,7 @@ end
 # ------------------------------------------------------------------------------------------
 
 
-function read_CSV_meteoNI2(meteoDir_NI::String, grid_thin::DataFrame, years)
+function read_CSV_meteoNI(meteoDir_NI::String, grid_thin::DataFrame, years)
     # Import multiple years of daily mean temperature for Northern Ireland
     # create the daily min and max temp, and the ID, eastings and northings of spatial locations
     #
