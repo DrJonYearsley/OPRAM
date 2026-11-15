@@ -56,7 +56,7 @@ if length(ARGS) == 1
     nNodes, run_params, species_setup, paths = import_parameters(ARGS[1])
 
 elseif length(ARGS) == 0 & isfile("julia/parameters.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("parameters_future_halyomorpha.toml")
+    nNodes, run_params, species_setup, paths = import_parameters("julia/parameters.toml")
 
 else
     @error "No parameter file given"
@@ -73,6 +73,7 @@ else
     @info "Importing species from the species file: " * string(species_setup.speciesStr)
     species_params = [import_species(species_setup.speciesFile, species_setup.speciesStr[s]) for s in eachindex(species_setup.speciesStr)]
 end
+
 
 
 # =============== End of parameter setup =====================================================
@@ -155,7 +156,7 @@ for s in eachindex(species_params)
                 # The files are named with the ensemble name at the end of the file name.
                 reg = Regex("^" * speciesName[1] * "_" * run_params.country *
                             "_rcp" * run_params.rcp[i] * "_" * run_params.futurePeriod[j] * 
-                            "_[-\\w]+_1km_" * run_params.method * ".jld2")
+                            "_[-\\w]+CM5_1km_" * run_params.method * ".jld2")
                 filename = filter(x -> occursin(reg, x),
                     readdir(joinpath(paths.resultsDir, speciesName[1])))
 
@@ -219,25 +220,17 @@ for s in eachindex(species_params)
             # If TRANSLATE future data then calculate the average across replicates
 
            # Import data for all ensembles and add them on to each other
+            @info "Importing data for " * yearStrVec[f]
+            df_tmp1 = [read_OPRAM_JLD2(inFiles[f][e], yearVec[f], grid) for e in eachindex(inFiles[f])]
 
-           # ======================================================================
-           # WORK IN PROGRESS
-            println("  ")
-            for e in eachindex(run_params.ensembles)
-                @info "Importing data for " * yearStrVec[f] * " ensemble " * run_params.ensembles[e]
-                df_tmp = read_OPRAM_JLD2(inFiles[f], yearVec[f], grid, run_params.ensembles[e])
+            df_tmp2 = reduce(vcat, df_tmp1)
+            df_tmp1 = nothing  # Remove df_tmp1
 
-                if e == 1
-                    df_1km = df_tmp
-                else
-                    append!(df_1km, df_tmp)
-                end
-            end
-           # ======================================================================
+            # ======================================================================
  
 
             # Group data frame by location and then starting Date 
-            df_group = groupby(df_tmp, [:ID, :startMonth])
+            df_group = groupby(df_tmp2, [:ID, :startMonth])
 
             # Calculate average over all replicates
             df_1km = combine(df_group,
@@ -256,7 +249,7 @@ for s in eachindex(species_params)
             df_1km.startDate = Date.(yearVec[f], df_1km.startMonth, 1)
 
             df_group = nothing  # Remove df_group
-            df_tmp = nothing    # Remove df_tmp
+            df_tmp2 = nothing    # Remove df_tmp
         else
             # Import data for historical climates
             println("  ")
