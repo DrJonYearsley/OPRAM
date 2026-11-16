@@ -19,9 +19,10 @@ meteoNI =  "nothing"                     # Folder containing meteo data for NI
 speciesFile = "git_repos/OPRAM/data/userdefined_parameters.csv"
 gridFile = "git_repos/OPRAM/data/IE_grid_locations.csv"
 countyDefs = "git_repos/OPRAM/data/granite_county_defs.csv"
+translateEnsemble = ["CNRM-CM5", "EC-EARTH", "MPI-ESM-LR", "HadGEM2-ES", "MIROC5"]     # Names of climate ensembles to include 
 
 [model]     # Parameters to define the model
-nReps = 1  # Number of replicates to run
+nReps = 2  # Number of replicates to run
 rcp = ["26","45","85"]     # Climate future RCP
 futurePeriod = ["2021-2050", "2041-2070"]        # Years to run model
 maxYears = 4         # Maximum number of years to complete insect development
