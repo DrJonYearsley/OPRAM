@@ -19,7 +19,6 @@ More details at https://DrJonYearsley.github.io/pesttool.html
 | Filename | Description |
 | -----------| ----------------|
 | `run_opram.sh` | Main script to run the OPRAM model and produce CSV and geotiff output (requires Julia and R to be installed) |
-| `run_main_test_UK_NI.sh` | Run the OPRAM model for Northern Ireland on either UK Met Office or Met Eireann data |
 | `compress_jld2_files.sh`  | Compress OPRAM model results (i.e. JLD2 files) |
 | `modify_filenames.sh` | Bulk-modify filenames |
 
