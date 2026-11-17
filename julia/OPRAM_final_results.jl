@@ -55,8 +55,8 @@ include("OPRAM_processing_functions.jl");
 if length(ARGS) == 1
     nNodes, run_params, species_setup, paths = import_parameters(ARGS[1])
 
-elseif length(ARGS) == 0 & isfile("julia/parameters.toml")
-    nNodes, run_params, species_setup, paths = import_parameters("julia/parameters.toml")
+elseif length(ARGS) == 0 & isfile("parameters.toml")
+    nNodes, run_params, species_setup, paths = import_parameters("parameters.toml")
 
 else
     @error "No parameter file given"
@@ -173,13 +173,14 @@ for s in eachindex(species_params)
 
         # Create vector of files to import for past climates
         for y in eachindex(run_params.years)
-            filename = filter(x -> occursin(r"^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km_" * run_params.method * ".jld2", x),
+            reg = Regex("^" * speciesName[1] * "_" * run_params.country * "_" * string(run_params.years[y]) * "_1km_" * run_params.method * ".jld2")
+            filename = filter(x -> occursin(reg, x),
                 readdir(joinpath(paths.resultsDir, speciesName[1])))
 
             if length(filename) > 1
                 @error "More than one input file found"
             else
-                push!(inFiles, joinpath(paths.resultsDir, speciesName[1], filename[1]))
+                push!(inFiles, joinpath.(paths.resultsDir, speciesName[1], filename))
             end
             push!(yearVec, run_params.years[y])
             push!(yearStrVec, string(run_params.years[y]))
@@ -221,10 +222,11 @@ for s in eachindex(species_params)
 
            # Import data for all ensembles and add them on to each other
             @info "Importing data for " * yearStrVec[f]
-            df_tmp1 = [read_OPRAM_JLD2(inFiles[f][e], yearVec[f], grid) for e in eachindex(inFiles[f])]
+            # df_tmp1 = [read_OPRAM_JLD2(inFiles[f][e], yearVec[f], grid) for e in eachindex(inFiles[f])]
 
-            df_tmp2 = reduce(vcat, df_tmp1)
-            df_tmp1 = nothing  # Remove df_tmp1
+            # df_tmp2 = reduce(vcat, df_tmp1)
+            # df_tmp1 = nothing  # Remove df_tmp1
+            df_tmp2 = read_OPRAM_JLD2(inFiles[f], yearVec[f], grid)
 
             # ======================================================================
  
@@ -252,7 +254,6 @@ for s in eachindex(species_params)
             df_tmp2 = nothing    # Remove df_tmp
         else
             # Import data for historical climates
-            println("  ")
             @info "Importing data for " * yearStrVec[f]
             df_1km = read_OPRAM_JLD2(inFiles[f], yearVec[f], grid)
         end

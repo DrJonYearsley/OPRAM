@@ -183,7 +183,7 @@ else
         # =========================================================
         # ################# Median across the years ##############
         # Calculate the median of nGenerations and emergeDOY
-        # Remove missing data when calculating the median
+        # Remove missing data when calculating the median (if missing data hasn't been replace by extreme values)
         d_agg = combine(df_group,
             :nGenerations => (x -> if all(isa.(x, Missing))
                 0.0
@@ -198,24 +198,17 @@ else
             :emergeDOY => (x -> sum(ismissing.(x))) => :nMissing)
 
 
-        # If emergeDOY is greater than maximum possible DOY (366*maxYears) then set
-        # nGenerations_median = 0 and emergeDOY_median = missing
-        idx_agg = ismissing.(d_agg.emergeDOY_median) .|| d_agg.emergeDOY_median .> 366 * run_params.maxYears
+        # If emergeDOY is greater than maximum possible DOY (366*maxYears) 
+        # Or if nGenerations_median < 0
+        # then set nGenerations_median = 0 and emergeDOY_median = missing
+        idx_agg1 = ismissing.(d_agg.emergeDOY_median) .|| d_agg.emergeDOY_median .> 366 * run_params.maxYears
+        idx_agg2 = d_agg.nGenerations_median .< 0
 
-        if any(idx_agg)
-            d_agg.nGenerations_median[idx_agg] .= 0.0
-            d_agg.emergeDOY_median[idx_agg] .= missing
+        if any(idx_agg1 .| idx_agg2)
+            allowmissing!(d_agg, [:nGenerations_median, :emergeDOY_median])
+            d_agg.nGenerations_median[idx_agg1 .| idx_agg2] .= 0.0
+            d_agg.emergeDOY_median[idx_agg1 .| idx_agg2] .= missing
         end
-
-        # =========================================================
-        # =========================================================
-        # Add in missing values for emergeDOY and zero for nGenerations where 10km worst case is out of bounds
-        # (i.e. nGenerations<0 or emergeDOY>5000)
-
-        allowmissing!(d_agg, [:nGenerations_median, :emergeDOY_median])
-        d_agg.nGenerations_median[d_agg.nGenerations_median.<0] .= 0.0
-
-        d_agg.emergeDOY_median[d_agg.emergeDOY_median.>5000] .= missing
 
         # Return df_1km missing values to original missing values
         if any(idx1)
