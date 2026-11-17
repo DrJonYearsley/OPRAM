@@ -41,6 +41,7 @@
 # ===============================================================
 # ===============================================================
 # Load packages that will be used
+
 using TOML;
 using Distributed;
 using CSV;
@@ -67,7 +68,7 @@ if length(ARGS)==1
   nNodes, run_params, species_params, paths =  import_parameters(ARGS[1])
 
 elseif length(ARGS)==0 & isfile("julia/parameters.toml")
-  nNodes, run_params, species_params, paths =  import_parameters("julia/parameters_test.toml")
+  nNodes, run_params, species_params, paths =  import_parameters("julia/parameters.toml")
 
 else
   @error "No parameter file given"
