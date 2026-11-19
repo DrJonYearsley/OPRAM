@@ -20,8 +20,8 @@ using TOML;
 
 
 
-include("OPRAM_io_functions.jl");
-include("OPRAM_processing_functions.jl");
+include("../julia/OPRAM_io_functions.jl");
+include("../julia/OPRAM_processing_functions.jl");
 
 
 # =================================================================================
@@ -30,11 +30,11 @@ include("OPRAM_processing_functions.jl");
 # "frugiperda", "duplicatus", "cembrae", "sexdentatus"
 
 rcp = 85
-year = 2055
+year = "2041-2070"
 month = 1
 scale = 10     # Either 1 for 1km scale or 10 for hectad scale
 county = 5      # Set to 0 to import all counties
-paramFile = "parameters_test.toml"
+paramFile = "/Users/jon/git_repos/OPRAM/julia/parameters_future.toml"
 
 nNodes, run_params, species_setup, paths = import_parameters(paramFile, true)
 
@@ -54,8 +54,8 @@ grid.north_hectad = convert.(Int32, floor.(grid.north ./ 1e4) .* 1e4)
 
 
 hectad_list = unique(grid.hectad)
-idx = [findfirst(grid.hectad.==hectad_list[l]) for l in eachindex(hectad_list)]
-grid_hectad = grid[idx,:]
+idx = [findfirst(grid.hectad .== hectad_list[l]) for l in eachindex(hectad_list)]
+grid_hectad = grid[idx, :]
 
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Set species parameters from the parameter file (can be more than one species)
@@ -73,7 +73,7 @@ end
 # Import data
 
 # Find directory matching the species name in run_params
-regex = Regex(replace(lowercase(species_params[1].species_name),
+regex = Regex(replace(lowercase(species_params[6].species_name),
     r"\s" => "\\w"))  # Replace spaces with reg expression
 speciesName = filter(x -> occursin(regex, x), readdir(paths.outDir))
 if length(speciesName) > 1
@@ -85,22 +85,30 @@ end
 
 # Default values
 ms = 0.5
-inFile = [speciesName[1] * "_" * string(scale) * "_" * string(county) * "_" * string(year) * ".csv"]
+# inFile = [speciesName[1] * "_" * string(scale) * "_" * string(county) * "_" * string(year) * ".csv"]
 
+if isnothing(rcp)
+    rcpStr = "rcp" * rcp
+else
+    rcpStr = ""
+end
 if scale == 10
-    inFile = [speciesName[1] * "_100_" * string(year) * ".csv"]
+    reg = Regex(speciesName[1] * "_" * string(scale^2) * "_" * rcpStr * "_" * string(year) * ".csv")
+    inFile = filter(x -> occursin(reg, x), readdir(joinpath(paths.outDir, speciesName[1])))
     ms = 3
 else
     if county == 0
         # Import mulitple files
-        reg = Regex(speciesName[1] * "_" * string(scale) * "_" * "[[:digit:]]{1,2}" * "_" * string(year) * ".csv")
-        inFile = filter(x -> occursin(reg, x), readdir(joinpath(paths.outDir, speciesName[1])))
+        reg = Regex(speciesName[1] * "_" * string(scale) * "_" * "[[:digit:]]{1,2}" * "_" * rcpStr * "_" * string(year) * ".csv")
+    else
+        reg = Regex(speciesName[1] * "_" * string(scale) * "_" * string(county) *  "_" * rcpStr * "_" * string(year) * ".csv")
     end
+    inFile = filter(x -> occursin(reg, x), readdir(joinpath(paths.outDir, speciesName[1])))
 end
 
 d = CSV.read(joinpath(paths.outDir, speciesName[1], inFile[1]), DataFrame, missingstring="NA")
 for f in 2:length(inFile)
-      append!(d, CSV.read(joinpath(paths.outDir, speciesName[1], inFile[f]), DataFrame, missingstring="NA"))
+    append!(d, CSV.read(joinpath(paths.outDir, speciesName[1], inFile[f]), DataFrame, missingstring="NA"))
 end
 
 
@@ -113,8 +121,8 @@ d.startMonth[idx] = Dates.month.(d.startDate[idx])  # Use month rather than DOY 
 
 # Add in coordinates
 if scale==10
-   leftjoin!(d, grid_hectad[:,[:hectad, :east_hectad, :north_hectad]], on=[:hectad])
-   rename!(d, :east_hectad => "eastings", :north_hectad => "northings")
+    leftjoin!(d, grid_hectad[:, [:hectad, :east_hectad, :north_hectad]], on=[:hectad])
+    rename!(d, :east_hectad => "eastings", :north_hectad => "northings")
 end
 
 
@@ -131,7 +139,7 @@ idx2 = d.startMonth .== month
 # Plots a map with a break in colour at 1 generation
 x=d.eastings[idx2]
 y=d.northings[idx2]
-z = d.nGen[idx2]
+z = d.emergeDOY[idx2]
 
 plot_idx = .!ismissing.(z)
 
@@ -152,7 +160,7 @@ plot(x[plot_idx],
     # title="Average number of generations per year\n"*run_params.averagedPeriod * " (" * speciesName[1] * ")",
     dpi=400)
 
-    # Add in points with missing data
+# Add in points with missing data
 plot!(x[Not(plot_idx)],
     y[Not(plot_idx)],
     seriestype=:scatter,
